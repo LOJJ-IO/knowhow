@@ -1,0 +1,132 @@
+// Prisma schema for Knowhow — mocked-data prototype.
+// See second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum Role {
+  OWNER
+  TEAM_LEADER
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  OFFBOARDED
+}
+
+enum DocType {
+  DOC
+  SHEET
+  SLIDE
+}
+
+enum ActivityType {
+  ONBOARDED
+  OFFBOARDED
+  DOC_AUTO_SHARED
+  DOC_REASSIGNED
+  ACCESS_REVOKED
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users      User[]
+  teams      Team[]
+  documents  Document[]
+  activities ActivityEvent[]
+}
+
+model User {
+  id           String     @id @default(cuid())
+  organization Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         Role
+  status       UserStatus @default(ACTIVE)
+
+  team      Team?  @relation("TeamMembers", fields: [teamId], references: [id])
+  teamId    String?
+
+  ledTeam   Team?  @relation("TeamLeader")
+
+  ownedDocuments Document[]      @relation("DocumentOwner")
+  activitiesAsActor  ActivityEvent[] @relation("ActivityActor")
+  activitiesAsTarget ActivityEvent[] @relation("ActivityTarget")
+
+  createdAt DateTime @default(now())
+}
+
+model Team {
+  id           String   @id @default(cuid())
+  organization Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  name         String
+
+  leader   User?   @relation("TeamLeader", fields: [leaderId], references: [id])
+  leaderId String? @unique
+
+  members   User[]     @relation("TeamMembers")
+  documents Document[]
+  policy    SharingPolicy?
+
+  createdAt DateTime @default(now())
+
+  @@unique([organizationId, name])
+}
+
+model Document {
+  id           String   @id @default(cuid())
+  organization Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  team         Team?    @relation(fields: [teamId], references: [id])
+  teamId       String?
+  owner        User     @relation("DocumentOwner", fields: [ownerId], references: [id])
+  ownerId      String
+  title        String
+  type         DocType
+  sharedWithOwner  Boolean @default(false)
+  sharedWithLeader Boolean @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model SharingPolicy {
+  id       String  @id @default(cuid())
+  team     Team    @relation(fields: [teamId], references: [id])
+  teamId   String  @unique
+  autoShareWithLeader Boolean @default(true)
+  autoShareWithOwner  Boolean @default(true)
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model ActivityEvent {
+  id             String   @id @default(cuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  type           ActivityType
+  actor          User?    @relation("ActivityActor", fields: [actorId], references: [id])
+  actorId        String?
+  target         User?    @relation("ActivityTarget", fields: [targetId], references: [id])
+  targetId       String?
+  message        String
+  createdAt      DateTime @default(now())
+}
