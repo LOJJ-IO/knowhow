@@ -1,9 +1,9 @@
 "use client";
 
-import { FileText, Sheet as SheetIcon, Presentation } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import { DocStatusDot } from "@/components/dashboard/doc-status-dot";
+import { DocTypeIcon } from "@/components/dashboard/doc-type-icon";
 import { Input } from "@/components/ui/input";
 
 type DocOwner = { id: string; name: string };
@@ -18,9 +18,9 @@ type DocRow = {
 type Columns = { DOC: DocRow[]; SHEET: DocRow[]; SLIDE: DocRow[] };
 
 const COLUMN_META = {
-  DOC: { label: "Docs", icon: FileText },
-  SHEET: { label: "Sheets", icon: SheetIcon },
-  SLIDE: { label: "Slides", icon: Presentation },
+  DOC: { label: "Docs", product: "Google Docs" },
+  SHEET: { label: "Sheets", product: "Google Sheets" },
+  SLIDE: { label: "Slides", product: "Google Slides" },
 } as const;
 
 const TIMEFRAMES = [
@@ -70,16 +70,16 @@ export function TeamDocumentsBoard({
     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
       {(Object.keys(COLUMN_META) as (keyof Columns)[]).map((key) => {
         const meta = COLUMN_META[key];
-        const Icon = meta.icon;
         const rows = filtered[key];
 
         return (
           <div key={key} className="rounded-xl border border-border bg-card">
             <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
-              <div className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <Icon className="size-4 text-muted-foreground" />
-                {meta.label}
+              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                <DocTypeIcon type={key} className="size-5 rounded-sm [&_svg]:size-3" />
+                Recent {meta.label}
               </div>
+              <span className="text-xs text-muted-foreground">{meta.product}</span>
             </div>
 
             <div className="space-y-2 border-b border-border p-2.5">
@@ -123,15 +123,16 @@ export function TeamDocumentsBoard({
                 rows.map((row) => (
                   <li
                     key={row.id}
-                    className="flex items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0"
+                    className="flex items-center gap-2.5 border-b border-border px-3 py-2 text-sm last:border-b-0"
                   >
-                    <DocStatusDot sharedWithOwner={row.sharedWithOwner} />
+                    <DocTypeIcon type={key} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-foreground">{row.title}</p>
                       <p className="truncate text-xs text-muted-foreground">
                         {row.owner.name} · {row.createdAt.toLocaleDateString()}
                       </p>
                     </div>
+                    <DocStatusDot sharedWithOwner={row.sharedWithOwner} />
                   </li>
                 ))
               )}

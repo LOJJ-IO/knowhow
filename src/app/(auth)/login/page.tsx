@@ -43,9 +43,15 @@ export default function LoginPage() {
         </Button>
       </form>
 
+      <p className="mt-3 text-center text-sm text-muted-foreground">Forgot password?</p>
+
       <Button variant="outline" size="lg" className="mt-3 w-full" disabled title="Google Workspace integration coming soon">
         Sign in with Google
       </Button>
+
+      <p className="mt-3 text-center text-sm text-muted-foreground">
+        Or use <span className="font-medium text-foreground">Single Sign-On</span>
+      </p>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}

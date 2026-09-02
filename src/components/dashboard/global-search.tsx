@@ -25,13 +25,9 @@ export function GlobalSearch({ placeholder = "Search every document in your Work
 
   useEffect(() => {
     const q = query.trim();
-    if (!q) {
-      setHits([]);
-      setOpen(false);
-      return;
-    }
-    setSearching(true);
+    if (!q) return;
     const handle = setTimeout(async () => {
+      setSearching(true);
       const results = (await searchAllDocuments(q)) as Hit[];
       setHits(results);
       setOpen(true);
@@ -53,7 +49,13 @@ export function GlobalSearch({ placeholder = "Search every document in your Work
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          if (!e.target.value.trim()) {
+            setHits([]);
+            setOpen(false);
+          }
+        }}
         onFocus={() => query.trim() && setOpen(true)}
         placeholder={placeholder}
         className="h-9 rounded-full bg-card pl-9"

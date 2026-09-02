@@ -28,7 +28,7 @@ const navItem =
 export function Sidebar({ teams, userName, userRole, canManageOrg }: SidebarProps) {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-3 py-4">
-      <div className="mb-6 px-1.5">
+      <div className="mb-6 px-1.5 text-lg text-sidebar-foreground">
         <Logo />
       </div>
 

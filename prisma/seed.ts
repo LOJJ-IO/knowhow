@@ -33,6 +33,19 @@ async function main() {
     },
   });
 
+  // Org-level doc from the owner: lives in the Company folder, broadcast to all.
+  await prisma.document.create({
+    data: {
+      organizationId: org.id,
+      ownerId: owner.id,
+      title: "Company Handbook",
+      type: "DOC",
+      sharedWithOwner: true,
+      sharedWithLeader: true,
+      sharedWithEveryone: true,
+    },
+  });
+
   const teamDefs = [
     { name: "Marketing", leader: "Sarah Chen", members: ["Mike Ross", "David Kim"] },
     { name: "Sales", leader: "Priya Anand", members: ["Leo Martins"] },
