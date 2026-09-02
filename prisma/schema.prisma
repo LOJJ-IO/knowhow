@@ -98,6 +98,7 @@ model Document {
   type         DocType
   sharedWithOwner  Boolean @default(false)
   sharedWithLeader Boolean @default(false)
+  sharedWithEveryone Boolean @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

@@ -83,6 +83,99 @@ export async function onboardPerson(input: OnboardInput): Promise<OnboardResult>
   return { userId: user.id, appsGranted: MOCK_APPS, autoShareEnabled };
 }
 
+export type ShareChoice = "POLICY" | "LEADER" | "OWNER" | "EVERYONE" | "PRIVATE";
+
+export type CreateDocumentInput = {
+  organizationId: string;
+  actorId: string;
+  title: string;
+  type: "DOC" | "SHEET" | "SLIDE";
+  share: ShareChoice;
+};
+
+export type CreateDocumentResult = {
+  documentId: string;
+  folder: string;
+  sharedWith: string[];
+};
+
+/**
+ * Creates a document as the actor, applies the sharing choice (or the team's
+ * auto-share policy), and "files" it into the right Drive folder — the team's
+ * folder, or the Company folder for org-level docs. Like onboarding, the real
+ * Drive API call is mocked (ADR-0001); this function is the seam.
+ */
+export async function createAndFileDocument(
+  input: CreateDocumentInput
+): Promise<CreateDocumentResult> {
+  const { organizationId, actorId, title, type, share } = input;
+
+  const actor = await prisma.user.findFirstOrThrow({
+    where: { id: actorId, organizationId },
+    include: { team: { include: { policy: true, leader: true } } },
+  });
+  const owner = await prisma.user.findFirstOrThrow({
+    where: { organizationId, role: "OWNER" },
+  });
+
+  const policy = actor.team?.policy;
+  const sharedWithEveryone = share === "EVERYONE";
+  const sharedWithOwner =
+    sharedWithEveryone ||
+    share === "OWNER" ||
+    (share === "POLICY" && (policy?.autoShareWithOwner ?? true));
+  const sharedWithLeader =
+    sharedWithEveryone ||
+    share === "LEADER" ||
+    (share === "POLICY" && (policy?.autoShareWithLeader ?? true));
+
+  const folder = actor.team?.name ?? "Company";
+
+  const doc = await prisma.document.create({
+    data: {
+      organizationId,
+      teamId: actor.teamId,
+      ownerId: actor.id,
+      title,
+      type,
+      sharedWithOwner,
+      sharedWithLeader,
+      sharedWithEveryone,
+    },
+  });
+
+  const sharedWith: string[] = [];
+  if (sharedWithEveryone) {
+    sharedWith.push("everyone in the organization");
+  } else {
+    const leader = actor.team?.leader;
+    if (sharedWithLeader && leader && leader.id !== actor.id) {
+      sharedWith.push(`${leader.name} (team leader)`);
+    }
+    if (sharedWithLeader && !actor.team) {
+      sharedWith.push("all team leaders");
+    }
+    if (sharedWithOwner && owner.id !== actor.id) {
+      sharedWith.push(`${owner.name} (owner)`);
+    }
+  }
+
+  await prisma.activityEvent.create({
+    data: {
+      organizationId,
+      type: "DOC_AUTO_SHARED",
+      actorId: actor.id,
+      message:
+        `"${title}" created by ${actor.name} — filed in Drive › ${folder}` +
+        (sharedWith.length > 0
+          ? `, auto-shared with ${sharedWith.join(" and ")}.`
+          : ". Not shared with anyone yet."),
+    },
+  });
+
+  return { documentId: doc.id, folder, sharedWith };
+}
+
 export type OffboardResult = {
   userId: string;
   docsTransferred: number;
