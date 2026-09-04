@@ -3,16 +3,22 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-02
+updated: 2026-09-04
 related: ["[[0001-mocked-data-first-prototype]]", "[[FEAT-org-chart-builder]]", "[[FEAT-doc-visibility-dashboard]]", "[[FEAT-doc-creation-auto-share]]", "[[FEAT-onboarding-offboarding-automation]]", "[[Known-Issues]]"]
 ---
 
 # Current Context
 
-## Active priority
-Demo prep for an upcoming pitch meeting (possibly with "Jeane" — user unsure who'll attend). 2026-09-02 pass delivered the two things the user asked for: (1) restyle to match the pitch-deck inspo (navy sidebar, Google Workspace colors, light-gray canvas — replacing the grayscale Sage-derived look), and (2) the live demo flow: in-app doc creation with a share-with choice, auto-share + Drive auto-filing visible in a receipt, a folder-routing "file chart" panel on the owner dashboard, and org-wide doc search. See [[FEAT-doc-creation-auto-share]]. All flows verified via an 11-check Playwright click-through (all passing).
+## Active priority (as of 2026-09-04 — supersedes the demo-prep priority below)
+The user is rebuilding the entire frontend themselves, from scratch, screen by screen — this is **not** a Claude-driven redesign. Claude's role narrowed sharply after two corrections in one session (see [[Lessons-Learned]], 2026-09-04 entries): a generated design-system/IA/screens canvas was rejected outright as "AI slop," and a follow-up landing-page build was corrected twice more for inventing marketing copy and reusing old design tokens/components instead of genuinely starting fresh. Working agreement going forward: **implement only what is explicitly asked, one piece at a time; never invent copy, layout, or visual decisions; ask rather than fill gaps.** The user also asked that second-brain be updated after every change, without exception — not just "non-trivial" ones.
 
-## What's true right now (2026-09-02)
+## What's true right now (2026-09-04)
+- `/` (`src/app/page.tsx`) is just the full-bleed looping hero video (`public/hero/onboarding-loop.{mp4,webm}` + poster, converted from `V1-Draft.mp4`; see [[Lessons-Learned]] for the encoding gotcha) — no logo, no nav, no buttons, no copy. Logged-in visitors still redirect straight to `/dashboard`. (Nav/logo were added then removed at explicit request — see [[Lessons-Learned]] 2026-09-04 entries; don't re-add without being asked.)
+- `/login` (`src/app/(auth)/login/page.tsx`) and `/dashboard` (`src/app/(app)/dashboard/page.tsx`) were deliberately cleared to blank placeholders at the user's explicit request, to give a clean slate for their own rebuild. **This is intentional, not a bug**: login renders nothing (no form — signing in through the UI does not currently work), dashboard keeps only its `requireUser()` auth guard and renders nothing. Do not "restore" either without being asked.
+- Everything else from the 2026-09-02 pass (org chart, team pages, settings, activity, the doc-visibility/auto-share engine) is untouched and still uses the old design system — the user has not asked for those yet.
+- A generated design canvas (`.design/knowhow-canvas/`, published as an Artifact) was rejected by the user as not what they meant — they want to design the system themselves. Do not reference or extend it; treat it as dead work.
+
+## Demo-prep priority (2026-09-02, now superseded but kept for reference)
 - Demo flow works end-to-end as owner (`owner@acme.test`), leader (`sarah.chen@acme.test`), and member (`mike.ross@acme.test`): login → org chart → owner dashboard (search, create-with-audience, auto-filing panel, per-team boards) → member dashboard (create → auto-share receipt → My Recent Work) → leader/owner see the doc arrive → activity feed logs it.
 - New schema field `Document.sharedWithEveryone` (owner broadcasts); visibility rules centralized in `visibilityWhere()` in `src/lib/queries.ts`.
 - `dev.db` has minor click-through residue — see the demo-data entry in [[Known-Issues]] for the pristine-reset command.
@@ -30,8 +36,9 @@ Demo prep for an upcoming pitch meeting (possibly with "Jeane" — user unsure w
 - second-brain vault seeded for this repo, mirroring Sage's structure/conventions (see [[README]]).
 
 ## Still open
-1. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
-2. No GitHub remote — ask before creating one if the user wants it pushed.
-3. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
-4. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
-5. SQLite is a prototyping choice — migrating to a real Postgres instance is an open follow-up decision, not yet made.
+1. **Frontend rebuild is mid-flight and user-driven** — `/login` and `/dashboard` are blank placeholders; the rest of the app still has the old design. Wait for explicit per-screen direction; don't get ahead of it.
+2. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
+3. No GitHub remote — ask before creating one if the user wants it pushed.
+4. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
+5. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
+6. SQLite is a prototyping choice — migrating to a real Postgres instance is an open follow-up decision, not yet made.

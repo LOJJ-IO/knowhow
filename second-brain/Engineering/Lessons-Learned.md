@@ -3,8 +3,8 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-08-31
-related: ["[[Known-Issues]]", "[[Architecture-Overview]]"]
+updated: 2026-09-04
+related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
@@ -29,3 +29,12 @@ The 08-31 offboarding click-through left Sarah Chen `OFFBOARDED` with Marketing'
 
 ## 2026-09-02 — `kill %1` across Bash tool calls is a no-op, and `next start` losing the port serves you a stale build
 Shell job control doesn't persist between tool invocations, so `kill %1` silently killed nothing; the replacement `next start` then died with `EADDRINUSE` *inside a backgrounded subshell* (exit code invisible), and the old server kept serving the pre-fix build — making a just-made CSS fix look ineffective in the screenshot. Kill by port (`lsof -ti :PORT | xargs kill`), and after any restart, confirm the new process owns the port before trusting what the browser shows.
+
+## 2026-09-04 — Don't generate a full design canvas/mockup set unless explicitly asked, even for "design the system top down"
+Asked to "design the system top down," a full design-system + IA map + nine-screen mockup canvas was generated unprompted and published as an Artifact. Rejected outright as "AI slop" — the user meant they'd design it themselves and wanted Claude to build scaffolding or get out of the way, not receive a finished visual design. The phrase "design the system" is ambiguous between "produce a design" and "define the system architecture" — when genuinely ambiguous and the cost of guessing wrong is a large unwanted deliverable, ask before generating, don't default to the more ambitious reading. The rejected canvas lives at `.design/knowhow-canvas/` — treat it as dead work, don't reference or extend it.
+
+## 2026-09-04 — When told to build a concrete screen, implement only what's named — no invented copy, no reused old design system
+Given a hero video and told to build a landing page, the result included headline/subcopy/footer marketing copy nobody asked for, and reused the existing (already-criticized) design tokens and components rather than treating it as a fresh start. Corrected twice: once for the invented copy, once for not actually "starting over." The standing rule now: implement literally what's asked, piece by piece; never fill gaps with invented copy, layout, or visual decisions; when "start over" or similar is said, treat it as discarding prior visual decisions, not just adding to them. See [[Current-Context]] for the working agreement this produced.
+
+## 2026-09-04 — A muted decorative background video needs a much lower CRF than footage, and browsers prefer WebM over MP4 when both are offered
+A looping hero animation (soft-gradient 3D shapes) encoded at VP9 crf 34 / H.264 crf 21 looked visibly degraded — banding on the gradients — even though the file stayed tiny (65KB). The bug wasn't obvious from the MP4 alone: Chrome/Firefox pick the first `<source>` they support, and WebM was listed first, so most viewers were silently getting the more-compressed VP9 file while the MP4 (the one easiest to eyeball-check) looked fine. Flat-gradient/vector-style motion graphics compress so efficiently that there's no real size cost to dropping CRF a lot (crf 34→20 for VP9, 21→16 for H.264 only doubled the file size, still under 320KB for a 9.5s clip) — for this kind of content, err toward much higher quality than footage-tuned CRF defaults suggest, and spot-check whichever `<source>` the browser will actually pick first, not just the fallback.

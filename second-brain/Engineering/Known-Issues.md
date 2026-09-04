@@ -3,8 +3,8 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-08-31
-related: ["[[Lessons-Learned]]"]
+updated: 2026-09-04
+related: ["[[Lessons-Learned]]", "[[Current-Context]]"]
 ---
 
 # Known Issues
@@ -15,6 +15,7 @@ related: ["[[Lessons-Learned]]"]
 ```
 
 ## Open
+- **[frontend]** `/login` and `/dashboard` render nothing — deliberately cleared to blank placeholders at the user's request so they can rebuild the frontend themselves from scratch. Login has no form (signing in via the UI does not work); dashboard keeps only its `requireUser()` auth guard. **Do not restore either without being explicitly asked** — see [[Current-Context]] for the full working agreement on the frontend rebuild. (since 2026-09-04)
 - **[product]** Offboarding is one-way — an offboarded `User` has no "reinstate" path in the UI (the data model supports flipping `status` back to `ACTIVE`, but nothing calls it). (since 2026-08-31)
 - **[auth]** "View as" (`src/app/(auth)/actions.ts`) starts a real session for any user in the org with no password check — explicitly a demo-only convenience so the org chart owner can preview a teammate's dashboard. Must not ship past this prototype phase without a real permission check (e.g. owner/leader only, and only for users in their own scope). (since 2026-08-31)
 - **[google-integration]** Nothing under `src/lib/` calls a real Google API yet — "Create New Work" now creates simulated in-app documents via `createAndFileDocument` (see [[FEAT-doc-creation-auto-share]]); access grants, sharing, folder filing, and the app list are all simulated. See [[0001-mocked-data-first-prototype]]. (since 2026-08-31, updated 2026-09-02)
