@@ -81,7 +81,12 @@ export function Sidebar({ teams, userName, userRole, canManageOrg }: SidebarProp
           </p>
         </div>
         <form action={logOut}>
-          <Button variant="ghost" size="sm" type="submit">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="submit"
+            className="text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          >
             Sign out
           </Button>
         </form>

@@ -1,0 +1,33 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "System & IA" },
+    { "id": "page-2", "name": "Screens" }
+  ],
+  "artboards": [
+    { "file": "Main.dc.html",  "page": "page-1", "x": 0,    "y": 0,    "w": 1400, "h": 2420 },
+    { "file": "IAMap.dc.html", "page": "page-1", "x": 1540, "y": 0,    "w": 1320, "h": 1240 },
+
+    { "file": "Login.dc.html",      "page": "page-2", "x": 0,    "y": 0,    "w": 1200, "h": 820  },
+    { "file": "OrgChart.dc.html",   "page": "page-2", "x": 1560, "y": 0,    "w": 1440, "h": 940  },
+    { "file": "OwnerHome.dc.html",  "page": "page-2", "x": 3120, "y": 0,    "w": 1440, "h": 1180 },
+
+    { "file": "MemberHome.dc.html", "page": "page-2", "x": 0,    "y": 1350, "w": 1440, "h": 1120 },
+    { "file": "Documents.dc.html",  "page": "page-2", "x": 1560, "y": 1350, "w": 1440, "h": 1010 },
+    { "file": "Visibility.dc.html", "page": "page-2", "x": 3120, "y": 1350, "w": 1440, "h": 1060 },
+
+    { "file": "TeamHub.dc.html",    "page": "page-2", "x": 0,    "y": 2650, "w": 1440, "h": 1000 },
+    { "file": "Activity.dc.html",   "page": "page-2", "x": 1560, "y": 2650, "w": 1440, "h": 960  },
+    { "file": "Settings.dc.html",   "page": "page-2", "x": 3120, "y": 2650, "w": 1440, "h": 1030 }
+  ],
+  "annotations": [
+    { "id": "note-tokens", "page": "page-1", "x": 0, "y": -150, "w": 460,
+      "text": "Colours here are the exact oklch values already in globals.css — nothing invented.\n\nThe one genuinely new proposal is the type pairing (Plus Jakarta Sans + Public Sans, replacing the Next.js default Arial stack). Both fall back to Helvetica/Arial, so nothing breaks if you'd rather not ship webfonts." },
+    { "id": "note-ia", "page": "page-1", "x": 1540, "y": -150, "w": 460,
+      "text": "The structural argument. Today's six routes grew feature-by-feature; this is what the same data layer already supports.\n\nCost: two new routes, one merged, a role-aware sidebar. No schema, query or server-action changes." },
+    { "id": "note-screens", "page": "page-2", "x": 0, "y": -170, "w": 470,
+      "text": "Static mockups at desktop width (1440), not a clickable prototype — say the word if you'd rather have working controls to click through in the meeting.\n\nPeople, teams and documents match prisma/seed.ts so the demo and the design tell the same story." },
+    { "id": "note-visibility", "page": "page-2", "x": 3120, "y": 1215, "w": 420,
+      "text": "The new surface, and the one worth showing Jeane: it turns the red dots into a queue with a fix attached to each row." }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}
