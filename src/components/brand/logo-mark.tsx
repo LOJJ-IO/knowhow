@@ -1,18 +1,46 @@
+import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 
-/** Stacked-layer mark from the Knowhow deck, redrawn in CSS: blue top face,
- * green/yellow middle band, red base — the Google Workspace palette. */
+export const sohne = localFont({
+  src: "../../fonts/sohne/TestSohne-Dreiviertelfett.otf",
+  weight: "700",
+  style: "normal",
+});
+
+/** Three stacked hexagons (blue / green+yellow / red) in the Google
+ * palette, overlapping so each tip nests into the plate below —
+ * proportions and colors measured directly from the user's reference. */
 function LogoMark({ className }: { className?: string }) {
   return (
-    <span
-      className={cn("relative inline-block size-5", className)}
+    <svg
+      viewBox="0 0 120 137"
+      className={cn("inline-block size-5", className)}
       aria-hidden="true"
     >
-      <span className="absolute inset-x-0 top-0 h-[38%] rounded-[3px] bg-gblue" />
-      <span className="absolute top-[44%] left-0 h-[24%] w-[48%] rounded-l-xs bg-ggreen" />
-      <span className="absolute top-[44%] right-0 h-[24%] w-[48%] rounded-r-xs bg-gyellow" />
-      <span className="absolute inset-x-0 bottom-0 h-[24%] rounded-xs bg-gred" />
-    </span>
+      <path
+        d="M60,66 L120,90 L120,111 L60,137 L0,111 L0,90 Z"
+        fill="#EA4335"
+        stroke="#F9F8F6"
+        strokeWidth="8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M60,33 L120,57 L120,78 L60,104 L0,78 L0,57 Z"
+        fill="none"
+        stroke="#F9F8F6"
+        strokeWidth="8"
+        strokeLinejoin="round"
+      />
+      <path d="M60,33 L0,57 L0,78 L60,104 Z" fill="#34A853" />
+      <path d="M60,33 L120,57 L120,78 L60,104 Z" fill="#FBBC05" />
+      <path
+        d="M60,0 L120,24 L120,45 L60,71 L0,45 L0,24 Z"
+        fill="#4285F4"
+        stroke="#F9F8F6"
+        strokeWidth="8"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -20,7 +48,9 @@ function LogoMark({ className }: { className?: string }) {
  * (navy foreground) and the navy sidebar (white). */
 function Logo({ className }: { className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1 font-bold tracking-tight text-inherit", className)}>
+    <span
+      className={cn(sohne.className, "inline-flex items-center gap-1 tracking-tight text-inherit", className)}
+    >
       Kn
       <LogoMark />
       how
