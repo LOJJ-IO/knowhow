@@ -56,12 +56,34 @@ function readCurrentConfig() {
 
 const EDITING_MODE_ENABLED = process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
 
+function Spinner({ size = 20 }: { size?: number }) {
+  const stroke = 2;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} className="animate-spin" style={{ animationDuration: "1.1s" }}>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={stroke} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        strokeLinecap="round"
+        strokeDasharray={`${c * 0.28} ${c * 0.72}`}
+      />
+    </svg>
+  );
+}
+
 function LandingHero() {
   const [editMode, setEditMode] = useState<boolean>(() => {
     if (!EDITING_MODE_ENABLED || typeof window === "undefined") return false;
     return localStorage.getItem("draggable:editMode") === "1";
   });
   const [configText, setConfigText] = useState<string | null>(null);
+  const [ctaLoading, setCtaLoading] = useState(false);
   // See the matching comment in GuidelinesOverlay: `editMode` can diverge
   // between server and first client render, so anything that structurally
   // mounts/unmounts based on it (like the "Copy config" button below) needs
@@ -75,6 +97,34 @@ function LandingHero() {
       if (!next) setConfigText(null);
       return next;
     });
+  }
+
+  // Synthesized via Web Audio instead of an audio file — no asset to source/license.
+  function playClickSound() {
+    try {
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.08);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.08);
+    } catch {
+      // Web Audio unavailable/blocked — sound is a nice-to-have, fail silently
+    }
+  }
+
+  // No real destination yet, so there's nothing to await — this just demos
+  // the spinner state for a fixed duration until the button is wired up.
+  function handleCtaClick() {
+    playClickSound();
+    setCtaLoading(true);
+    setTimeout(() => setCtaLoading(false), 1500);
   }
 
   async function copyConfig() {
@@ -176,9 +226,20 @@ function LandingHero() {
         className="w-max"
       >
         {/* No destination yet — placeholder button, per explicit instruction not to wire a link until asked.
-            Styled to match the "Edit positions" button (rounded-full bg-black/80 px-4 py-2 text-sm), scaled ~49% bigger overall (20%, then 15%, then 8%). */}
-        <button type="button" className="rounded-full bg-black/80 px-[1.4904rem] py-[0.7452rem] text-[1.3041rem] text-white shadow">
-          Get Started
+            Styled to match the "Edit positions" button (rounded-full bg-black/80 px-4 py-2 text-sm), scaled up then −10% from the prior committed size. */}
+        <button
+          type="button"
+          onClick={handleCtaClick}
+          disabled={ctaLoading}
+          className="inline-flex h-[49.5px] min-w-[138.6px] items-center justify-center rounded-full bg-black/80 px-[1.34136rem] text-[1.17369rem] text-white shadow transition-transform duration-150 active:scale-95 disabled:opacity-80"
+        >
+          {ctaLoading ? (
+            <Spinner size={23} />
+          ) : (
+            <span className="t-shimmer t-shimmer-on-dark" data-text="Get Started">
+              Get Started
+            </span>
+          )}
         </button>
       </Draggable>
 

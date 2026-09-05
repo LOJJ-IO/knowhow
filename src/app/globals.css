@@ -144,3 +144,61 @@ html {
     @apply bg-background font-sans text-foreground;
   }
 }
+
+/* Shimmer text (Transitions.dev). Duplicate the visible string into
+   data-text so the ::before layer can mask the gradient onto the same
+   glyphs — keep them in sync if the text changes. */
+:root {
+  --shimmer-dur: 2000ms;
+  --shimmer-base: #6e6e6e;
+  --shimmer-highlight: #ededed;
+  --shimmer-band: 400%;
+  --shimmer-ease: linear;
+}
+
+.t-shimmer {
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
+}
+@keyframes t-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer::before {
+    animation: none !important;
+  }
+}
+
+/* Override for shimmer text sitting on a dark surface (e.g. the "Get
+   Started" button, which is always a dark pill regardless of site theme). */
+.t-shimmer-on-dark {
+  --shimmer-base: rgba(255, 255, 255, 0.55);
+  --shimmer-highlight: #ffffff;
+}

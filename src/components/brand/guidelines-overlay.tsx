@@ -27,8 +27,8 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
   // post-hydration render — avoiding a hydration mismatch.
   const mounted = useHydrated();
 
-  const [columns, setColumns] = useState<number>(() => readCount("guidelines:columns", 3));
-  const [rows, setRows] = useState<number>(() => readCount("guidelines:rows", 3));
+  const [columns, setColumns] = useState<number>(() => readCount("guidelines:columns", 8));
+  const [rows, setRows] = useState<number>(() => readCount("guidelines:rows", 5));
 
   function updateColumns(next: number) {
     const clamped = Math.max(1, next);
@@ -42,8 +42,8 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
     localStorage.setItem("guidelines:rows", String(clamped));
   }
 
-  const displayColumns = mounted ? columns : 3;
-  const displayRows = mounted ? rows : 3;
+  const displayColumns = mounted ? columns : 8;
+  const displayRows = mounted ? rows : 5;
   const showControls = mounted && editable;
   const cells = Array.from({ length: displayColumns * displayRows }, (_, i) => i + 1);
 
