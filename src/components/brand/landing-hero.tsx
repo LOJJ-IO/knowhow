@@ -60,7 +60,7 @@ function LandingHero() {
         <source src="/hero/onboarding-loop.mp4" type="video/mp4" />
       </video>
 
-      <Draggable id="landing-logo-text" initial={{ x: 24, y: 24 }} locked={!editMode}>
+      <Draggable id="landing-logo-text" initial={{ x: 9.875, y: -10.21875 }} locked={!editMode}>
         <span
           className={`${sohne.className} inline-flex items-center gap-2 leading-none tracking-tight text-[#1c1917]`}
           style={{ fontSize: LOGO_FONT_SIZE }}
@@ -71,13 +71,13 @@ function LandingHero() {
         </span>
       </Draggable>
 
-      <Draggable id="landing-logo-mark" initial={{ x: 130, y: 40 }} locked={!editMode}>
+      <Draggable id="landing-logo-mark" initial={{ x: 241.3046875, y: -50.18359375 }} locked={!editMode}>
         <div style={{ fontSize: LOGO_FONT_SIZE }}>
           <LogoMark className="h-[0.71em] w-[0.62em]" />
         </div>
       </Draggable>
 
-      <Draggable id="landing-logo-tm" initial={{ x: 780, y: 24 }} locked={!editMode}>
+      <Draggable id="landing-logo-tm" initial={{ x: 696.19921875, y: -107.63671875 }} locked={!editMode}>
         <span
           className={`${sohne.className} leading-none tracking-tight text-[#1c1917]`}
           style={{ fontSize: LOGO_FONT_SIZE }}
