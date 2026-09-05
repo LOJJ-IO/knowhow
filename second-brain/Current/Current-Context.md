@@ -108,9 +108,9 @@ Initial position (`{x: 2, y: 11}`, same em-relative-to-own-font-size basis as th
 
 ## Still open
 1. **Frontend rebuild is mid-flight and user-driven** — `/login` and `/dashboard` are blank placeholders; the rest of the app still has the old design. Wait for explicit per-screen direction; don't get ahead of it.
-2. **Prisma removed for Vercel (2026-09-05, uncommitted)** — packages + `prisma/` tree + `db.ts` gone; data layer stubbed. See [[0002-remove-prisma-for-vercel]]. Landing `npm run build` passes. Needs commit + push/redeploy.
+2. **Prisma removed; force-redeploy pushed (2026-09-05)** — Vercel failure logs showing commit `8d7a8a1` + `src/lib/db.ts` are **stale** (pre-removal). `main` is now `0d3a211` (Prisma-free). Auth catch-22 (null `getSessionUser`) fixed locally via cookie sessions + demo roster ([[0003-cookie-only-sessions-demo-roster]]) — uncommitted until asked. Do **not** hit Redeploy on the failed deployment (that rebuilds the same old SHA); wait for the new Git-triggered build, or Deploy latest from the Vercel project. Origin remote URL updated to `https://github.com/LOJJ-IO/knowhow.git` (repo moved from `ronaldwopara/knowhow`).
 3. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
-4. GitHub remote now exists (`LOJJ-IO/knowhow`) — Vercel is deploying from `main`.
+4. GitHub remote is `LOJJ-IO/knowhow` — Vercel deploys from `main`.
 5. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
 6. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
 7. Durable database for production is an open follow-up (Prisma/SQLite removed; do not put SQLite back on Vercel).

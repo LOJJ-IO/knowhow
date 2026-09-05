@@ -4,7 +4,7 @@ status: active
 tags: [area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-05
-related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[Product-Vision]]"]
+related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[0003-cookie-only-sessions-demo-roster]]", "[[Product-Vision]]"]
 ---
 
 # Architecture Overview
@@ -27,7 +27,7 @@ No separate backend service. Server Components read; Server Actions (`"use serve
 
 ## Components
 
-- **`src/app/(auth)/`** — login/signup placeholders; cookie helpers in `src/lib/session.ts` / `src/lib/password.ts` (sessions no longer persist).
+- **`src/app/(auth)/`** — signup UI still present; login page blank on purpose. Cookie sessions in `src/lib/session.ts` store full `SessionUser` JSON; demo roster in `src/lib/demo-users.ts` — see [[0003-cookie-only-sessions-demo-roster]].
 - **`src/app/(app)/`** — dashboard, org chart, team people, activity, settings (UI present; DB-backed behavior stubbed).
 - **`src/lib/workspace.ts`** — onboarding/offboarding/doc-creation seam (stubbed; still the place real Google Admin SDK calls will land later — [[0001-mocked-data-first-prototype]]).
 - **`src/lib/queries.ts`** — read API surface, still scoped by `organizationId`; returns empty / throws until a store returns.

@@ -9,8 +9,11 @@ related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"
 
 # Lessons Learned
 
+## 2026-09-05 — Stubbing `getSessionUser` to null is a full auth catch-22
+After Prisma removal, returning `null` from every session read plus hard-erroring `logIn`/`signUp` meant `requireUser()` always redirected and no action could create a session. Fix without a DB: put the full `SessionUser` in the httpOnly cookie and authenticate against an in-memory demo roster (see [[0003-cookie-only-sessions-demo-roster]]). Leave queries/workspace stubbed separately — auth and data persistence are different seams.
+
 ## 2026-09-05 — Removed Prisma entirely for Vercel (not just `prisma generate`)
-First prod build failed on missing `@/generated/prisma/client`. A generate-in-build fix was drafted, but the user rejected staying on Prisma for this deploy ("remove the prisma its not accepting"). Packages, `prisma/` tree, and `db.ts` are gone; session/queries/workspace are stubs. Landing page `npm run build` is clean. Do not re-add SQLite on Vercel — next DB needs a durable host (see [[0002-remove-prisma-for-vercel]]).
+First prod build failed on missing `@/generated/prisma/client`. A generate-in-build fix was drafted, but the user rejected staying on Prisma for this deploy ("remove the prisma its not accepting"). Packages, `prisma/` tree, and `db.ts` are gone; session/queries/workspace were stubs (auth later rewired per entry above). Landing page `npm run build` is clean. Do not re-add SQLite on Vercel — next DB needs a durable host (see [[0002-remove-prisma-for-vercel]]).
 
 ## 2026-09-05 — Vercel build needs `prisma generate`; generated client is gitignored
 *(Superseded the same day by removing Prisma — kept for history.)* `src/generated/prisma` is in `.gitignore` (correct — Prisma regenerate output). Local `npm run build` worked only because that folder already existed from prior `prisma generate` runs. On a clean Vercel clone it did not, so Turbopack failed with `Can't resolve '@/generated/prisma/client'`.
