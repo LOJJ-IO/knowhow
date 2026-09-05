@@ -42,6 +42,7 @@ const DRAGGABLE_IDS = [
   "landing-logo-tm",
   "landing-logo-tagline",
   "landing-hero-subhead",
+  "landing-hero-cta",
 ] as const;
 
 function readCurrentConfig() {
@@ -53,11 +54,11 @@ function readCurrentConfig() {
   return config;
 }
 
-const EDITOR_ENABLED = process.env.NEXT_PUBLIC_LOGO_EDITOR_ENABLED === "true";
+const EDITING_MODE_ENABLED = process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
 
 function LandingHero() {
   const [editMode, setEditMode] = useState<boolean>(() => {
-    if (!EDITOR_ENABLED || typeof window === "undefined") return false;
+    if (!EDITING_MODE_ENABLED || typeof window === "undefined") return false;
     return localStorage.getItem("draggable:editMode") === "1";
   });
   const [configText, setConfigText] = useState<string | null>(null);
@@ -101,7 +102,7 @@ function LandingHero() {
         <source src="/hero/onboarding-loop.mp4" type="video/mp4" />
       </video>
 
-      <GuidelinesOverlay editable={EDITOR_ENABLED && editMode} />
+      <GuidelinesOverlay editable={EDITING_MODE_ENABLED && editMode} />
 
       <Draggable
         id="landing-logo-text"
@@ -118,7 +119,7 @@ function LandingHero() {
 
       <Draggable
         id="landing-logo-mark"
-        initial={{ x: 1.362253430886243, y: -0.3315213018077601 }}
+        initial={{ x: 1.36804046792328, y: -0.3315213018077601 }}
         locked={!editMode}
         style={{ fontSize: LOGO_FONT_SIZE }}
       >
@@ -127,7 +128,7 @@ function LandingHero() {
 
       <Draggable
         id="landing-logo-tm"
-        initial={{ x: 3.817430555555555, y: -0.8900018601190477 }}
+        initial={{ x: 3.839686535493827, y: -0.8957165591931218 }}
         locked={!editMode}
         style={{ fontSize: LOGO_FONT_SIZE }}
       >
@@ -168,7 +169,20 @@ function LandingHero() {
         </span>
       </Draggable>
 
-      {EDITOR_ENABLED && (
+      <Draggable
+        id="landing-hero-cta"
+        initial={{ x: 77.228271484375, y: 3.373046875 }}
+        locked={!editMode}
+        className="w-max"
+      >
+        {/* No destination yet — placeholder button, per explicit instruction not to wire a link until asked.
+            Styled to match the "Edit positions" button (rounded-full bg-black/80 px-4 py-2 text-sm), scaled ~49% bigger overall (20%, then 15%, then 8%). */}
+        <button type="button" className="rounded-full bg-black/80 px-[1.4904rem] py-[0.7452rem] text-[1.3041rem] text-white shadow">
+          Get Started
+        </button>
+      </Draggable>
+
+      {EDITING_MODE_ENABLED && (
         <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
           {configText && (
             <pre className="max-w-sm overflow-auto rounded-lg bg-black/85 p-3 font-mono text-[11px] text-white">

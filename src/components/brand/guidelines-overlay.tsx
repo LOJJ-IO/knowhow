@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useHydrated } from "@/lib/use-hydrated";
 
-/** Permanent design element: divides the hero into a numbered N×M grid, like
- * design software's layout guides, sitting at the same z-level as the
- * background video (behind the logo) — grid lines and cell numbers are
- * always visible. Column/row counts persist in localStorage; only the +/-
- * controls to tune them are dev-only and stay behind `editable`. */
+/** Permanent design element: divides the hero into an N×M grid, like design
+ * software's layout guides, sitting at the same z-level as the background
+ * video (behind the logo) — the grid lines themselves are always visible.
+ * Column/row counts persist in localStorage; the numbered cells and the +/-
+ * controls to tune them are dev-only and stay behind `editable`, since bare
+ * numbers on the grid aren't part of the shipped design. */
 function readCount(key: string, fallback: number) {
   if (typeof window === "undefined") return fallback;
   try {
@@ -58,7 +59,7 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
         >
           {cells.map((n) => (
             <div key={n} className="flex items-start justify-start border border-white/40 p-2">
-              <span className="font-mono text-xs text-white/70">{n}</span>
+              {showControls && <span className="font-mono text-xs text-white/70">{n}</span>}
             </div>
           ))}
         </div>
