@@ -1,12 +1,48 @@
 "use client";
 
 import { useState } from "react";
+import localFont from "next/font/local";
 import { LogoMark, sohne } from "@/components/brand/logo-mark";
 import { Draggable } from "@/components/brand/draggable";
+import { GuidelinesOverlay } from "@/components/brand/guidelines-overlay";
+import { useHydrated } from "@/lib/use-hydrated";
 
-const LOGO_FONT_SIZE = "clamp(3.5rem,12.5vw,12.5rem)";
+const lojjFont = localFont({
+  src: "../../fonts/logo/LOGO.otf",
+  weight: "400",
+  style: "normal",
+});
 
-const DRAGGABLE_IDS = ["landing-logo-text", "landing-logo-mark", "landing-logo-tm"] as const;
+const satoshi = localFont({
+  src: [
+    { path: "../../fonts/satoshi/Satoshi-Regular.woff2", weight: "400", style: "normal" },
+    { path: "../../fonts/satoshi/Satoshi-Medium.woff2", weight: "500", style: "normal" },
+    { path: "../../fonts/satoshi/Satoshi-Bold.woff2", weight: "700", style: "normal" },
+  ],
+});
+
+const LOGO_FONT_SIZE = "clamp(3.15rem,11.25vw,11.25rem)";
+const SUBHEAD_FONT_SIZE = "clamp(1.215rem,3.645vw,3.645rem)";
+
+// G/o/o/g/l/e colored per the real Google logotype, using the same exact hex
+// values as the cube mark in logo-mark.tsx (not the --gblue/etc. oklch
+// tokens elsewhere in the app, which are a slightly different palette).
+const GOOGLE_LETTERS = [
+  { char: "G", color: "#4285F4" },
+  { char: "o", color: "#EA4335" },
+  { char: "o", color: "#FBBC05" },
+  { char: "g", color: "#4285F4" },
+  { char: "l", color: "#34A853" },
+  { char: "e", color: "#EA4335" },
+] as const;
+
+const DRAGGABLE_IDS = [
+  "landing-logo-text",
+  "landing-logo-mark",
+  "landing-logo-tm",
+  "landing-logo-tagline",
+  "landing-hero-subhead",
+] as const;
 
 function readCurrentConfig() {
   const config: Record<string, { x: number; y: number } | null> = {};
@@ -25,6 +61,11 @@ function LandingHero() {
     return localStorage.getItem("draggable:editMode") === "1";
   });
   const [configText, setConfigText] = useState<string | null>(null);
+  // See the matching comment in GuidelinesOverlay: `editMode` can diverge
+  // between server and first client render, so anything that structurally
+  // mounts/unmounts based on it (like the "Copy config" button below) needs
+  // to wait for `mounted` to avoid a hydration mismatch.
+  const mounted = useHydrated();
 
   function toggleEditMode() {
     setEditMode((v) => {
@@ -60,29 +101,70 @@ function LandingHero() {
         <source src="/hero/onboarding-loop.mp4" type="video/mp4" />
       </video>
 
-      <Draggable id="landing-logo-text" initial={{ x: 9.875, y: -10.21875 }} locked={!editMode}>
-        <span
-          className={`${sohne.className} inline-flex items-center gap-2 leading-none tracking-tight text-[#1c1917]`}
-          style={{ fontSize: LOGO_FONT_SIZE }}
-        >
+      <GuidelinesOverlay editable={EDITOR_ENABLED && editMode} />
+
+      <Draggable
+        id="landing-logo-text"
+        initial={{ x: 0.07626364087301586, y: -0.3182669890873016 }}
+        locked={!editMode}
+        style={{ fontSize: LOGO_FONT_SIZE }}
+      >
+        <span className={`${sohne.className} inline-flex items-center gap-2 leading-none tracking-tight text-[#1c1917]`}>
           Kn
           <span className="inline-block w-[0.62em]" />
           how
         </span>
       </Draggable>
 
-      <Draggable id="landing-logo-mark" initial={{ x: 241.3046875, y: -50.18359375 }} locked={!editMode}>
-        <div style={{ fontSize: LOGO_FONT_SIZE }}>
-          <LogoMark className="h-[0.71em] w-[0.62em]" />
-        </div>
+      <Draggable
+        id="landing-logo-mark"
+        initial={{ x: 1.362253430886243, y: -0.3315213018077601 }}
+        locked={!editMode}
+        style={{ fontSize: LOGO_FONT_SIZE }}
+      >
+        <LogoMark className="h-[0.71em] w-[0.62em]" />
       </Draggable>
 
-      <Draggable id="landing-logo-tm" initial={{ x: 696.19921875, y: -107.63671875 }} locked={!editMode}>
-        <span
-          className={`${sohne.className} leading-none tracking-tight text-[#1c1917]`}
-          style={{ fontSize: LOGO_FONT_SIZE }}
-        >
+      <Draggable
+        id="landing-logo-tm"
+        initial={{ x: 3.817430555555555, y: -0.8900018601190477 }}
+        locked={!editMode}
+        style={{ fontSize: LOGO_FONT_SIZE }}
+      >
+        <span className={`${sohne.className} leading-none tracking-tight text-[#1c1917]`}>
           <span className="text-[0.16em] leading-none">™</span>
+        </span>
+      </Draggable>
+
+      <Draggable
+        id="landing-logo-tagline"
+        initial={{ x: 3.0792584325396835, y: -0.11720920138888889 }}
+        locked={!editMode}
+        style={{ fontSize: LOGO_FONT_SIZE }}
+      >
+        <span className="leading-none text-[#1c1917]">
+          <span className={`${sohne.className} text-[0.162em] tracking-tight`}>by </span>
+          <span className={`${lojjFont.className} text-[0.162em]`}>LOJJ.io</span>
+        </span>
+      </Draggable>
+
+      <Draggable
+        id="landing-hero-subhead"
+        initial={{ x: 3.8317713691700956, y: 13.44483307494094 }}
+        locked={!editMode}
+        style={{ fontSize: SUBHEAD_FONT_SIZE }}
+        className="w-max"
+      >
+        <span className="leading-none whitespace-nowrap text-[#1c1917]">
+          <span className={`${sohne.className} tracking-tight`}>Take Control of your </span>
+          <span className={`${satoshi.className} font-bold`}>
+            {GOOGLE_LETTERS.map(({ char, color }, i) => (
+              <span key={i} style={{ color }}>
+                {char}
+              </span>
+            ))}
+          </span>
+          <span className={`${satoshi.className} font-normal`}> Workspace</span>
         </span>
       </Draggable>
 
@@ -94,7 +176,7 @@ function LandingHero() {
             </pre>
           )}
           <div className="flex gap-2">
-            {editMode && (
+            {mounted && editMode && (
               <button
                 type="button"
                 onClick={copyConfig}
@@ -108,7 +190,7 @@ function LandingHero() {
               onClick={toggleEditMode}
               className="rounded-full bg-black/80 px-4 py-2 text-sm text-white shadow"
             >
-              {editMode ? "Done editing" : "Edit positions"}
+              {mounted && editMode ? "Done editing" : "Edit positions"}
             </button>
           </div>
         </div>
