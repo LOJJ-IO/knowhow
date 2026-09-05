@@ -15,19 +15,20 @@ function LogoMark({ className }: { className?: string }) {
     <svg
       viewBox="0 0 120 137"
       className={cn("inline-block size-5", className)}
+      style={{ overflow: "visible" }}
       aria-hidden="true"
     >
       <path
         d="M60,66 L120,90 L120,111 L60,137 L0,111 L0,90 Z"
         fill="#EA4335"
-        stroke="#F9F8F6"
+        stroke="none"
         strokeWidth="8"
         strokeLinejoin="round"
       />
       <path
         d="M60,33 L120,57 L120,78 L60,104 L0,78 L0,57 Z"
         fill="none"
-        stroke="#F9F8F6"
+        stroke="none"
         strokeWidth="8"
         strokeLinejoin="round"
       />
@@ -36,7 +37,7 @@ function LogoMark({ className }: { className?: string }) {
       <path
         d="M60,0 L120,24 L120,45 L60,71 L0,45 L0,24 Z"
         fill="#4285F4"
-        stroke="#F9F8F6"
+        stroke="none"
         strokeWidth="8"
         strokeLinejoin="round"
       />
