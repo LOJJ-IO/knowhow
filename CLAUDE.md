@@ -29,21 +29,21 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 ## Repo layout
 
 - `src/app/` — Next.js App Router: `(auth)/` (login/signup, unauthenticated), `(app)/` (everything behind a session — dashboard, org-chart, team people management, activity, settings).
-- `src/lib/` — data access (`db.ts`, `queries.ts`), auth (`auth.ts`, `session.ts`, `password.ts`), the onboarding/offboarding engine (`workspace.ts`).
+- `src/lib/` — data access (`queries.ts` — stubbed), auth (`auth.ts`, `session.ts`, `password.ts`), the onboarding/offboarding engine (`workspace.ts` — stubbed).
 - `src/components/` — `ui/` (design-system primitives), `shell/` (sidebar), `dashboard/`, `team/`, `settings/`, `brand/`, `theme/`.
-- `prisma/` — `schema.prisma`, migrations, `seed.ts`.
 - `second-brain/` — persistent engineering memory (see above).
 
 ---
 
 ## Knowhow — architecture invariants (non-negotiable)
 
-These are locked design decisions for this build phase, not defaults. If one seems wrong, **stop and ask** — don't unilaterally "improve" it. Full reasoning: [`second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md).
+These are locked design decisions for this build phase, not defaults. If one seems wrong, **stop and ask** — don't unilaterally "improve" it. Full reasoning: [`second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md). Prisma/SQLite removal: [`0002-remove-prisma-for-vercel.md`](second-brain/Architecture/Decisions/0002-remove-prisma-for-vercel.md).
 
 1. **The Next.js app is the single chokepoint.** No separate backend service. Server Components read; Server Actions (`"use server"`) mutate. Don't introduce a second API layer.
 2. **Google Workspace integration is mocked.** Nothing under `src/lib/` may call a real Google API until an ADR records that a GCP project + domain-wide delegation has actually been provisioned by the user. `src/lib/workspace.ts` (`onboardPerson`/`offboardPerson`) is the seam — extend the simulation there, don't bolt a real call on elsewhere.
 3. **Every data-access function is scoped by `organizationId`.** It's a required, non-defaulted argument — this repo will eventually be multi-tenant, so this discipline starts now, not later. See `src/lib/queries.ts` for the pattern.
 4. **Secrets from env only.** Never hardcode keys.
 5. **This repo is independent of Sage_v1.** It started as a spinoff conversation from that repo and intentionally borrowed its design language (see `src/app/globals.css`, `src/components/ui/`), but the two products share no code, no data, and no architecture invariants beyond that visual similarity.
+6. **No Prisma/SQLite on Vercel.** ORM and local SQLite were removed for deployability; do not re-add them without a new ADR and a durable database host.
 
-Locked stack: Next.js 15 (App Router, TypeScript) · Tailwind v4 · Prisma 7 + `@prisma/adapter-better-sqlite3` (SQLite — prototyping choice, not assumed for production) · custom cookie-session auth (Node `crypto.scrypt`, no NextAuth) · no external state library (React state + Server Actions + `router.refresh()` is enough at this scale).
+Locked stack: Next.js (App Router, TypeScript) · Tailwind v4 · no ORM currently (data layer stubbed) · cookie-session helpers (no NextAuth) · no external state library (React state + Server Actions + `router.refresh()` is enough at this scale).

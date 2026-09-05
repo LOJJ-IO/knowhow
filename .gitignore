@@ -41,12 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-/src/generated/prisma
-
-# local sqlite db (regenerate with `npx prisma migrate deploy` + `npm run db:seed`)
-/dev.db
-/dev.db-journal
-
 # trial fonts (not licensed for production — keep untracked until a design + licensing decision is made)
 /greed-font-family/
 /sohne-font-family/

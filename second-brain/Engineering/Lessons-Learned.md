@@ -9,8 +9,11 @@ related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"
 
 # Lessons Learned
 
+## 2026-09-05 — Removed Prisma entirely for Vercel (not just `prisma generate`)
+First prod build failed on missing `@/generated/prisma/client`. A generate-in-build fix was drafted, but the user rejected staying on Prisma for this deploy ("remove the prisma its not accepting"). Packages, `prisma/` tree, and `db.ts` are gone; session/queries/workspace are stubs. Landing page `npm run build` is clean. Do not re-add SQLite on Vercel — next DB needs a durable host (see [[0002-remove-prisma-for-vercel]]).
+
 ## 2026-09-05 — Vercel build needs `prisma generate`; generated client is gitignored
-`src/generated/prisma` is in `.gitignore` (correct — Prisma regenerate output). Local `npm run build` worked only because that folder already existed from prior `prisma generate` runs. On a clean Vercel clone it did not, so Turbopack failed with `Can't resolve '@/generated/prisma/client'`. Fix: `"build": "prisma generate && next build"`, plus an `allowScripts` allowlist for `@prisma/engines` / `prisma` / `better-sqlite3` / `esbuild` / `unrs-resolver` so newer npm on Vercel actually runs their install scripts.
+*(Superseded the same day by removing Prisma — kept for history.)* `src/generated/prisma` is in `.gitignore` (correct — Prisma regenerate output). Local `npm run build` worked only because that folder already existed from prior `prisma generate` runs. On a clean Vercel clone it did not, so Turbopack failed with `Can't resolve '@/generated/prisma/client'`.
 
 ## 2026-08-31 — Prisma 7 requires a driver adapter; there's no implicit engine connection anymore
 `new PrismaClient()` with no options now throws `PrismaClientInitializationError: ... A driver adapter is required`. For SQLite, install `@prisma/adapter-better-sqlite3` (pinned to the same version as `prisma`/`@prisma/client`) and pass `new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) })`. Note the export is `PrismaBetterSqlite3` (lowercase "q" in "Sqlite"), not `PrismaBetterSQLite3` — easy to typo from the package name. `prisma migrate dev`/`deploy` (the CLI) don't need this — only the runtime client does.
