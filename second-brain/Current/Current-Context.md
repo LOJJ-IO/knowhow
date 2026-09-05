@@ -108,8 +108,9 @@ Initial position (`{x: 2, y: 11}`, same em-relative-to-own-font-size basis as th
 
 ## Still open
 1. **Frontend rebuild is mid-flight and user-driven** — `/login` and `/dashboard` are blank placeholders; the rest of the app still has the old design. Wait for explicit per-screen direction; don't get ahead of it.
-2. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
-3. No GitHub remote — ask before creating one if the user wants it pushed.
-4. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
-5. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
-6. SQLite is a prototyping choice — migrating to a real Postgres instance is an open follow-up decision, not yet made.
+2. **Vercel deploy build fix (2026-09-05, uncommitted)** — first prod build failed because `@/generated/prisma/client` is gitignored and `build` didn't run `prisma generate`. Fixed in `package.json` (`prisma generate && next build` + `allowScripts` for Prisma/native deps). Needs commit + push/redeploy. Separately: SQLite will not work as a durable prod DB on Vercel serverless — see [[Known-Issues]].
+3. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
+4. GitHub remote now exists (`LOJJ-IO/knowhow`) — Vercel is deploying from `main`.
+5. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
+6. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
+7. SQLite is a prototyping choice — migrating to a real Postgres instance is an open follow-up decision, not yet made.

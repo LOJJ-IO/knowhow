@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-04
+updated: 2026-09-05
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-05 — Vercel build needs `prisma generate`; generated client is gitignored
+`src/generated/prisma` is in `.gitignore` (correct — Prisma regenerate output). Local `npm run build` worked only because that folder already existed from prior `prisma generate` runs. On a clean Vercel clone it did not, so Turbopack failed with `Can't resolve '@/generated/prisma/client'`. Fix: `"build": "prisma generate && next build"`, plus an `allowScripts` allowlist for `@prisma/engines` / `prisma` / `better-sqlite3` / `esbuild` / `unrs-resolver` so newer npm on Vercel actually runs their install scripts.
 
 ## 2026-08-31 — Prisma 7 requires a driver adapter; there's no implicit engine connection anymore
 `new PrismaClient()` with no options now throws `PrismaClientInitializationError: ... A driver adapter is required`. For SQLite, install `@prisma/adapter-better-sqlite3` (pinned to the same version as `prisma`/`@prisma/client`) and pass `new PrismaClient({ adapter: new PrismaBetterSqlite3({ url }) })`. Note the export is `PrismaBetterSqlite3` (lowercase "q" in "Sqlite"), not `PrismaBetterSQLite3` — easy to typo from the package name. `prisma migrate dev`/`deploy` (the CLI) don't need this — only the runtime client does.
