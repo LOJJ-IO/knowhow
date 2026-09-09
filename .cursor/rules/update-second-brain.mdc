@@ -1,0 +1,10 @@
+---
+description: After finishing work, update second-brain via the update-second-brain skill
+alwaysApply: true
+---
+
+# Second-brain write-back
+
+After any non-trivial completed work in this repo, follow the project skill **update-second-brain** (`.cursor/skills/update-second-brain/SKILL.md`) before ending the turn.
+
+Minimum bar: if behavior, architecture, bugs, features, lessons, or priorities changed, `second-brain/Current/Current-Context.md` (and any matching ADR / Known-Issues / Lessons-Learned / FEAT note) must be updated in the same turn — not deferred to a later chat.

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "hooks": {
+    "stop": [
+      {
+        "type": "prompt",
+        "prompt": "You are checking whether the agent finished durable work without updating Knowhow's second-brain vault.\n\nLook at this turn: were there code/config changes, bugs found/fixed, architecture decisions, features shipped/specced, non-obvious lessons, or priority changes?\n\nIf YES and second-brain/ was not updated appropriately this turn, set followup_message to instruct the agent to immediately follow the update-second-brain skill (.cursor/skills/update-second-brain/SKILL.md) and write back to Current-Context plus any matching ADR/Known-Issues/Lessons-Learned/FEAT notes before stopping again.\n\nIf NO durable vault write is needed (pure Q&A, already wrote back, or only trivial edits with no new facts), do not continue the loop.\n\nHook input: $ARGUMENTS",
+        "loop_limit": 1
+      }
+    ]
+  }
+}

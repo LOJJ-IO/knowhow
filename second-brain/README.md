@@ -9,7 +9,7 @@ This vault follows the same conventions as [Sage's second-brain](../../Sage_v1/s
 ## How this works
 
 1. **Claude reads before it acts.** At the start of a task, check [Current/Current-Context.md](Current/Current-Context.md) and any linked notes before asking for context.
-2. **Claude writes as it goes.** Architecture decisions, bugs, shipped features, and non-obvious lessons get written back here — not just left in chat.
+2. **Claude writes as it goes.** Architecture decisions, bugs, shipped features, and non-obvious lessons get written back here — not just left in chat. Enforced for Cursor via project skill `.cursor/skills/update-second-brain/`, rule `.cursor/rules/update-second-brain.mdc`, and a `stop` hook in `.cursor/hooks.json`.
 3. **You correct in the vault, not just in chat.** If a note is wrong, edit it or tell Claude to update it.
 4. **The repo's `CLAUDE.md` is the entry point.** It tells any agent working in this repo that this vault exists and how to use it.
 
