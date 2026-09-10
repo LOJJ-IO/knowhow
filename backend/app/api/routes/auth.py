@@ -19,15 +19,15 @@ ACCESS_COOKIE = "knohow_access_token"
 REFRESH_COOKIE = "knohow_refresh_token"
 
 
-def _cookie_kwargs() -> dict:
+def cookie_kwargs() -> dict:
     settings = get_settings()
     is_prod = settings.environment != "development"
     return {"httponly": True, "secure": is_prod, "samesite": "none" if is_prod else "lax"}
 
 
-def _set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     settings = get_settings()
-    kwargs = _cookie_kwargs()
+    kwargs = cookie_kwargs()
     response.set_cookie(ACCESS_COOKIE, access_token, max_age=settings.jwt_access_token_ttl_seconds, **kwargs)
     response.set_cookie(REFRESH_COOKIE, refresh_token, max_age=settings.jwt_refresh_token_ttl_seconds, **kwargs)
 
@@ -53,7 +53,7 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
         ) from exc
 
     response = RedirectResponse(settings.frontend_origin, status_code=status.HTTP_302_FOUND)
-    _set_session_cookies(response, result.access_token, result.refresh_token)
+    set_session_cookies(response, result.access_token, result.refresh_token)
     return response
 
 
@@ -78,7 +78,7 @@ def refresh(
     access_token = issue_access_token(member_id, uuid.UUID(payload["org_id"]))
     settings = get_settings()
     response.set_cookie(
-        ACCESS_COOKIE, access_token, max_age=settings.jwt_access_token_ttl_seconds, **_cookie_kwargs()
+        ACCESS_COOKIE, access_token, max_age=settings.jwt_access_token_ttl_seconds, **cookie_kwargs()
     )
     return {"status": "refreshed"}
 
