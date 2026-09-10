@@ -46,3 +46,9 @@ class AuditChainBroken(KnohowError):
     """Raised internally when a break in an organization's audit hash chain is
     detected during a write. Reads use verify_audit_chain() instead, which
     reports the break rather than raising."""
+
+
+class WebhookTokenMismatch(KnohowError):
+    """Raised when a Drive push notification's X-Goog-Channel-Token header
+    doesn't match the secret stored for that channel at registration —
+    means the request isn't a legitimate delivery for this channel."""
