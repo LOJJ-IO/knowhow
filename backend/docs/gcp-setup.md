@@ -44,6 +44,7 @@ APIs & Services → OAuth consent screen.
 |---|---|---|
 | `openid`, `.../userinfo.email`, `.../userinfo.profile` | No | App login only (identifies who is signing in). Requested on every login, for every member regardless of auth_type. Grants no Drive capability. |
 | `https://www.googleapis.com/auth/drive` | **Yes — restricted, requires verification** | Full Drive access. Requested both (a) as the domain-wide delegation scope authorized by the Workspace super-admin, and (b) on the per-user consent flow for personal-account members. |
+| `https://www.googleapis.com/auth/admin.reports.audit.readonly` | **Yes — restricted, requires verification** | Org-engine module only: the Admin SDK Reports API feed of org-wide Drive activity for domain members (`app/activity/reports_feed.py`), impersonating the delegation-approving admin. Read-only; used to detect file creation/edits, never to modify anything. Deliberately used instead of one Drive push-notification "watch channel" per domain member, which would mean maintaining and renewing N expiring subscriptions per organization instead of one polled feed — see that module's docstring. |
 
 **Why full `drive` and not the narrower `drive.file` or `drive.metadata`
 scopes:** Knohow's core function is managing ownership and sharing on
@@ -107,9 +108,15 @@ APIs & Services → Credentials → Create Credentials → OAuth client ID →
    (admin.google.com → Security → API Controls → Domain-wide Delegation →
    Add new):
    - **Client ID**: the service account's numeric client ID from step 3.
-   - **OAuth Scopes**: exactly `https://www.googleapis.com/auth/drive`
-     (comma-separated if more are ever added here — keep this list in sync
-     with `app/google/scopes.py::DOMAIN_DELEGATION_SCOPES`).
+   - **OAuth Scopes**: `https://www.googleapis.com/auth/drive` plus, for the
+     org-engine module's Reports-feed activity detection,
+     `https://www.googleapis.com/auth/admin.reports.audit.readonly`
+     (comma-separated — keep this list in sync with
+     `app/google/scopes.py::DOMAIN_DELEGATION_SCOPES` and the
+     `REPORTS_SCOPE` constant in `app/activity/reports_feed.py`). The Admin
+     SDK Reports API is impersonation-based the same way Drive is, so it
+     needs its own scope in this same domain-wide delegation grant — it is
+     not covered by the Drive scope above.
 5. Once the super-admin confirms they've added it, call
    `POST /organizations/{org_id}/delegation/approve` with their email —
    see `app/auth/delegation.py::approve_delegation`. Knohow cannot verify
