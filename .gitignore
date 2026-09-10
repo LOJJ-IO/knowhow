@@ -47,3 +47,15 @@ next-env.d.ts
 
 # reference images (scratch files for design iteration)
 /referencelog.png
+
+# backend (FastAPI/Python) — see backend/README and second-brain ADR on the
+# Next.js + separate backend split
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.pyc
+backend/.venv/
+backend/venv/
+backend/*.egg-info/
+backend/.pytest_cache/
+backend/.ruff_cache/
+backend/.mypy_cache/
