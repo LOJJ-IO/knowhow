@@ -8,6 +8,7 @@ from app.audit.service import record_audit_entry
 from app.db import SessionLocal
 from app.exceptions import CrossOrgAccessDenied, PersonalAccountNotConsented
 from app.google.drive_client import get_drive_client_for_user
+from app.google.ownership import revoke_permission_if_not_owner, transfer_ownership
 from app.google.retry import google_api_call
 from app.models.org_member import AuthType, OrgMember
 from app.models.unresolved_ownership import UnresolvedOwnership, UnresolvedOwnershipReason
@@ -41,18 +42,6 @@ def _require_member_in_org(member_id: uuid.UUID, org_id: uuid.UUID, db: Session)
     return member
 
 
-def _revoke_own_permission_if_not_owner(drive, file_id: str, member_email: str) -> None:
-    permissions = google_api_call(
-        drive.permissions()
-        .list(fileId=file_id, fields="permissions(id,emailAddress,role)")
-        .execute
-    )
-    own = next(
-        (p for p in permissions.get("permissions", []) if p.get("emailAddress", "").lower() == member_email.lower()),
-        None,
-    )
-    if own is not None and own.get("role") != "owner":
-        google_api_call(drive.permissions().delete(fileId=file_id, permissionId=own["id"]).execute)
 
 
 def revoke_and_offboard(
@@ -138,17 +127,9 @@ def revoke_and_offboard(
 
                 if can_transfer_ownership:
                     try:
-                        google_api_call(
-                            drive.permissions()
-                            .create(
-                                fileId=file_id,
-                                body={"role": "owner", "type": "user", "emailAddress": recipient.email},
-                                transferOwnership=True,
-                            )
-                            .execute
-                        )
+                        transfer_ownership(drive, file_id, recipient.email)
                         result.files.append(FileOffboardResult(file_id, file_name, "ownership_transferred"))
-                        _revoke_own_permission_if_not_owner(drive, file_id, departing.email)
+                        revoke_permission_if_not_owner(drive, file_id, departing.email)
                     except HttpError as exc:
                         result.files.append(FileOffboardResult(file_id, file_name, "error", str(exc)))
                 else:

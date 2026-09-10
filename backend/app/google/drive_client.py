@@ -15,7 +15,7 @@ from app.models.org_member import AuthType, OrgMember
 from app.security.crypto import decrypt_refresh_token
 
 
-def _load_service_account_info() -> dict:
+def load_service_account_info() -> dict:
     raw = get_settings().google_service_account_json
     stripped = raw.strip()
     if stripped.startswith("{"):
@@ -64,7 +64,7 @@ def _domain_delegated_client(member: OrgMember, db: Session) -> Resource:
             f"organization {member.organization_id}'s verified domain {grant.verified_domain!r}"
         )
 
-    info = _load_service_account_info()
+    info = load_service_account_info()
     credentials = service_account.Credentials.from_service_account_info(
         info, scopes=DOMAIN_DELEGATION_SCOPES
     )
