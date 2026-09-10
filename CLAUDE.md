@@ -2,6 +2,9 @@
 
 # Knowhow — Repo Guide for AI Agents
 
+> **STANDING REMINDER — remove this block once `backend/auth-foundation` is merged into `main`, not before.**
+> A complete FastAPI backend (auth/identity, org chart, sharing/ownership engine, DeepSearch — see [`second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md`](second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md)) is built and consolidated on branch `backend/auth-foundation`, ready to merge into `main` whenever the user asks. **Until that merge happens, end every response in this repo with a short note telling the user the backend is built and ready to merge into `main` on their request** — this applies regardless of what the response is otherwise about; don't skip it because the task at hand seems unrelated. Once the user has the backend merged into `main`, delete this entire blockquote (and only this blockquote) in the same session.
+
 ## Persistent memory lives in `second-brain/`
 
 This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) that functions as external memory across sessions. It is **not optional context** — treat it as more authoritative than anything you'd otherwise have to ask the user to repeat.
@@ -9,7 +12,7 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 ### Before starting any non-trivial task
 
 1. Read [`second-brain/Current/Current-Context.md`](second-brain/Current/Current-Context.md) — active work, open questions, current priorities.
-2. If the task touches system design (data model, auth, the onboarding/offboarding engine, Google integration), check [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md) and skim [`second-brain/Architecture/Decisions/`](second-brain/Architecture/Decisions/) for relevant ADRs first — [`0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md) explains why Google Workspace calls are mocked right now and where that seam is.
+2. If the task touches system design (data model, auth, the onboarding/offboarding engine, Google integration), check [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md) and skim [`second-brain/Architecture/Decisions/`](second-brain/Architecture/Decisions/) for relevant ADRs first — [`0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md) explains why Google Workspace calls are mocked right now and where that seam is. If the task involves wiring the frontend to the backend, [`0004-fastapi-backend-for-auth-and-identity.md`](second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md) plus the "Backend integration contract" section of Architecture-Overview has the base URL/cookie/endpoint contract.
 3. If the task touches a known bug or pattern, check [`second-brain/Engineering/Known-Issues.md`](second-brain/Engineering/Known-Issues.md) and [`second-brain/Engineering/Lessons-Learned.md`](second-brain/Engineering/Lessons-Learned.md).
 4. If the task is a feature, check whether a spec already exists in [`second-brain/Product/Features/`](second-brain/Product/Features/).
 
@@ -32,6 +35,7 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 - `src/lib/` — data access (`queries.ts` — stubbed), auth (`auth.ts`, `session.ts`, `password.ts`), the onboarding/offboarding engine (`workspace.ts` — stubbed).
 - `src/components/` — `ui/` (design-system primitives), `shell/` (sidebar), `dashboard/`, `team/`, `settings/`, `brand/`, `theme/`.
 - `second-brain/` — persistent engineering memory (see above).
+- `backend/` — **not yet present on `main`** (see the standing reminder above). Lives on branch `backend/auth-foundation`: a separate FastAPI (Python 3.12) service — real Google OAuth/Drive/Admin-SDK integration, SQLAlchemy 2.x + Alembic, meant for Railway + Postgres. Once merged, see [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md)'s "Backend integration contract" section before writing any frontend code that calls it.
 
 ---
 
@@ -39,8 +43,8 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 
 These are locked design decisions for this build phase, not defaults. If one seems wrong, **stop and ask** — don't unilaterally "improve" it. Full reasoning: [`second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md). Prisma/SQLite removal: [`0002-remove-prisma-for-vercel.md`](second-brain/Architecture/Decisions/0002-remove-prisma-for-vercel.md).
 
-1. **The Next.js app is the single chokepoint.** No separate backend service. Server Components read; Server Actions (`"use server"`) mutate. Don't introduce a second API layer.
-2. **Google Workspace integration is mocked.** Nothing under `src/lib/` may call a real Google API until an ADR records that a GCP project + domain-wide delegation has actually been provisioned by the user. `src/lib/workspace.ts` (`onboardPerson`/`offboardPerson`) is the seam — extend the simulation there, don't bolt a real call on elsewhere.
+1. **The Next.js app is the single chokepoint.** No separate backend service. Server Components read; Server Actions (`"use server"`) mutate. Don't introduce a second API layer. **Still true for everything currently on `main`.** A real, separate FastAPI backend has been built and is ready to merge on branch `backend/auth-foundation` per [`0004-fastapi-backend-for-auth-and-identity.md`](second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md) — that ADR is the sanctioned exception; don't treat it as license to add a *second* backend service beyond it.
+2. **Google Workspace integration is mocked.** Nothing under `src/lib/` may call a real Google API until an ADR records that a GCP project + domain-wide delegation has actually been provisioned by the user. `src/lib/workspace.ts` (`onboardPerson`/`offboardPerson`) is the seam — extend the simulation there, don't bolt a real call on elsewhere. **This still fully applies to `src/lib/`** — ADR-0004 narrows its scope (the FastAPI backend does real Google API calls) but does not lift it here.
 3. **Every data-access function is scoped by `organizationId`.** It's a required, non-defaulted argument — this repo will eventually be multi-tenant, so this discipline starts now, not later. See `src/lib/queries.ts` for the pattern.
 4. **Secrets from env only.** Never hardcode keys.
 5. **This repo is independent of Sage_v1.** It started as a spinoff conversation from that repo and intentionally borrowed its design language (see `src/app/globals.css`, `src/components/ui/`), but the two products share no code, no data, and no architecture invariants beyond that visual similarity.

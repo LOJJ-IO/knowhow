@@ -4,10 +4,15 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-09
-related: ["[[0001-mocked-data-first-prototype]]", "[[FEAT-org-chart-builder]]", "[[FEAT-doc-visibility-dashboard]]", "[[FEAT-doc-creation-auto-share]]", "[[FEAT-onboarding-offboarding-automation]]", "[[Known-Issues]]"]
+related: ["[[0001-mocked-data-first-prototype]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-org-chart-builder]]", "[[FEAT-doc-visibility-dashboard]]", "[[FEAT-doc-creation-auto-share]]", "[[FEAT-onboarding-offboarding-automation]]", "[[Known-Issues]]"]
 ---
 
 # Current Context
+
+## 🔔 Backend is built and ready to merge into `main` (2026-09-09)
+A complete FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — is built, tested, and consolidated onto branch `backend/auth-foundation` (its own `backend/org-engine` branch was fast-forward-merged into it, so `backend/auth-foundation` is now the single chief branch holding the whole backend). Full reasoning and integration contract (base URL, auth-cookie shape, endpoint list) in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
+
+**Not merged into `main` yet — only on the user's explicit request.** Per [`CLAUDE.md`](../../CLAUDE.md)'s standing reminder (added this same session), every response in this repo should note the backend is ready to merge until that happens; that instruction — not this note — is the enforcement mechanism, remove both together once merged. Deployment (Railway project, managed Postgres, GCP provisioning per `backend/docs/gcp-setup.md`) is explicitly out of scope until then — nothing has been provisioned.
 
 ## Active priority (as of 2026-09-04 — supersedes the demo-prep priority below)
 The user is rebuilding the entire frontend themselves, from scratch, screen by screen — this is **not** a Claude-driven redesign. Claude's role narrowed sharply after two corrections in one session (see [[Lessons-Learned]], 2026-09-04 entries): a generated design-system/IA/screens canvas was rejected outright as "AI slop," and a follow-up landing-page build was corrected twice more for inventing marketing copy and reusing old design tokens/components instead of genuinely starting fresh. Working agreement going forward: **implement only what is explicitly asked, one piece at a time; never invent copy, layout, or visual decisions; ask rather than fill gaps.** The user also asked that second-brain be updated after every change, without exception — not just "non-trivial" ones.
@@ -112,6 +117,7 @@ Initial position (`{x: 2, y: 11}`, same em-relative-to-own-font-size basis as th
 3. **Second-brain auto write-back (2026-09-09)** — project skill `.cursor/skills/update-second-brain/`, always-on rule `.cursor/rules/update-second-brain.mdc`, and `stop` hook in `.cursor/hooks.json` so agents update the vault when work finishes.
 4. Commit the tail of the 2026-09-02 demo-prep work (sidebar sign-out fix + vault updates) when the user says so; most of it was already committed mid-session (see above).
 5. GitHub remote is `LOJJ-IO/knowhow` — Vercel deploys from `main`.
-6. Real Google OAuth + Admin SDK domain-wide delegation is still fully mocked — needs a GCP project + Workspace admin consent that only the user can provision (see [[0001-mocked-data-first-prototype]]).
+6. `src/lib/` (the Next.js app's own Google Workspace code) is still fully mocked, unchanged — see [[0001-mocked-data-first-prototype]]. Separately, real Google OAuth/Drive/Admin-SDK integration code now exists on branch `backend/auth-foundation` (see the note at the top of this file) but is neither merged into `main` nor connected to any real GCP project — don't conflate "code exists on a branch" with "connected to a real org."
 7. "View as" has no permission check — demo-only, flagged in [[Known-Issues]], must not ship past prototype as-is.
-8. Durable database for production is an open follow-up (Prisma/SQLite removed; do not put SQLite back on Vercel).
+8. Durable database for production is an open follow-up (Prisma/SQLite removed; do not put SQLite back on Vercel). Note: `backend/auth-foundation` brings its own separate Postgres (via SQLAlchemy/Alembic) for the FastAPI service specifically — that does not resolve this item, which is about the Next.js app's own data layer.
+9. `backend/auth-foundation` merge into `main` is pending the user's explicit go-ahead (see top of file) — when it happens, wire the frontend to it per [[Architecture-Overview]]'s "Backend integration contract," and update/remove the CLAUDE.md standing reminder plus this file's top note in the same pass.
