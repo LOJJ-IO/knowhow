@@ -45,18 +45,4 @@ function LogoMark({ className }: { className?: string }) {
   );
 }
 
-/** Wordmark inherits its text color, so it works on both the light auth card
- * (navy foreground) and the navy sidebar (white). */
-function Logo({ className }: { className?: string }) {
-  return (
-    <span
-      className={cn(sohne.className, "inline-flex items-center gap-1 tracking-tight text-inherit", className)}
-    >
-      Kn
-      <LogoMark />
-      how
-    </span>
-  );
-}
-
-export { Logo, LogoMark };
+export { LogoMark };

@@ -1,54 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:where(.dark, .dark *));
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: Arial, Helvetica, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
-  --font-heading: Arial, Helvetica, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-success: var(--success);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --spacing-dialog-shell-x: var(--dialog-shell-px);
-  --spacing-dialog-shell-header-y: var(--dialog-shell-header-py);
-  --spacing-dialog-shell-footer-y: var(--dialog-shell-footer-py);
-  --spacing-dialog-shell-body-y: var(--dialog-shell-body-py);
-  --color-gblue: var(--gblue);
-  --color-ggreen: var(--ggreen);
-  --color-gyellow: var(--gyellow);
-  --color-gred: var(--gred);
 }
 
 body {
@@ -60,86 +18,13 @@ html {
   min-height: 100%;
 }
 
-/* Palette matched to the Knowhow pitch deck: deep navy brand + Google
-   Workspace product colors on a cool light-gray canvas. */
 :root {
-  --background: oklch(0.972 0.004 250);
-  --foreground: oklch(0.24 0.035 258);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.24 0.035 258);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.24 0.035 258);
-  --primary: oklch(0.32 0.075 258);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.955 0.008 250);
-  --secondary-foreground: oklch(0.32 0.075 258);
-  --muted: oklch(0.955 0.008 250);
-  --muted-foreground: oklch(0.5 0.025 258);
-  --accent: oklch(0.955 0.008 250);
-  --accent-foreground: oklch(0.32 0.075 258);
-  --destructive: oklch(0.6 0.21 27);
-  --success: oklch(0.62 0.15 152);
-  --border: oklch(0.915 0.008 250);
-  --input: oklch(0.915 0.008 250);
-  --ring: oklch(0.62 0.12 258);
-  --gblue: oklch(0.62 0.17 259);
-  --ggreen: oklch(0.65 0.16 152);
-  --gyellow: oklch(0.82 0.16 85);
-  --gred: oklch(0.6 0.21 27);
-  --radius: 0.625rem;
-  --dialog-shell-px: 1.5rem;
-  --dialog-shell-header-py: 0.875rem;
-  --dialog-shell-footer-py: 0.75rem;
-  --dialog-shell-body-py: 1.25rem;
-  --sidebar: oklch(0.27 0.06 258);
-  --sidebar-foreground: oklch(0.97 0.005 250);
-  --sidebar-primary: oklch(0.62 0.17 259);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.33 0.065 258);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.62 0.12 258);
-}
-
-:root.dark {
-  color-scheme: dark;
-  --background: oklch(0.2 0.025 258);
-  --foreground: oklch(0.97 0.005 250);
-  --card: oklch(0.24 0.03 258);
-  --card-foreground: oklch(0.97 0.005 250);
-  --popover: oklch(0.24 0.03 258);
-  --popover-foreground: oklch(0.97 0.005 250);
-  --primary: oklch(0.68 0.15 259);
-  --primary-foreground: oklch(0.145 0.02 258);
-  --secondary: oklch(0.3 0.035 258);
-  --secondary-foreground: oklch(0.97 0.005 250);
-  --muted: oklch(0.165 0.02 258);
-  --muted-foreground: oklch(0.78 0.015 250);
-  --accent: oklch(0.3 0.035 258);
-  --accent-foreground: oklch(0.97 0.005 250);
-  --destructive: oklch(0.72 0.17 22);
-  --success: oklch(0.72 0.15 150);
-  --gblue: oklch(0.68 0.15 259);
-  --ggreen: oklch(0.7 0.14 152);
-  --gyellow: oklch(0.83 0.14 85);
-  --gred: oklch(0.7 0.17 25);
-  --border: oklch(1 0 0 / 14%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.65 0.08 258);
-  --sidebar: oklch(0.22 0.04 258);
-  --sidebar-foreground: oklch(0.97 0.005 250);
-  --sidebar-primary: oklch(0.68 0.15 259);
-  --sidebar-primary-foreground: oklch(0.145 0.02 258);
-  --sidebar-accent: oklch(0.29 0.045 258);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.65 0.08 258);
+  /* Landing canvas — matches hero `#F9F8F6`. */
+  --background: #f9f8f6;
+  --foreground: #1c1917;
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
   body {
     @apply bg-background font-sans text-foreground;
   }
@@ -196,9 +81,530 @@ html {
   }
 }
 
-/* Override for shimmer text sitting on a dark surface (e.g. the "Get
-   Started" button, which is always a dark pill regardless of site theme). */
 .t-shimmer-on-dark {
   --shimmer-base: rgba(255, 255, 255, 0.55);
   --shimmer-highlight: #ffffff;
+}
+
+/* Hero video — oil-paint / canvas-tooth grain. Soft-light keeps chroma;
+   coarser tile + mid baseFrequency reads painterly, not digital static. */
+.t-hero-grain {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  opacity: 0.85;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.12 0 0 0 0 0.1 0 0 0 0 0.08 0 0 0 0.85 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 220px 220px;
+}
+.t-hero-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: 0.9;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 120px 120px;
+}
+
+/* Landing handoff — video stays; logo + subhead shrink 20%; CTA stays;
+   desktop: rise + linear-spread (16:9 mac windows);
+   mobile: phone-aspect Cover Flow stack (framer-motion).
+   Prior MC-recess + tall deck: [[Patterns-landing-mc-recess-deck]]. */
+:root {
+  --handoff-dur: 900ms;
+  --handoff-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --panel-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --logo-shrink: 0.8;
+  --deck-card-w: min(84.6vw, 68.4rem);
+  --deck-band-y: 5vh;
+  --deck-side-x: 73vw;
+  --deck-side-drop: 5vh;
+  --deck-rise-dur: 700ms;
+  --deck-spread-dur: 1331ms;
+  --deck-window-radius: 10px;
+  --deck-mac-radius: 14px;
+  --deck-titlebar-h: 2.75rem;
+  --deck-dot: 13px;
+  --deck-brand-border: 3px;
+  /* Rise keeps a little snap; spread eases out hard so the seat-in isn't abrupt. */
+  --deck-rise-ease: cubic-bezier(0.25, 0.85, 0.3, 1);
+  --deck-spread-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.t-handoff-shrink {
+  transform: scale(1);
+  transition: transform var(--handoff-dur) var(--handoff-ease);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+.t-handoff-shrink[data-open="true"] {
+  transform: scale(var(--logo-shrink));
+}
+.t-handoff-shrink--logo[data-open="true"] {
+  /* Shrunk lockup sits 2vh higher than the scaled seat alone. */
+  transform: translateY(-2vh) scale(var(--logo-shrink));
+}
+.t-handoff-shrink--logo {
+  transform-origin: center top;
+}
+@media (min-width: 768px) {
+  .t-handoff-shrink--logo {
+    transform-origin: left center;
+  }
+}
+.t-handoff-shrink--subhead {
+  transform-origin: center center;
+}
+
+.t-deck {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+}
+.t-deck[data-open="true"] {
+  pointer-events: auto;
+}
+.t-deck--desktop {
+  display: none;
+}
+.t-deck--mobile {
+  display: block;
+}
+@media (min-width: 768px) {
+  .t-deck--desktop {
+    display: block;
+  }
+  .t-deck--mobile {
+    display: none;
+  }
+}
+
+/* Shared macOS frosted chrome */
+.t-deck-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--deck-window-radius);
+  overflow: hidden;
+  background: #19191b;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  box-shadow:
+    0 10px 24px rgb(0 0 0 / 0.16),
+    0 1px 3px rgb(0 0 0 / 0.1),
+    inset 0 0.5px 0 rgb(255 255 255 / 0.14);
+  backface-visibility: hidden;
+}
+.t-deck-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 var(--deck-brand-border) var(--deck-brand);
+}
+
+.t-deck-titlebar {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 var(--deck-titlebar-h);
+  display: flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  background: #1a1a1c;
+  border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.t-deck-traffic {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transform: translateY(5%);
+}
+
+.t-deck-dot {
+  width: var(--deck-dot);
+  height: var(--deck-dot);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.25);
+}
+.t-deck-dot--close {
+  background: #ff5f57;
+}
+.t-deck-dot--min {
+  background: #febc2e;
+}
+.t-deck-dot--max {
+  background: #28c840;
+}
+
+.t-deck-card--center {
+  --deck-brand: #4285f4;
+  background: #4285f4;
+}
+.t-deck-card--left {
+  --deck-brand: #34a853;
+  background: #34a853;
+}
+.t-deck-card--right {
+  --deck-brand: #ea4335;
+  background: #ea4335;
+}
+
+/* Shared painted mat + inset interactive mac window. */
+.t-deck-card--mat {
+  align-items: center;
+  justify-content: center;
+  border-color: rgb(255 255 255 / 0.18);
+  box-shadow:
+    0 10px 24px rgb(0 0 0 / 0.16),
+    0 1px 3px rgb(0 0 0 / 0.1);
+}
+.t-deck-card--mat::after {
+  display: none;
+}
+
+.t-deck-mat {
+  position: absolute;
+  inset: 0;
+}
+.t-deck-mat--blue {
+  background:
+    linear-gradient(rgb(66 133 244 / 0.12), rgb(66 133 244 / 0.12)),
+    url("/deck/blue.png") center / cover no-repeat;
+}
+.t-deck-mat--green {
+  background:
+    linear-gradient(rgb(52 168 83 / 0.12), rgb(52 168 83 / 0.12)),
+    url("/deck/green.png") center / cover no-repeat;
+}
+.t-deck-mat--red {
+  background:
+    linear-gradient(rgb(234 67 53 / 0.12), rgb(234 67 53 / 0.12)),
+    url("/deck/red.png") center / cover no-repeat;
+}
+.t-deck-mat--yellow {
+  background:
+    linear-gradient(rgb(251 188 5 / 0.12), rgb(251 188 5 / 0.12)),
+    url("/deck/yellow.png") center / cover no-repeat;
+}
+
+.t-deck-window {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--deck-mac-radius);
+  overflow: hidden;
+  background: #f3f2ef;
+  border: 1px solid rgb(0 0 0 / 0.08);
+  box-shadow:
+    0 8px 20px rgb(0 0 0 / 0.18),
+    inset 0 0.5px 0 rgb(255 255 255 / 0.7);
+}
+
+.t-deck-window--interactive {
+  overflow: visible;
+}
+
+.t-deck-window .t-deck-titlebar {
+  background: #d1cfcc;
+  border-bottom: 1px solid rgb(0 0 0 / 0.08);
+  border-radius: var(--deck-mac-radius) var(--deck-mac-radius) 0 0;
+  cursor: grab;
+}
+
+/* While dragging, keep the clenched hand over every element under the pointer. */
+html.t-deck-dragging,
+html.t-deck-dragging *,
+body.t-deck-dragging,
+body.t-deck-dragging * {
+  cursor: grabbing !important;
+}
+
+.t-deck-resize {
+  position: absolute;
+  z-index: 6;
+  touch-action: none;
+}
+.t-deck-resize--n {
+  top: -5px;
+  left: 10px;
+  right: 10px;
+  height: 10px;
+  cursor: ns-resize;
+}
+.t-deck-resize--s {
+  bottom: -5px;
+  left: 10px;
+  right: 10px;
+  height: 10px;
+  cursor: ns-resize;
+}
+.t-deck-resize--e {
+  top: 10px;
+  right: -5px;
+  bottom: 10px;
+  width: 10px;
+  cursor: ew-resize;
+}
+.t-deck-resize--w {
+  top: 10px;
+  left: -5px;
+  bottom: 10px;
+  width: 10px;
+  cursor: ew-resize;
+}
+.t-deck-resize--ne {
+  top: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+}
+.t-deck-resize--nw {
+  top: -6px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+.t-deck-resize--se {
+  bottom: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+}
+.t-deck-resize--sw {
+  bottom: -6px;
+  left: -6px;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+}
+
+.t-deck-card--left {
+  --deck-brand: #34a853;
+}
+.t-deck-card--right {
+  --deck-brand: #ea4335;
+}
+
+/* ——— Desktop: rise + linear spread (16:9) ——— */
+.t-deck--desktop .t-deck-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: var(--deck-card-w);
+  aspect-ratio: 16 / 9;
+  height: auto;
+  will-change: transform;
+  transform: translate3d(-50%, calc(-50% + 110vh), 0);
+}
+.t-deck--desktop .t-deck-card--center {
+  z-index: 3;
+}
+.t-deck--desktop .t-deck-card[data-focus="true"] {
+  z-index: 6;
+}
+
+.t-deck--desktop[data-open="true"] .t-deck-card--center {
+  animation: t-deck-rise var(--deck-rise-dur) var(--deck-rise-ease) forwards;
+}
+.t-deck--desktop[data-open="true"] .t-deck-card--left {
+  animation:
+    t-deck-rise var(--deck-rise-dur) var(--deck-rise-ease) forwards,
+    t-deck-spread-left var(--deck-spread-dur) var(--deck-spread-ease)
+      var(--deck-rise-dur) forwards;
+}
+.t-deck--desktop[data-open="true"] .t-deck-card--right {
+  animation:
+    t-deck-rise var(--deck-rise-dur) var(--deck-rise-ease) forwards,
+    t-deck-spread-right var(--deck-spread-dur) var(--deck-spread-ease)
+      var(--deck-rise-dur) forwards;
+}
+
+@keyframes t-deck-rise {
+  from {
+    transform: translate3d(-50%, calc(-50% + 110vh), 0);
+  }
+  to {
+    transform: translate3d(-50%, calc(-50% + var(--deck-band-y)), 0);
+  }
+}
+@keyframes t-deck-spread-left {
+  from {
+    transform: translate3d(-50%, calc(-50% + var(--deck-band-y)), 0);
+  }
+  to {
+    transform: translate3d(
+      calc(-50% - var(--deck-side-x)),
+      calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
+      0
+    );
+  }
+}
+@keyframes t-deck-spread-right {
+  from {
+    transform: translate3d(-50%, calc(-50% + var(--deck-band-y)), 0);
+  }
+  to {
+    transform: translate3d(
+      calc(-50% + var(--deck-side-x)),
+      calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
+      0
+    );
+  }
+}
+
+/* ——— Mobile: phone-aspect Cover Flow stack ——— */
+.t-deck-cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0 1rem;
+  transform: translate3d(0, 110vh, 0);
+  opacity: 0;
+  transition:
+    transform var(--deck-rise-dur) var(--deck-rise-ease),
+    opacity calc(var(--deck-rise-dur) * 0.85) var(--deck-rise-ease);
+}
+.t-deck--mobile[data-open="true"] .t-deck-cover {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+}
+
+.t-deck-cover-stage {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: min(58vh, 28rem);
+  align-items: center;
+  justify-content: center;
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.t-deck-cover-item {
+  position: absolute;
+  width: min(52vw, 13.5rem);
+  aspect-ratio: 9 / 19.5;
+  cursor: pointer;
+  transform-style: preserve-3d;
+}
+
+.t-deck-cover-item .t-deck-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: unset;
+}
+
+.t-deck-cover-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 20;
+  border-radius: 9999px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  background: #2a2a2c;
+  padding: 0.2rem 0.45rem;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+
+.t-deck-cover-nav button {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.75);
+  cursor: pointer;
+}
+.t-deck-cover-nav button:hover {
+  background: rgb(255 255 255 / 0.1);
+  color: #fff;
+}
+.t-deck-cover-nav button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.t-deck-cover-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 0.15rem;
+}
+
+.t-deck-cover-dot {
+  height: 0.25rem;
+  width: 0.25rem;
+  border-radius: 9999px;
+  border: 0;
+  padding: 0;
+  background: rgb(255 255 255 / 0.3);
+  cursor: pointer;
+  transition:
+    width 200ms ease,
+    background-color 200ms ease;
+}
+.t-deck-cover-dot[data-active="true"] {
+  width: 1rem;
+  background: #fff;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --deck-titlebar-h: 2.25rem;
+    --deck-dot: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-handoff-shrink {
+    transition: none !important;
+  }
+  .t-deck-cover {
+    transition: none !important;
+  }
+  .t-deck--desktop .t-deck-card--center,
+  .t-deck--desktop .t-deck-card--left,
+  .t-deck--desktop .t-deck-card--right {
+    animation: none !important;
+  }
+  .t-deck--desktop[data-open="true"] .t-deck-card--center {
+    transform: translate3d(-50%, calc(-50% + var(--deck-band-y)), 0);
+  }
+  .t-deck--desktop[data-open="true"] .t-deck-card--left {
+    transform: translate3d(
+      calc(-50% - var(--deck-side-x)),
+      calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
+      0
+    );
+  }
+  .t-deck--desktop[data-open="true"] .t-deck-card--right {
+    transform: translate3d(
+      calc(-50% + var(--deck-side-x)),
+      calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
+      0
+    );
+  }
+  .t-deck--mobile[data-open="true"] .t-deck-cover {
+    transform: none;
+    opacity: 1;
+  }
 }

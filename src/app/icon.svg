@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 137" fill="none">
+  <path
+    d="M60,66 L120,90 L120,111 L60,137 L0,111 L0,90 Z"
+    fill="#EA4335"
+  />
+  <path d="M60,33 L0,57 L0,78 L60,104 Z" fill="#34A853" />
+  <path d="M60,33 L120,57 L120,78 L60,104 Z" fill="#FBBC05" />
+  <path
+    d="M60,0 L120,24 L120,45 L60,71 L0,45 L0,24 Z"
+    fill="#4285F4"
+  />
+</svg>

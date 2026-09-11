@@ -3,8 +3,8 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-05
-related: ["[[Lessons-Learned]]", "[[Current-Context]]"]
+updated: 2026-09-10
+related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
 # Known Issues
@@ -15,15 +15,13 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]"]
 ```
 
 ## Open
-- **[deploy / data]** Prisma + SQLite were removed (2026-09-05) so Vercel builds without native sqlite / generated client. Queries/workspace mutations remain stubs. Auth was rewired to cookie-only sessions + in-memory demo roster ([[0003-cookie-only-sessions-demo-roster]]); org-chart/doc data still empty until a durable store is wired — see [[0002-remove-prisma-for-vercel]]. (since 2026-09-05, auth portion resolved 2026-09-05)
-- **[frontend]** `/login` and `/dashboard` render nothing — deliberately cleared to blank placeholders at the user's request so they can rebuild the frontend themselves from scratch. Login has no form (signing in via the UI does not work even though `logIn` works); use `/signup` or call the action directly. Dashboard keeps only its `requireUser()` auth guard. **Do not restore either without being explicitly asked** — see [[Current-Context]] for the full working agreement on the frontend rebuild. (since 2026-09-04)
-- **[auth]** Signup creates an ephemeral cookie session only — there is no password store, so those accounts cannot sign back in after the cookie expires. Demo `@acme.test` / `knowhow-demo` accounts remain the durable-for-prototype login path. (since 2026-09-05)
-- **[product]** Offboarding is one-way — an offboarded `User` has no "reinstate" path in the UI (the data model supports flipping `status` back to `ACTIVE`, but nothing calls it). (since 2026-08-31)
-- **[auth]** "View as" (`src/app/(auth)/actions.ts`) starts a real session for any user in the org with no password check — explicitly a demo-only convenience so the org chart owner can preview a teammate's dashboard. Must not ship past this prototype phase without a real permission check (e.g. owner/leader only, and only for users in their own scope). (since 2026-08-31)
-- **[google-integration]** Nothing under `src/lib/` calls a real Google API yet — "Create New Work" now creates simulated in-app documents via `createAndFileDocument` (see [[FEAT-doc-creation-auto-share]]); access grants, sharing, folder filing, and the app list are all simulated. See [[0001-mocked-data-first-prototype]]. (since 2026-08-31, updated 2026-09-02)
-- **[demo-data]** `dev.db` carries residue from verification click-throughs: a few extra activity events and test docs ("All-Hands Agenda", "Q4 Budget Tracker"), and an "Alex Rivera" test member on Marketing. Harmless (arguably makes the demo look lived-in), but for a pristine run do `rm dev.db && npx prisma migrate deploy && npm run db:seed` — the seed now includes the org-level "Company Handbook". (since 2026-09-02)
+- **[a11y / landing]** Hero text (`#1c1917`) sits on a looping background video with no dim overlay (explicit product choice, 2026-09-09). Contrast can fail WCAG 2.2 AA on darker video frames even when it passes on light ones. Tracked until a contrast strategy is chosen. (since 2026-09-09)
+- **[deploy / data]** No durable database in tree (Prisma/SQLite removed earlier). Auth/data/product routes were purged 2026-09-10 ([[0004-landing-only-purge-old-app]]). Next store needs a durable host — see [[0002-remove-prisma-for-vercel]]. (since 2026-09-05, updated 2026-09-10)
+- **[google-integration]** No Google API client in tree. When workspace seams return, keep them mocked until GCP + domain-wide delegation is provisioned — [[0001-mocked-data-first-prototype]]. (since 2026-08-31, updated 2026-09-10)
 
 ## Recently resolved
+- **[frontend]** Old product app (auth routes, `(app)/*`, Sage `ui/`/shell/dashboard/team/settings, navy oklch tokens, cookie sessions, stubbed queries/workspace) removed from the live tree per explicit purge — [[0004-landing-only-purge-old-app]]. (resolved 2026-09-10)
+- **[frontend]** `/login` and `/dashboard` blank-placeholder regime ended — those routes no longer exist. (resolved 2026-09-10; was open since 2026-09-04)
 - **[frontend]** `TeamDocumentsBoard`'s owner list (used for both the filter dropdown and React list keys) had duplicate entries when a team's leader was also present in `team.members` (their `teamId` gets set when promoted, so they show up in both `team.leader` and `team.members`) — caused a "two children with the same key" React warning on the owner dashboard. Fixed by filtering `activeTeam.members` to exclude `activeTeam.leaderId` before building the owners list in `src/app/(app)/dashboard/page.tsx`. Caught via a Playwright-driven click-through, not by inspection. (resolved 2026-08-31)
 - **[backend]** `onboardPerson` let a duplicate email hit Prisma's unique constraint and throw an unhandled `PrismaClientKnownRequestError`, surfacing as a raw 500 with no user-facing feedback. Fixed: check for an existing user by email first and throw a plain `Error` with a friendly message; `addPerson` (the Server Action) now catches and returns `{ error: string }` instead of letting Next's default production error-message redaction hide it. `PeopleManager` renders that error distinctly from a success summary. (resolved 2026-08-31)
 - **[frontend]** `PeopleManager` used one shared `useTransition`/`isPending` for both Add and Remove actions — removing someone made the unrelated "Add Person" button show "Adding…". Fixed with two separate transitions (`isAdding`, `isRemoving` + `removingId` to scope the "Removing…" label to the specific row). (resolved 2026-08-31)

@@ -1,13 +1,16 @@
 ---
 type: adr
-status: accepted
+status: superseded
 tags: [area/backend, area/auth]
 created: 2026-09-05
-updated: 2026-09-05
-related: ["[[0002-remove-prisma-for-vercel]]", "[[Architecture-Overview]]", "[[Known-Issues]]"]
+updated: 2026-09-10
+related: ["[[0002-remove-prisma-for-vercel]]", "[[0004-landing-only-purge-old-app]]", "[[Architecture-Overview]]", "[[Known-Issues]]"]
 ---
 
 # ADR 0003 — Cookie-only sessions with in-memory demo roster
+
+## Status
+`superseded` by [[0004-landing-only-purge-old-app]] (session/auth code removed from the live tree; restore from git if auth returns).
 
 ## Context
 [[0002-remove-prisma-for-vercel]] stubbed `getSessionUser()` to always return `null` and made `logIn`/`signUp` return hard errors. That left a catch-22: every authenticated route calls `requireUser()` → redirect `/login`, and login itself could not create a session. No durable DB is available yet on Vercel.

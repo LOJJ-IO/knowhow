@@ -3,8 +3,8 @@ type: architecture
 status: active
 tags: [area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-09
-related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[0003-cookie-only-sessions-demo-roster]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Product-Vision]]", "[[Current-Context]]"]
+updated: 2026-09-10
+related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[0003-cookie-only-sessions-demo-roster]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Product-Vision]]", "[[Current-Context]]"]
 ---
 
 # Architecture Overview
@@ -14,13 +14,16 @@ The living map of how Knowhow fits together. Update this whenever a decision cha
 ## System diagram
 
 ```
-Next.js App Router (TypeScript) — frontend, owns UI + its own mocked data layer
+Next.js App Router (TypeScript) — frontend (landing only on main today)
          |
          v
-Data layer stubbed (no ORM) — see [[0002-remove-prisma-for-vercel]]
+Landing only (`/` → LandingHero) — see [[0004-landing-only-purge-old-app]]
          |
          v
-Durable DB TBD (do not put SQLite back on Vercel serverless)
+Data / auth / Google seams — not in the live `src/` tree; restore from git + ADRs when rebuilt
+         |
+         v
+Durable DB TBD for the Next.js app (do not put SQLite back on Vercel serverless)
 
 -------------------------------------------------------------------
 NOT MERGED INTO main YET — see [[0004-fastapi-backend-for-auth-and-identity]]
@@ -32,15 +35,14 @@ Branch: backend/auth-foundation (org-engine already merged into it —
 this is the one branch to merge into main).
 ```
 
-**As of this writing, the Next.js app on `main` still has no separate backend service** — that invariant (below) is accurate for `main` today. A complete, separate FastAPI backend exists on branch `backend/auth-foundation` and is ready to merge into `main` on request; once merged, invariants 1 and 2 below are superseded for real (not mocked) Google Workspace operations — see [[0004-fastapi-backend-for-auth-and-identity]] for the full reasoning, and the "Backend integration contract" section below for the base URL, auth-cookie shape, and endpoint list frontend code will need once that lands.
+**As of this writing, the Next.js app on `main` still has no separate backend service** — that invariant (below) is accurate for `main` today. Prisma + SQLite were removed earlier ([[0002-remove-prisma-for-vercel]]). The 2026-09-10 purge removed the stubbed product UI and session layer from the live tree ([[0004-landing-only-purge-old-app]]). A complete FastAPI backend exists on branch `backend/auth-foundation` and is ready to merge into `main` on request; once merged, see [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section below.
 
 ## Components
 
-- **`src/app/(auth)/`** — signup UI still present; login page blank on purpose. Cookie sessions in `src/lib/session.ts` store full `SessionUser` JSON; demo roster in `src/lib/demo-users.ts` — see [[0003-cookie-only-sessions-demo-roster]].
-- **`src/app/(app)/`** — dashboard, org chart, team people, activity, settings (UI present; DB-backed behavior stubbed).
-- **`src/lib/workspace.ts`** — onboarding/offboarding/doc-creation seam (stubbed; still the place real Google Admin SDK calls will land later — [[0001-mocked-data-first-prototype]]).
-- **`src/lib/queries.ts`** — read API surface, still scoped by `organizationId`; returns empty / throws until a store returns.
-- Former Prisma schema/seed lived under `prisma/` — deleted with the ORM; recover from git history when wiring a new database.
+- **`src/app/page.tsx`** — renders `<LandingHero />` only (no session redirect).
+- **`src/components/brand/`** — `landing-hero`, `logo-mark` (hex mark + Söhne), `guidelines-overlay`.
+- **`src/lib/`** — `utils.ts`, `use-hydrated.ts` only.
+- **`src/app/globals.css`** — landing canvas `#F9F8F6` / `#1c1917`, `.t-shimmer`, handoff + deck chrome (desktop linear-spread / mobile Cover Flow). No navy/oklch design-system palette, no dark theme, no sidebar tokens.
 
 ## Backend integration contract (pending merge — see [[0004-fastapi-backend-for-auth-and-identity]])
 
@@ -58,11 +60,11 @@ For whoever wires the Next.js frontend up to `/backend` once `backend/auth-found
 
 ## Design language
 
-Ported from Sage's frontend on request: grayscale oklch tokens (light/dark), `0.625rem` base radius scale, pill-shaped gradient buttons, `border-foreground/20` input chrome. Hand-rolled `Button`/`Input`/`Badge`/`Switch`/`Card` in `src/components/ui/`. Landing page additionally uses self-hosted Söhne / Satoshi / LOGO fonts — see [[Current-Context]].
+Landing is being designed by the user screen-by-screen. Do not reintroduce the old Sage-derived `ui/` primitives or cool-navy oklch tokens. Google mark colors remain literal hex in `logo-mark.tsx` / landing subhead (`#4285F4` / `#34A853` / `#FBBC05` / `#EA4335`).
 
 ## Non-negotiables (see [/CLAUDE.md](../../CLAUDE.md) for the full list)
 
-1. Next.js app is the single chokepoint — no separate backend service. **True for `main` today; superseded on merge of `backend/auth-foundation` per [[0004-fastapi-backend-for-auth-and-identity]] — that ADR records the decision, not yet the merge.**
-2. Google Workspace integration is mocked until an ADR records that GCP domain-wide delegation is provisioned. **Still true for `src/lib/` specifically — narrowed, not lifted, by ADR-0004; the mocked seam here is untouched.**
-3. Every data-access function takes `organizationId` as a required argument.
-4. Secrets from env only.
+1. Next.js app is the single chokepoint on `main` — no separate backend service in the live tree. **Superseded on merge of `backend/auth-foundation` per [[0004-fastapi-backend-for-auth-and-identity]].**
+2. Google Workspace integration is mocked in `src/` until an ADR records that GCP domain-wide delegation is provisioned. **Still true for `src/`; narrowed, not lifted, by the FastAPI ADR.**
+3. Every data-access function takes `organizationId` as a required argument when a data layer returns.
+4. Secrets from env only · independent of Sage_v1 · no Prisma/SQLite on Vercel · implement only what is asked.
