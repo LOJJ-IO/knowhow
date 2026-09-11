@@ -14,6 +14,11 @@ import { LogoMark, sohne } from "@/components/brand/logo-mark";
 import { GuidelinesOverlay } from "@/components/brand/guidelines-overlay";
 import { useHydrated } from "@/lib/use-hydrated";
 import { cn } from "@/lib/utils";
+import gsap from "gsap";
+import { SplitText } from "gsap/SplitText";
+import { useGSAP } from "@gsap/react";
+
+gsap.registerPlugin(SplitText, useGSAP);
 
 const lojjFont = localFont({
   src: "../../fonts/logo/LOGO.otf",
@@ -183,8 +188,18 @@ function readSplitTiming() {
   };
 }
 
+/** `active:scale-95` is the same press as CTA_CLASS; its 150ms transition is
+ *  inline (the button's `transition` also carries the split). */
 const CTA_DAUGHTER_CLASS =
-  "rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "rounded-full active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+
+/** The same press, on each arrow's chevron (it lives in its own layer so it
+ *  could stay parked while the pill pinched) — driven by its circle's :active.
+ *  Literal per key so Tailwind can see the classes. */
+const CTA_CHEVRON_PRESS: Record<(typeof CTA_DAUGHTERS)[number]["key"], string> = {
+  prev: "group-has-[[data-step=prev]:active]/cta:scale-95",
+  next: "group-has-[[data-step=next]:active]/cta:scale-95",
+};
 
 const CTA_DAUGHTERS = [
   { key: "prev", label: "Show left card", dir: -1 },
@@ -300,6 +315,7 @@ function CtaSplitLayer({
             <button
               type="button"
               aria-label={label}
+              data-step={key}
               disabled={!settled}
               onClick={() => onStep?.(dir < 0 ? "left" : "right")}
               className={`${CTA_DAUGHTER_CLASS} ${settled ? "bg-black/80 shadow" : ""}`}
@@ -310,8 +326,12 @@ function CtaSplitLayer({
                 height: CTA_DIAMETER,
                 marginTop: -CTA_DIAMETER / 2,
                 width: spread ? CTA_DIAMETER : "100%",
-                transform: `translateX(calc(-50% + ${spread ? dir * CTA_OFFSET : 0}px))`,
-                transition: `${move("width")}, ${move("transform")}`,
+                // Position via `translate`, not `transform`: CSS applies
+                // `scale` before `transform` but after `translate`, so the
+                // press shrinks the circle about its own centre instead of
+                // pulling it towards where its box started.
+                translate: `calc(-50% + ${spread ? dir * CTA_OFFSET : 0}px) 0`,
+                transition: `${move("width")}, ${move("translate")}, scale 150ms var(--default-transition-timing-function)`,
                 pointerEvents: settled ? "auto" : "none",
               }}
             />
@@ -399,7 +419,7 @@ function GetStartedCta({
       ))}
       <div
         ref={boxRef}
-        className="relative inline-flex h-[43.542px] items-center justify-center"
+        className="group/cta relative inline-flex h-[43.542px] items-center justify-center"
       >
         <button
           type="button"
@@ -446,8 +466,8 @@ function GetStartedCta({
           {CTA_DAUGHTERS.map(({ key, dir }) => (
             <span
               key={key}
-              className="absolute left-1/2 top-1/2 -ml-[7.2px] -mt-[7.2px] flex"
-              style={{ transform: `translateX(${dir * CTA_OFFSET}px)` }}
+              className={`absolute left-1/2 top-1/2 -ml-[7.2px] -mt-[7.2px] flex transition-transform duration-150 ${CTA_CHEVRON_PRESS[key]}`}
+              style={{ translate: `${dir * CTA_OFFSET}px 0` }}
             >
               {dir < 0 ? (
                 <ChevronLeftIcon size={14.4} />
@@ -706,17 +726,23 @@ function DeckWindow({
   focused = false,
   ref,
   style,
+  onPointerDownCapture,
+  onClick,
 }: {
   mat: DeckMat;
   focused?: boolean;
   ref?: React.Ref<HTMLDivElement>;
   style?: React.CSSProperties;
+  onPointerDownCapture?: (e: React.PointerEvent) => void;
+  onClick?: (e: React.MouseEvent) => void;
 }) {
   const entrance = DECK_ENTRANCE[mat];
   return (
     <div
       ref={ref}
       style={style}
+      onPointerDownCapture={onPointerDownCapture}
+      onClick={onClick}
       className={[
         "t-deck-card",
         "t-deck-card--mat",
@@ -897,11 +923,15 @@ type DeckHandle = { shift: (dir: -1 | 1) => void; close: () => void };
 function DesktopDeck({
   seated,
   ref,
+  onCardStep,
 }: {
   seated: boolean;
   ref: React.Ref<DeckHandle>;
+  /** Clicking the card in the left / right slot does what that arrow does. */
+  onCardStep?: (side: "left" | "right") => void;
 }) {
   const cards = useRef<(HTMLDivElement | null)[]>([]);
+  const cardDown = useRef<{ x: number; y: number } | null>(null);
   const [slots] = useState(() =>
     DESKTOP_DECK.map((_, i) => motionValue(i - 1)),
   );
@@ -1061,6 +1091,21 @@ function DesktopDeck({
             cards.current[i] = el;
           }}
           style={seated ? { animation: "none" } : undefined}
+          // Capture, so the mac window's own drag/resize (which stops
+          // propagation) can't hide the press; a drag moves, so never counts.
+          onPointerDownCapture={(e) => {
+            cardDown.current =
+              e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
+          }}
+          onClick={(e) => {
+            const down = cardDown.current;
+            cardDown.current = null;
+            if (!onCardStep || !down) return;
+            if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+            const p = slots[i].get();
+            if (Math.abs(p + 1) < 0.5) onCardStep("left");
+            else if (Math.abs(p - 1) < 0.5) onCardStep("right");
+          }}
         />
       ))}
     </>
@@ -1102,6 +1147,109 @@ const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
   { key: "demo", label: "Book a demo" },
 ];
 
+/** Subhead wave — a crest that travels left → right through the characters,
+ *  once every `every` seconds. Tune here. */
+const SUBHEAD_WAVE = {
+  /** px each character lifts at the crest. */
+  amplitude: 12,
+  /** s to rise to the crest — and the same again to settle back. */
+  duration: 0.45,
+  /** s between neighbouring characters: how fast the crest travels. */
+  stagger: 0.035,
+  ease: "sine.inOut",
+  /** deg of tilt at the crest; 0 = none (keep within ±2–4 if used). */
+  rotation: 0,
+  /** s from the start of one wave to the start of the next. */
+  every: 8,
+} as const;
+
+/** Where each visible glyph of `el` sits (document order), from the live text. */
+function glyphBoxes(el: HTMLElement) {
+  const out: { x: number; y: number }[] = [];
+  const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+    const text = n.textContent ?? "";
+    for (let i = 0; i < text.length; i++) {
+      if (/\s/.test(text[i])) continue;
+      range.setStart(n, i);
+      range.setEnd(n, i + 1);
+      const r = range.getBoundingClientRect();
+      out.push({ x: r.left, y: r.top });
+    }
+  }
+  return out;
+}
+
+/** Splitting into inline-block characters loses kerning (browsers don't kern
+ *  across element boundaries) — ~10px wider on this line. Give each character
+ *  the margin that restores the gap to its left neighbour, so every advance,
+ *  the line's width and therefore its centring match the unsplit text. In em,
+ *  so it holds as the vw-based font size changes. */
+function restoreGlyphAdvances(el: HTMLElement, chars: Element[], before: { x: number; y: number }[]) {
+  if (chars.length !== before.length) return;
+  const zoom = el.getBoundingClientRect().width / el.offsetWidth || 1;
+  const now = chars.map((c) => c.getBoundingClientRect().left);
+  chars.forEach((c, i) => {
+    if (i === 0 || Math.abs(before[i].y - before[i - 1].y) > 1) return; // line start
+    const gap = before[i].x - before[i - 1].x - (now[i] - now[i - 1]);
+    if (Math.abs(gap) < 0.01) return;
+    const em = parseFloat(getComputedStyle(c).fontSize) || 16;
+    (c as HTMLElement).style.marginLeft = `${gap / zoom / em}em`;
+  });
+}
+
+/** Runs the subhead wave on `ref`'s text. SplitText splits it into characters
+ *  in place — no copy; spaces stay real text nodes between words; screen
+ *  readers still get the sentence via aria-label — and one repeating timeline
+ *  lifts them with a stagger, so the crest travels without per-character
+ *  timers. Split once the fonts are in (glyph positions depend on them).
+ *  `useGSAP` reverts the split (margins included) and kills the timeline on
+ *  unmount — and between Strict Mode's double mount — so nothing duplicates. */
+function useSubheadWave(ref: React.RefObject<HTMLElement | null>) {
+  useGSAP(
+    (_, contextSafe) => {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      let live = true;
+      const start = contextSafe!(() => {
+        const el = ref.current;
+        if (!live || !el) return;
+        const { amplitude, duration, stagger, ease, rotation, every } =
+          SUBHEAD_WAVE;
+        const before = glyphBoxes(el);
+        // <span>s keep the <p> valid; SplitText only sets display on <div>
+        // wrappers, and a transform needs an inline-block box (words too, so
+        // a wrapping subhead can't break mid-word).
+        const { chars } = SplitText.create(el, {
+          type: "words, chars",
+          tag: "span",
+          wordsClass: "inline-block",
+          charsClass: "inline-block",
+        });
+        restoreGlyphAdvances(el, chars, before);
+        const wave = gsap.timeline({ repeat: -1, delay: every });
+        wave.to(chars, {
+          y: -amplitude,
+          ...(rotation ? { rotation } : {}),
+          duration,
+          ease,
+          // Each character rises then settles (yoyo), starting `stagger`
+          // after its left neighbour.
+          stagger: { each: stagger, repeat: 1, yoyo: true },
+        });
+        // No inline transform left on any character between waves.
+        wave.set(chars, { clearProps: "transform" });
+        wave.repeatDelay(Math.max(0, every - wave.duration()));
+      });
+      document.fonts.ready.then(start);
+      return () => {
+        live = false;
+      };
+    },
+    { scope: ref },
+  );
+}
+
 function LandingHero() {
   const [editMode, setEditMode] = useState<boolean>(() => {
     if (!EDITING_MODE_ENABLED || typeof window === "undefined") return false;
@@ -1118,17 +1266,22 @@ function LandingHero() {
   const deckRef = useRef<DeckHandle>(null);
   const deskDeckEl = useRef<HTMLDivElement>(null);
   const mobDeckEl = useRef<HTMLDivElement>(null);
+  const mobSubheadRef = useRef<HTMLParagraphElement>(null);
+  const deskSubheadRef = useRef<HTMLParagraphElement>(null);
+  useSubheadWave(mobSubheadRef);
+  useSubheadWave(deskSubheadRef);
   const backdropDown = useRef<{ x: number; y: number } | null>(null);
 
   function focusDeckSide(side: "left" | "right") {
     setDeckIndex(side === "left" ? 0 : DECK_MATS.length - 1);
   }
 
-  /** ← sends the desktop deck left: left card off, centre to the left slot,
-   *  right card to centre, the thrown card back in on the right. → mirrors. */
+  /** ← brings the left card to the centre — the cards travel right: right
+   *  card off, centre to the right slot, left card to centre, the thrown card
+   *  back in on the left. → mirrors. */
   function stepDesktopDeck(side: "left" | "right") {
     playClickSound();
-    deckRef.current?.shift(side === "left" ? -1 : 1);
+    deckRef.current?.shift(side === "left" ? 1 : -1);
   }
 
   function stepMobileDeck(side: "left" | "right") {
@@ -1296,7 +1449,7 @@ function LandingHero() {
           style={{ fontSize: MOBILE_SUBHEAD_FONT_SIZE }}
           data-open={openAttr}
         >
-          <p className="leading-snug">
+          <p ref={mobSubheadRef} className="leading-snug">
             <span className={`${sohne.className} tracking-tight`}>
               Take Control of your
             </span>
@@ -1341,7 +1494,10 @@ function LandingHero() {
           style={{ fontSize: DESKTOP_SUBHEAD_FONT_SIZE }}
           data-open={openAttr}
         >
-          <p className="leading-none whitespace-nowrap text-[#1c1917]">
+          <p
+            ref={deskSubheadRef}
+            className="leading-none whitespace-nowrap text-[#1c1917]"
+          >
             <span className={`${sohne.className} tracking-tight`}>
               Take Control of your{" "}
             </span>
@@ -1364,6 +1520,7 @@ function LandingHero() {
             ctaPhase === "merging" ||
             ctaPhase === "sinking"
           }
+          onCardStep={ctaPhase === "controls" ? stepDesktopDeck : undefined}
         />
         {/* "Features" — the subhead's type (face, tracking, colour, and its
             open-state size), just above the middle card. Anchored to the
