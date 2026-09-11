@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import localFont from "next/font/local";
-import { motion } from "framer-motion";
+import { animate, motion, motionValue } from "framer-motion";
 import { Liquid } from "liquid-gooey";
 import { LogoMark, sohne } from "@/components/brand/logo-mark";
 import { GuidelinesOverlay } from "@/components/brand/guidelines-overlay";
 import { useHydrated } from "@/lib/use-hydrated";
+import { cn } from "@/lib/utils";
 
 const lojjFont = localFont({
   src: "../../fonts/logo/LOGO.otf",
@@ -16,9 +23,21 @@ const lojjFont = localFont({
 
 const satoshi = localFont({
   src: [
-    { path: "../../fonts/satoshi/Satoshi-Regular.woff2", weight: "400", style: "normal" },
-    { path: "../../fonts/satoshi/Satoshi-Medium.woff2", weight: "500", style: "normal" },
-    { path: "../../fonts/satoshi/Satoshi-Bold.woff2", weight: "700", style: "normal" },
+    {
+      path: "../../fonts/satoshi/Satoshi-Regular.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../fonts/satoshi/Satoshi-Medium.woff2",
+      weight: "500",
+      style: "normal",
+    },
+    {
+      path: "../../fonts/satoshi/Satoshi-Bold.woff2",
+      weight: "700",
+      style: "normal",
+    },
   ],
 });
 
@@ -40,12 +59,27 @@ const GOOGLE_LETTERS = [
   { char: "e", color: "#EA4335" },
 ] as const;
 
-const DECK_VARIANTS = ["left", "center", "right"] as const;
-type DeckVariant = (typeof DECK_VARIANTS)[number];
+/** Card identity = painted mat. Desktop shows three at a time; yellow starts
+ *  off-stage and joins the ring on the first ← (or the mirrored →). */
+const DECK_MATS = ["green", "blue", "red", "yellow"] as const;
+type DeckMat = (typeof DECK_MATS)[number];
+/** CSS entrance seats for the first three; yellow parks off-stage until seated. */
+const DECK_ENTRANCE: Partial<Record<DeckMat, "left" | "center" | "right">> = {
+  green: "left",
+  blue: "center",
+  red: "right",
+};
 
-const EDITING_MODE_ENABLED = process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
+const EDITING_MODE_ENABLED =
+  process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
 
-function Spinner({ size = 20, spinning = true }: { size?: number; spinning?: boolean }) {
+function Spinner({
+  size = 20,
+  spinning = true,
+}: {
+  size?: number;
+  spinning?: boolean;
+}) {
   const stroke = 2;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -57,7 +91,15 @@ function Spinner({ size = 20, spinning = true }: { size?: number; spinning?: boo
       aria-hidden
       style={spinning ? { animationDuration: "1.1s" } : undefined}
     >
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth={stroke} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity={0.25}
+        strokeWidth={stroke}
+      />
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -73,17 +115,36 @@ function Spinner({ size = 20, spinning = true }: { size?: number; spinning?: boo
 }
 
 const CTA_CLASS =
-  "relative inline-flex h-[54.428px] min-h-[33.68px] min-w-[152.4px] items-center justify-center rounded-full bg-black/80 px-[1.474923rem] text-[1.290556rem] text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "relative inline-flex h-[43.542px] min-h-[26.944px] min-w-[121.92px] items-center justify-center rounded-full bg-black/80 px-[1.179938rem] text-[1.032445rem] text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 /** One CTA body divides into two horizontally aligned daughters. */
-const CTA_DIAMETER = 54;
+const CTA_DIAMETER = 43.542;
 const CTA_GAP = 8;
 /** Half the final centre-to-centre distance. */
-const CTA_OFFSET = (CTA_DIAMETER + CTA_GAP) / 2; // 31
+const CTA_OFFSET = (CTA_DIAMETER + CTA_GAP) / 2;
 
 /** Choreography, in order. Each phase is its own visual beat; the body stays a
  *  single pill until `splitting`. */
-type CtaPhase = "idle" | "spinner" | "blank" | "arrows" | "splitting" | "controls";
+type CtaPhase =
+  | "idle"
+  | "spinner"
+  | "blank"
+  | "arrows"
+  | "splitting"
+  | "controls"
+  // Reverse, after a click outside the open deck: the pieces flow back into
+  // the pill while the cards fold in (merging), then it holds while the deck
+  // sinks (sinking) — and back through arrows → blank → idle.
+  | "merging"
+  | "sinking";
+
+/** Phases in which the liquid layer, not the Layer-1 pill, is the CTA. */
+const CTA_LIQUID_PHASES: readonly CtaPhase[] = [
+  "splitting",
+  "controls",
+  "merging",
+  "sinking",
+];
 
 const CTA_SPINNER_MS = 400;
 const CTA_BLANK_MS = 220;
@@ -96,17 +157,30 @@ const CTA_SETTLE_MS = 120;
  *  `.t-deck-card--left/--right`. Read from the CSS vars so retuning the deck
  *  retunes the CTA with it; the fallbacks mirror `globals.css`. */
 const CTA_SPLIT_EASE = "cubic-bezier(0.22, 1, 0.36, 1)"; // --deck-spread-ease
+/** Played backwards, a cubic-bezier (x1, y1, x2, y2) becomes
+ *  (1−x2, 1−y2, 1−x1, 1−y1): what settled in on the way out accelerates away
+ *  on the way back. */
+const CTA_SPLIT_EASE_REVERSE = "cubic-bezier(0.64, 0, 0.78, 0)";
 
 function cssMs(name: string, fallback: number) {
   if (typeof window === "undefined") return fallback;
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  const ms = raw.endsWith("ms") ? parseFloat(raw) : raw.endsWith("s") ? parseFloat(raw) * 1000 : NaN;
+  const raw = getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  const ms = raw.endsWith("ms")
+    ? parseFloat(raw)
+    : raw.endsWith("s")
+      ? parseFloat(raw) * 1000
+      : NaN;
   return Number.isFinite(ms) ? ms : fallback;
 }
 
 /** Hold = --deck-rise-dur (the cards' spread delay), travel = --deck-spread-dur. */
 function readSplitTiming() {
-  return { hold: cssMs("--deck-rise-dur", 700), travel: cssMs("--deck-spread-dur", 1331) };
+  return {
+    hold: cssMs("--deck-rise-dur", 700),
+    travel: cssMs("--deck-spread-dur", 1331),
+  };
 }
 
 const CTA_DAUGHTER_CLASS =
@@ -117,24 +191,49 @@ const CTA_DAUGHTERS = [
   { key: "next", label: "Show right card", dir: 1 },
 ] as const;
 
+/** Buttons that stay hidden until Get Started is clicked, then goo out of the
+ *  pill into their own slots (left of it in the row) as the pill divides. */
+type CtaExtra = { key: string; label: string };
+
+/** Liquid copy of an extra: the real button's typography (from CTA_CLASS) with
+ *  no surface of its own — the goo paints it while it travels. */
+const CTA_EXTRA_LIQUID_CLASS = cn(
+  CTA_CLASS,
+  "absolute inset-y-0 left-1/2 min-w-0 bg-transparent px-0 shadow-none",
+);
+
+/** Goo is only drawn within `filterPadding` of the group's box (the pill), so
+ *  while extras are travelling it has to reach their furthest slot (~330px
+ *  left of the pill at current sizes). */
+const CTA_EXTRAS_REACH = 400;
+
 /** Layers 2+3 — the pill divides in place. Each daughter starts as the WHOLE
  *  pill (`width: 100%` of the CTA box, so the two overlap into exactly the
- *  pill's silhouette) and, on the deck's spread timing, shrinks to a 54px
- *  circle while sliding to ±31: the middle pinches, necks and lets go. Both
- *  sit on one shared centre with a fixed 54px height and only `width` and
+ *  pill's silhouette) and, on the deck's spread timing, shrinks to a CTA-diameter
+ *  circle while sliding to ±offset: the middle pinches, necks and lets go. Both
+ *  sit on one shared centre with a fixed CTA height and only `width` and
  *  `translateX` ever change, so the division can only be horizontal. The
  *  liquid follows their rendered rects (`observe`) and paints the surface. */
 function CtaSplitLayer({
   spread,
   settled,
+  reverse = false,
   onStep,
+  extras = [],
 }: {
   spread: boolean;
   settled: boolean;
+  /** Flowing back into the pill: no hold up front — in reverse the hold comes
+   *  after, while the deck sinks. */
+  reverse?: boolean;
   onStep?: (side: "left" | "right") => void;
+  extras?: readonly CtaExtra[];
 }) {
   const [timing] = useState(readSplitTiming);
-  const move = (prop: string) => `${prop} ${timing.travel}ms ${CTA_SPLIT_EASE} ${timing.hold}ms`;
+  const move = (prop: string) =>
+    reverse
+      ? `${prop} ${timing.travel}ms ${CTA_SPLIT_EASE_REVERSE}`
+      : `${prop} ${timing.travel}ms ${CTA_SPLIT_EASE} ${timing.hold}ms`;
   // Same alpha as the Layer-1 pill (`bg-black/80`) — no darken on handoff.
   const liquid = settled ? "settled" : "live";
 
@@ -153,7 +252,44 @@ function CtaSplitLayer({
         contrast={18}
         fill="#000"
         shadow="0 1px 3px rgb(0 0 0 / 0.18)"
+        filterPadding={extras.length && !settled ? CTA_EXTRAS_REACH : undefined}
       >
+        {/* Extras start as copies of the whole pill and stream left into their
+            slots (measured into --cta-x-<key>-dx / -w by GetStartedCta) on the
+            same schedule as the pinch; each label fades in as it arrives. Once
+            settled they hide behind the real buttons in those slots, ready to
+            flow back into the pill if the handoff is reversed. */}
+        {extras.map(({ key, label }) => (
+            <Liquid.Item
+              key={key}
+              observe
+              radius={CTA_DIAMETER / 2}
+              style={{ display: "block", position: "absolute", inset: 0 }}
+            >
+              <div
+                aria-hidden
+                className={CTA_EXTRA_LIQUID_CLASS}
+                style={{
+                  visibility: settled ? "hidden" : "visible",
+                  width: spread ? `var(--cta-x-${key}-w)` : "100%",
+                  transform: `translateX(calc(-50% + ${spread ? `var(--cta-x-${key}-dx)` : "0px"}))`,
+                  transition: `${move("width")}, ${move("transform")}`,
+                }}
+              >
+                <span
+                  className="whitespace-nowrap"
+                  style={{
+                    opacity: spread ? 1 : 0,
+                    transition: reverse
+                      ? "opacity 300ms ease-in"
+                      : `opacity 400ms ease-out ${timing.hold + timing.travel * 0.55}ms`,
+                  }}
+                >
+                  {label}
+                </span>
+              </div>
+            </Liquid.Item>
+          ))}
         {CTA_DAUGHTERS.map(({ key, label, dir }) => (
           <Liquid.Item
             key={key}
@@ -195,19 +331,50 @@ function GetStartedCta({
   phase,
   onClick,
   onStep,
+  extras = [],
 }: {
   phase: CtaPhase;
   onClick: () => void;
   onStep?: (side: "left" | "right") => void;
+  /** Rendered as real buttons to the left, hidden until the pill has divided. */
+  extras?: readonly CtaExtra[];
 }) {
+  /** Dividing, or divided. */
   const splitting = phase === "splitting" || phase === "controls";
+  /** The liquid layer is the CTA — the split and its reverse. */
+  const liquid = CTA_LIQUID_PHASES.includes(phase);
+  const reverse = phase === "merging" || phase === "sinking";
   const [spread, setSpread] = useState(false);
+  const spreadNow = splitting && spread;
+  const boxRef = useRef<HTMLDivElement>(null);
+  const extraRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  // The extras already occupy their slots (just invisible), so their liquid
+  // copies can be aimed at them exactly: offset of each slot's centre from the
+  // pill's centre, and its width. Measured once, before the split first paints.
+  useLayoutEffect(() => {
+    const box = boxRef.current;
+    if (!splitting || !box) return;
+    const b = box.getBoundingClientRect();
+    extras.forEach(({ key }, i) => {
+      const el = extraRefs.current[i];
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      box.style.setProperty(
+        `--cta-x-${key}-dx`,
+        `${r.left + r.width / 2 - (b.left + b.width / 2)}px`,
+      );
+      box.style.setProperty(`--cta-x-${key}-w`, `${r.width}px`);
+    });
+  }, [splitting, extras]);
+
+  // Spread a frame after the split mounts (the liquid snaps to its target on
+  // first layout instead of animating). On the way back `spreadNow` drops at
+  // once; the flag itself resets a frame later, ready for the next run.
   useEffect(() => {
-    if (!splitting) return;
     let inner = 0;
     const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => setSpread(true));
+      inner = requestAnimationFrame(() => setSpread(splitting));
     });
     return () => {
       cancelAnimationFrame(outer);
@@ -216,54 +383,82 @@ function GetStartedCta({
   }, [splitting]);
 
   return (
-    <div className="relative inline-flex h-[54.428px] items-center justify-center">
-      <button
-        type="button"
-        onClick={onClick}
-        disabled={phase !== "idle"}
-        aria-busy={phase === "spinner"}
-        aria-hidden={splitting}
-        className={CTA_CLASS}
-        style={splitting ? { opacity: 0, pointerEvents: "none" } : undefined}
-      >
-        {/* In flow, so the pill keeps its natural idle width in every phase. */}
-        <span
-          className="t-shimmer t-shimmer-on-dark whitespace-nowrap transition-opacity duration-200"
-          data-text="Get Started"
-          style={{ opacity: phase === "idle" ? 1 : 0 }}
+    <>
+      {extras.map(({ key, label }, i) => (
+        <button
+          key={key}
+          ref={(el) => {
+            extraRefs.current[i] = el;
+          }}
+          type="button"
+          className={CTA_CLASS}
+          style={{ visibility: phase === "controls" ? "visible" : "hidden" }}
         >
-          Get Started
-        </span>
+          {label}
+        </button>
+      ))}
+      <div
+        ref={boxRef}
+        className="relative inline-flex h-[43.542px] items-center justify-center"
+      >
+        <button
+          type="button"
+          onClick={onClick}
+          disabled={phase !== "idle"}
+          aria-busy={phase === "spinner"}
+          aria-hidden={liquid}
+          className={CTA_CLASS}
+          style={liquid ? { opacity: 0, pointerEvents: "none" } : undefined}
+        >
+          {/* In flow, so the pill keeps its natural idle width in every phase. */}
+          <span
+            className="t-shimmer t-shimmer-on-dark whitespace-nowrap transition-opacity duration-200"
+            data-text="Get Started"
+            style={{ opacity: phase === "idle" ? 1 : 0 }}
+          >
+            Get Started
+          </span>
+
+          <span
+            className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200"
+            style={{ opacity: phase === "spinner" ? 1 : 0 }}
+            aria-hidden
+          >
+            <Spinner size={20.208} spinning={phase === "spinner"} />
+          </span>
+        </button>
+
+        {liquid && (
+          <CtaSplitLayer
+            spread={spreadNow}
+            settled={phase === "controls"}
+            reverse={reverse}
+            onStep={onStep}
+            extras={extras}
+          />
+        )}
 
         <span
-          className="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-200"
-          style={{ opacity: phase === "spinner" ? 1 : 0 }}
+          className="pointer-events-none absolute inset-0 text-white transition-opacity duration-200"
+          style={{ opacity: phase === "arrows" || liquid ? 1 : 0 }}
           aria-hidden
         >
-          <Spinner size={25.26} spinning={phase === "spinner"} />
+          {CTA_DAUGHTERS.map(({ key, dir }) => (
+            <span
+              key={key}
+              className="absolute left-1/2 top-1/2 -ml-[7.2px] -mt-[7.2px] flex"
+              style={{ transform: `translateX(${dir * CTA_OFFSET}px)` }}
+            >
+              {dir < 0 ? (
+                <ChevronLeftIcon size={14.4} />
+              ) : (
+                <ChevronRightIcon size={14.4} />
+              )}
+            </span>
+          ))}
         </span>
-      </button>
-
-      {splitting && (
-        <CtaSplitLayer spread={spread} settled={phase === "controls"} onStep={onStep} />
-      )}
-
-      <span
-        className="pointer-events-none absolute inset-0 text-white transition-opacity duration-200"
-        style={{ opacity: phase === "arrows" || splitting ? 1 : 0 }}
-        aria-hidden
-      >
-        {CTA_DAUGHTERS.map(({ key, dir }) => (
-          <span
-            key={key}
-            className="absolute left-1/2 top-1/2 -ml-[9px] -mt-[9px] flex"
-            style={{ transform: `translateX(${dir * CTA_OFFSET}px)` }}
-          >
-            {dir < 0 ? <ChevronLeftIcon size={18} /> : <ChevronRightIcon size={18} />}
-          </span>
-        ))}
-      </span>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -284,26 +479,40 @@ function GoogleWorkspaceMark() {
 
 function LogoLockup({ fontSize }: { fontSize: string }) {
   return (
-    <div className="relative inline-block -translate-y-[10%] text-[#1c1917]" style={{ fontSize }}>
-      <h1 className={`${sohne.className} m-0 inline-flex items-start leading-none tracking-tight`}>
+    <div
+      className="relative inline-block -translate-y-[10%] text-[#1c1917]"
+      style={{ fontSize }}
+    >
+      <h1
+        className={`${sohne.className} m-0 inline-flex items-start leading-none tracking-tight`}
+      >
         <span className="inline-flex items-center">
           Kn
           <LogoMark className="mx-[0.04em] h-[0.71em] w-[0.62em] shrink-0 translate-x-[8%] translate-y-[10%]" />
           how
         </span>
-        <span className="ml-[0.02em] mt-[0.08em] text-[0.22em] leading-none" aria-hidden>
+        <span
+          className="ml-[0.02em] mt-[0.08em] text-[0.22em] leading-none"
+          aria-hidden
+        >
           ™
         </span>
       </h1>
       <p className="absolute right-[0.28em] top-[0.60em] m-0 whitespace-nowrap leading-none">
-        <span className={`${sohne.className} text-[0.26em] tracking-tight`}>by </span>
+        <span className={`${sohne.className} text-[0.26em] tracking-tight`}>
+          by{" "}
+        </span>
         <span className={`${lojjFont.className} text-[0.26em]`}>LOJJ.io</span>
       </p>
     </div>
   );
 }
 
-function DeckChrome({ onDragPointerDown }: { onDragPointerDown?: (e: React.PointerEvent) => void }) {
+function DeckChrome({
+  onDragPointerDown,
+}: {
+  onDragPointerDown?: (e: React.PointerEvent) => void;
+}) {
   return (
     <div
       className="t-deck-titlebar"
@@ -320,7 +529,16 @@ function DeckChrome({ onDragPointerDown }: { onDragPointerDown?: (e: React.Point
 }
 
 type ResizeHandle = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
-const RESIZE_HANDLES: ResizeHandle[] = ["n", "s", "e", "w", "ne", "nw", "se", "sw"];
+const RESIZE_HANDLES: ResizeHandle[] = [
+  "n",
+  "s",
+  "e",
+  "w",
+  "ne",
+  "nw",
+  "se",
+  "sw",
+];
 
 type WindowBox = { x: number; y: number; w: number; h: number };
 
@@ -483,23 +701,30 @@ function InteractiveMacWindow() {
   );
 }
 
-const DECK_MAT: Record<DeckVariant, "blue" | "green" | "red"> = {
-  left: "green",
-  center: "blue",
-  right: "red",
-};
-
 function DeckWindow({
-  variant,
+  mat,
   focused = false,
+  ref,
+  style,
 }: {
-  variant: DeckVariant;
+  mat: DeckMat;
   focused?: boolean;
+  ref?: React.Ref<HTMLDivElement>;
+  style?: React.CSSProperties;
 }) {
-  const mat = DECK_MAT[variant];
+  const entrance = DECK_ENTRANCE[mat];
   return (
     <div
-      className={`t-deck-card t-deck-card--${variant} t-deck-card--mat`}
+      ref={ref}
+      style={style}
+      className={[
+        "t-deck-card",
+        "t-deck-card--mat",
+        `t-deck-card--${mat}`,
+        entrance ? `t-deck-card--${entrance}` : null,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       data-focus={focused ? "true" : "false"}
     >
       <div className={`t-deck-mat t-deck-mat--${mat}`} aria-hidden />
@@ -547,7 +772,7 @@ function DeckCoverFlow({
   return (
     <div className="t-deck-cover">
       <div className="t-deck-cover-stage">
-        {DECK_VARIANTS.map((variant, i) => {
+        {DECK_MATS.map((mat, i) => {
           const offset = i - activeIndex;
           const absOffset = Math.abs(offset);
           const isActive = offset === 0;
@@ -555,7 +780,7 @@ function DeckCoverFlow({
 
           return (
             <motion.div
-              key={variant}
+              key={mat}
               className="t-deck-cover-item"
               initial={false}
               animate={{
@@ -569,7 +794,7 @@ function DeckCoverFlow({
               style={{ zIndex: 100 - absOffset }}
               onClick={() => onActiveIndexChange(i)}
             >
-              <DeckWindow variant={variant} focused={isActive} />
+              <DeckWindow mat={mat} focused={isActive} />
             </motion.div>
           );
         })}
@@ -585,9 +810,9 @@ function DeckCoverFlow({
           <ChevronLeftIcon />
         </button>
         <div className="t-deck-cover-dots">
-          {DECK_VARIANTS.map((variant, i) => (
+          {DECK_MATS.map((mat, i) => (
             <button
-              key={variant}
+              key={mat}
               type="button"
               aria-label={`Show card ${i + 1}`}
               className="t-deck-cover-dot"
@@ -599,9 +824,9 @@ function DeckCoverFlow({
         <button
           type="button"
           aria-label="Next card"
-          disabled={activeIndex === DECK_VARIANTS.length - 1}
+          disabled={activeIndex === DECK_MATS.length - 1}
           onClick={() =>
-            onActiveIndexChange(Math.min(DECK_VARIANTS.length - 1, activeIndex + 1))
+            onActiveIndexChange(Math.min(DECK_MATS.length - 1, activeIndex + 1))
           }
         >
           <ChevronRightIcon />
@@ -611,6 +836,272 @@ function DeckCoverFlow({
   );
 }
 
+/** Desktop carousel — mat order as first seated, left → right → off-stage. */
+const DESKTOP_DECK = DECK_MATS;
+const DESKTOP_DECK_N = DESKTOP_DECK.length;
+
+/** Every on-screen move shares one spring (ζ≈0.91: soft, no wobble on a
+ *  surface this big, ~0.6s to rest), including the card thrown off-stage — so
+ *  it can never be slower than the cards following it, even mid-flight on rapid
+ *  clicks. Moves cascade 70ms apart in the direction of travel. The cascade also keeps layering clean: incoming and outgoing centre
+ *  cards overlap at rest, but by the time they're equidistant from centre —
+ *  where they swap which is on top — the lag has pulled them ~92vw apart,
+ *  wider than a card at every desktop width, so the swap happens in clear air. */
+const DECK_SPRING = {
+  type: "spring",
+  stiffness: 120,
+  damping: 20,
+  restDelta: 0.0005,
+  restSpeed: 0.005,
+} as const;
+const DECK_STAGGER_S = 0.07;
+/** Cap on the throw speed carried through the wrap, slots/s. */
+const DECK_MAX_CARRY = 6;
+/** |slot| past which a card is fully off-screen at every desktop width. */
+const DECK_OFFSTAGE = 1.6;
+/** The thrown card re-enters no earlier than this after the click, so it's the
+ *  last beat: it slides into the trailing slot as the card ahead clears it. */
+const DECK_ENTER_AT_MS = 340;
+/** Closing is the entrance backwards: time-reversed --deck-spread-ease for the
+ *  fold, time-reversed --deck-rise-ease for the sink. */
+const DECK_FOLD_EASE = [0.64, 0, 0.78, 0] as const;
+const DECK_SINK_EASE = [0.7, 0, 0.75, 0.15] as const;
+
+/** Slot → transform, in slot units: −1 left, 0 centre, +1 right, ±2 off-stage.
+ *  At whole slots this is exactly where the CSS entrance leaves each card
+ *  (`t-deck-spread-*` in globals.css), so seating is seamless; between slots x
+ *  scales linearly and the side drop ramps in over the first slot. */
+/*  `sink` (0 → 1) lowers the deck to where the rise starts: at p = 0, sink = 1
+ *  this is exactly the CSS base transform (−50%, −50% + --deck-sunk). */
+function deckTransform(p: number, sink = 0) {
+  const drop = Math.min(Math.abs(p), 1);
+  return `translate3d(calc(-50% + var(--deck-side-x) * ${p}), calc(-50% + var(--deck-band-y) + var(--deck-side-drop) * ${drop} + (var(--deck-sunk, 110vh) - var(--deck-band-y)) * ${sink}), 0)`;
+}
+
+/** Closer to centre = on top; `bias` breaks the tie when cards converge. */
+function deckLayer(p: number, bias = 0) {
+  return String(Math.round(100 - Math.abs(p) * 20) + bias);
+}
+
+function mod(n: number, m: number) {
+  return ((n % m) + m) % m;
+}
+
+type DeckHandle = { shift: (dir: -1 | 1) => void; close: () => void };
+
+/** Desktop deck. The CSS entrance (rise + spread) plays untouched; once
+ *  `seated`, each card's position is a motion value in slot units and `shift`
+ *  rotates the ring: the leading card is thrown off, the rest step one slot,
+ *  and the thrown card comes back in from the trailing edge. Interruptible —
+ *  a click mid-flight retargets from the current position and velocity. */
+function DesktopDeck({
+  seated,
+  ref,
+}: {
+  seated: boolean;
+  ref: React.Ref<DeckHandle>;
+}) {
+  const cards = useRef<(HTMLDivElement | null)[]>([]);
+  const [slots] = useState(() =>
+    DESKTOP_DECK.map((_, i) => motionValue(i - 1)),
+  );
+  const offset = useRef(0);
+  const runs = useRef(DESKTOP_DECK.map(() => 0));
+  const detach = useRef<((() => void) | undefined)[]>([]);
+  const [sink] = useState(() => motionValue(0));
+  /** While closing: −1 on every card but the centre one, so it stays on top
+   *  as the others fold under it. */
+  const bias = useRef(DESKTOP_DECK.map(() => 0));
+
+  // Take over from the CSS entrance: the inline transform lands on its final
+  // frame in the same commit that drops the animation, so nothing moves.
+  // Yellow (slot +2) has no CSS entrance — it appears parked off-stage right.
+  useLayoutEffect(() => {
+    if (!seated) return;
+    const els = cards.current;
+    const paint = (i: number) => {
+      const el = els[i];
+      if (!el) return;
+      const p = slots[i].get();
+      el.style.transform = deckTransform(p, sink.get());
+      el.style.zIndex = deckLayer(p, bias.current[i]);
+    };
+    const paintAll = () => slots.forEach((_, i) => paint(i));
+    paintAll();
+    const offs = [
+      ...slots.map((mv, i) => mv.on("change", () => paint(i))),
+      sink.on("change", paintAll),
+    ];
+    const pending = runs.current;
+    const listeners = detach.current;
+    return () => {
+      offs.forEach((off) => off());
+      // Unseated only once the deck has closed and sunk — exactly where the
+      // CSS base transform parks every card — so hand back to CSS and reset
+      // the ring for the next Get Started.
+      slots.forEach((mv, i) => {
+        pending[i]++;
+        listeners[i]?.();
+        mv.jump(i - 1);
+        els[i]?.style.removeProperty("transform");
+        els[i]?.style.removeProperty("z-index");
+      });
+      sink.jump(0);
+      bias.current = DESKTOP_DECK.map(() => 0);
+      offset.current = 0;
+    };
+  }, [seated, slots, sink]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      /** `dir` is the way the cards travel: −1 sends them left. */
+      shift(dir) {
+        if (!seated) return;
+        const reduce = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        const clickAt = performance.now();
+        const prev = offset.current;
+        offset.current = prev - dir;
+        DESKTOP_DECK.forEach((_, i) => {
+          const from = mod(i - prev, DESKTOP_DECK_N) - 1;
+          const to = mod(i - offset.current, DESKTOP_DECK_N) - 1;
+          const mv = slots[i];
+          const run = ++runs.current[i];
+          detach.current[i]?.();
+          if (reduce) {
+            mv.set(to);
+            return;
+          }
+          // Leading card first; anything already moving retargets at once.
+          const rank = 1 - from * dir;
+          const delay = mv.isAnimating() ? 0 : rank * DECK_STAGGER_S;
+          const wraps = dir < 0 ? to > mv.get() : to < mv.get();
+          if (!wraps) {
+            animate(mv, to, { ...DECK_SPRING, delay });
+            return;
+          }
+          // Thrown off the leading edge, re-enters from the trailing one. The
+          // swap happens the moment it's fully off-screen, between two
+          // off-screen positions. `jump` (not `set`) so the spring doesn't read
+          // the 4-slot leap as velocity and fling the card hundreds of slots;
+          // off-screen it can wait for its cue, else it keeps its real speed.
+          const reenter = () => {
+            const v = mv.getVelocity();
+            mv.jump(-2 * dir);
+            const wait = Math.max(
+              0,
+              clickAt + DECK_ENTER_AT_MS - performance.now(),
+            );
+            const carry =
+              wait === 0 && Math.sign(v) === dir
+                ? Math.min(Math.abs(v), DECK_MAX_CARRY) * dir
+                : 0;
+            animate(mv, to, {
+              ...DECK_SPRING,
+              velocity: carry,
+              delay: wait / 1000,
+            });
+          };
+          // Already off-screen on the leading side (e.g. parked waiting for its
+          // cue when the direction reverses): there's nothing to exit — swap now.
+          if (mv.get() * dir >= DECK_OFFSTAGE) {
+            reenter();
+            return;
+          }
+          const exit = animate(mv, 2 * dir, { ...DECK_SPRING, delay });
+          const off = mv.on("change", (p) => {
+            if (p * dir < DECK_OFFSTAGE) return;
+            off();
+            if (runs.current[i] !== run) return;
+            exit.stop();
+            reenter();
+          });
+          detach.current[i] = off;
+        });
+      },
+      /** The entrance backwards: everything on the band folds in under the
+       *  centre card (parked cards stay off-stage), then the stack sinks. */
+      close() {
+        if (!seated) return;
+        const { hold, travel } = readSplitTiming();
+        const centre = slots.reduce(
+          (best, mv, i) =>
+            Math.abs(mv.get()) < Math.abs(slots[best].get()) ? i : best,
+          0,
+        );
+        bias.current = DESKTOP_DECK.map((_, i) => (i === centre ? 0 : -1));
+        slots.forEach((mv, i) => {
+          runs.current[i]++;
+          detach.current[i]?.();
+          if (Math.abs(mv.get()) >= DECK_OFFSTAGE) {
+            mv.stop();
+            return;
+          }
+          animate(mv, 0, { duration: travel / 1000, ease: DECK_FOLD_EASE });
+        });
+        animate(sink, 1, {
+          duration: hold / 1000,
+          ease: DECK_SINK_EASE,
+          delay: travel / 1000,
+        });
+      },
+    }),
+    [seated, slots, sink],
+  );
+
+  return (
+    <>
+      {DESKTOP_DECK.map((mat, i) => (
+        <DeckWindow
+          key={mat}
+          mat={mat}
+          ref={(el) => {
+            cards.current[i] = el;
+          }}
+          style={seated ? { animation: "none" } : undefined}
+        />
+      ))}
+    </>
+  );
+}
+
+let clickAudio: AudioContext | null = null;
+
+/** Short sine tick (880→220Hz, 80ms). One shared AudioContext: a fresh one per
+ *  click leaks, and browsers cap how many can exist — which matters once the
+ *  deck arrows get clicked in quick succession. */
+function playClickSound() {
+  try {
+    clickAudio ??= new AudioContext();
+    const ctx = clickAudio;
+    if (ctx.state === "suspended") void ctx.resume();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(
+      220,
+      ctx.currentTime + 0.08,
+    );
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.08);
+  } catch {
+    // Web Audio unavailable/blocked — sound is a nice-to-have, fail silently
+  }
+}
+
+/** Desktop header buttons that appear only after Get Started divides. */
+const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
+  { key: "login", label: "Log in" },
+  { key: "demo", label: "Book a demo" },
+];
+
 function LandingHero() {
   const [editMode, setEditMode] = useState<boolean>(() => {
     if (!EDITING_MODE_ENABLED || typeof window === "undefined") return false;
@@ -618,14 +1109,31 @@ function LandingHero() {
   });
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
-  /** 0 left · 1 center · 2 right — driven by the split CTA arrows. */
+  /** Cover Flow index — driven by the split CTA arrows on mobile. */
   const [deckIndex, setDeckIndex] = useState(1);
   const mounted = useHydrated();
   const videoRef = useRef<HTMLVideoElement>(null);
   const ctaTimers = useRef<number[]>([]);
 
+  const deckRef = useRef<DeckHandle>(null);
+  const deskDeckEl = useRef<HTMLDivElement>(null);
+  const mobDeckEl = useRef<HTMLDivElement>(null);
+  const backdropDown = useRef<{ x: number; y: number } | null>(null);
+
   function focusDeckSide(side: "left" | "right") {
-    setDeckIndex(side === "left" ? 0 : 2);
+    setDeckIndex(side === "left" ? 0 : DECK_MATS.length - 1);
+  }
+
+  /** ← sends the desktop deck left: left card off, centre to the left slot,
+   *  right card to centre, the thrown card back in on the right. → mirrors. */
+  function stepDesktopDeck(side: "left" | "right") {
+    playClickSound();
+    deckRef.current?.shift(side === "left" ? -1 : 1);
+  }
+
+  function stepMobileDeck(side: "left" | "right") {
+    playClickSound();
+    focusDeckSide(side);
   }
 
   useEffect(() => {
@@ -639,25 +1147,6 @@ function LandingHero() {
       localStorage.setItem("draggable:editMode", next ? "1" : "0");
       return next;
     });
-  }
-
-  function playClickSound() {
-    try {
-      const ctx = new AudioContext();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.08);
-    } catch {
-      // Web Audio unavailable/blocked — sound is a nice-to-have, fail silently
-    }
   }
 
   function handleCtaClick() {
@@ -683,10 +1172,92 @@ function LandingHero() {
     at(splitAt + hold + travel + CTA_SETTLE_MS, () => setCtaPhase("controls"));
   }
 
+  /** The Get Started handoff, backwards: the pieces flow back into the pill
+   *  as the side cards fold under the centre card; then the pill holds while
+   *  the deck sinks and the logo + subhead grow back; then the arrows fade and
+   *  Get Started returns. The spinner is a loading beat, not part of the
+   *  morph, so it isn't replayed. */
+  function reverseCta() {
+    const at = (ms: number, run: () => void) => {
+      ctaTimers.current.push(window.setTimeout(run, ms));
+    };
+    const { hold, travel } = readSplitTiming();
+    const sinkAt = travel;
+    const pillAt = sinkAt + hold;
+    const blankAt = pillAt + CTA_ARROWS_MS;
+    const idleAt = blankAt + CTA_BLANK_MS;
+
+    setCtaPhase("merging");
+    deckRef.current?.close();
+    at(sinkAt, () => {
+      setCtaPhase("sinking");
+      setNextOpen(false);
+    });
+    at(pillAt, () => setCtaPhase("arrows"));
+    at(blankAt, () => setCtaPhase("blank"));
+    at(idleAt, () => {
+      setCtaPhase("idle");
+      setDeckIndex(1);
+    });
+  }
+
+  /** Where a click never closes the deck: any control (incl. the header
+   *  button row), the logo lockup, or anywhere in the band the open deck's
+   *  cards occupy — its Features label and Cover Flow bar included. */
+  function isDeckKeepZone(target: EventTarget | null, y: number) {
+    if (
+      target instanceof Element &&
+      target.closest("button, a, [data-cta-row], .t-handoff-shrink--logo")
+    )
+      return true;
+    const deck = [deskDeckEl.current, mobDeckEl.current].find(
+      (d) => d && getComputedStyle(d).display !== "none",
+    );
+    const rects = deck
+      ? [
+          ...deck.querySelectorAll(
+            ".t-deck-card, .t-deck-cover-nav, [data-deck-label]",
+          ),
+        ]
+          .map((n) => n.getBoundingClientRect())
+          .filter(
+            (r) => r.width > 0 && r.right > 0 && r.left < window.innerWidth,
+          )
+      : [];
+    if (!rects.length) return false;
+    const top = Math.min(...rects.map((r) => r.top));
+    const bottom = Math.max(...rects.map((r) => r.bottom));
+    return y >= top && y <= bottom;
+  }
+
+  function handleBackdropPointerDown(e: React.PointerEvent) {
+    backdropDown.current =
+      ctaPhase === "controls" &&
+      e.button === 0 &&
+      !isDeckKeepZone(e.target, e.clientY)
+        ? { x: e.clientX, y: e.clientY }
+        : null;
+  }
+
+  /** A click — not the end of a drag, e.g. resizing a window and letting go
+   *  outside it — that starts and ends outside the keep zones reverses. */
+  function handleBackdropClick(e: React.MouseEvent) {
+    const down = backdropDown.current;
+    backdropDown.current = null;
+    if (ctaPhase !== "controls" || !down) return;
+    if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
+    if (isDeckKeepZone(e.target, e.clientY)) return;
+    reverseCta();
+  }
+
   const openAttr = nextOpen ? "true" : "false";
 
   return (
-    <div className="relative min-h-dvh overflow-hidden bg-[#F9F8F6]">
+    <div
+      className="relative min-h-dvh overflow-hidden bg-[#F9F8F6]"
+      onPointerDown={handleBackdropPointerDown}
+      onClick={handleBackdropClick}
+    >
       {/* Background video — keeps playing under the card deck */}
       <div className="absolute inset-0 z-0 isolate" aria-hidden>
         <video
@@ -726,28 +1297,42 @@ function LandingHero() {
           data-open={openAttr}
         >
           <p className="leading-snug">
-            <span className={`${sohne.className} tracking-tight`}>Take Control of your</span>
+            <span className={`${sohne.className} tracking-tight`}>
+              Take Control of your
+            </span>
             <br />
             <GoogleWorkspaceMark />
           </p>
         </div>
 
         <div className="relative z-30 flex -translate-y-[2vh] justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
-          <GetStartedCta phase={ctaPhase} onClick={handleCtaClick} onStep={focusDeckSide} />
+          <GetStartedCta
+            phase={ctaPhase}
+            onClick={handleCtaClick}
+            onStep={stepMobileDeck}
+          />
         </div>
       </div>
 
       {/* ——— Desktop ——— */}
       <div className="pointer-events-none absolute inset-0 z-10 hidden md:block">
-        <div className="pointer-events-auto absolute inset-x-0 top-[clamp(0.35rem,2.5vh,1.75rem)] z-30 flex -translate-y-[calc(10%+5vh)] items-center justify-between px-[clamp(0.75rem,2vw,1.5rem)] lg:px-6">
+        <div className="pointer-events-auto absolute inset-x-0 top-[clamp(0.35rem,2.5vh,1.75rem)] z-30 flex -translate-y-[calc(10%+5vh)] items-center justify-between gap-4 px-[clamp(0.75rem,2vw,1.5rem)] lg:px-6">
           <div
             className="t-handoff-shrink t-handoff-shrink--logo translate-y-[5vh]"
             data-open={openAttr}
           >
             <LogoLockup fontSize={DESKTOP_LOGO_FONT_SIZE} />
           </div>
-          <div className="translate-y-[calc(-10%+3vh)]">
-            <GetStartedCta phase={ctaPhase} onClick={handleCtaClick} onStep={focusDeckSide} />
+          <div
+            data-cta-row
+            className={`${satoshi.className} flex translate-y-[calc(-10%+3vh)] items-center gap-2`}
+          >
+            <GetStartedCta
+              phase={ctaPhase}
+              onClick={handleCtaClick}
+              onStep={stepDesktopDeck}
+              extras={DESKTOP_HEADER_EXTRAS}
+            />
           </div>
         </div>
 
@@ -757,22 +1342,65 @@ function LandingHero() {
           data-open={openAttr}
         >
           <p className="leading-none whitespace-nowrap text-[#1c1917]">
-            <span className={`${sohne.className} tracking-tight`}>Take Control of your </span>
+            <span className={`${sohne.className} tracking-tight`}>
+              Take Control of your{" "}
+            </span>
             <GoogleWorkspaceMark />
           </p>
         </div>
       </div>
 
       {/* Desktop: rise + linear spread (16:9) */}
-      <div className="t-deck t-deck--desktop" data-open={openAttr} aria-hidden={!nextOpen}>
-        <DeckWindow variant="left" focused={deckIndex === 0} />
-        <DeckWindow variant="right" focused={deckIndex === 2} />
-        <DeckWindow variant="center" focused={deckIndex === 1} />
+      <div
+        ref={deskDeckEl}
+        className="t-deck t-deck--desktop group"
+        data-open={openAttr}
+        aria-hidden={!nextOpen}
+      >
+        <DesktopDeck
+          ref={deckRef}
+          seated={
+            ctaPhase === "controls" ||
+            ctaPhase === "merging" ||
+            ctaPhase === "sinking"
+          }
+        />
+        {/* "Features" — the subhead's type (face, tracking, colour, and its
+            open-state size), just above the middle card. Anchored to the
+            card's top edge in deck coordinates so it rides the deck's
+            height-fit scale, then counter-scaled so the type stays true size.
+            Fades in as the card seats; out as the deck closes. */}
+        <div
+          className="pointer-events-none absolute left-1/2 z-[200] h-0 w-0 opacity-0 transition-opacity duration-300 group-data-[open=true]:opacity-100 group-data-[open=true]:delay-500"
+          style={{
+            top: "calc(50% + var(--deck-band-y) - var(--deck-card-w) * 9 / 32)",
+            scale: "calc(1 / var(--deck-fit, 1))",
+            transformOrigin: "0 0",
+          }}
+        >
+          <p
+            data-deck-label
+            className={`${sohne.className} absolute bottom-[0.5em] left-0 m-0 -translate-x-1/2 whitespace-nowrap leading-none tracking-tight text-[#1c1917]`}
+            style={{
+              fontSize: `calc(${DESKTOP_SUBHEAD_FONT_SIZE} * var(--logo-shrink))`,
+            }}
+          >
+            Features
+          </p>
+        </div>
       </div>
 
       {/* Mobile: phone-aspect Cover Flow stack */}
-      <div className="t-deck t-deck--mobile" data-open={openAttr} aria-hidden={!nextOpen}>
-        <DeckCoverFlow activeIndex={deckIndex} onActiveIndexChange={setDeckIndex} />
+      <div
+        ref={mobDeckEl}
+        className="t-deck t-deck--mobile"
+        data-open={openAttr}
+        aria-hidden={!nextOpen}
+      >
+        <DeckCoverFlow
+          activeIndex={deckIndex}
+          onActiveIndexChange={setDeckIndex}
+        />
       </div>
 
       {EDITING_MODE_ENABLED && (

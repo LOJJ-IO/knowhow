@@ -166,11 +166,38 @@ html {
   z-index: 20;
   pointer-events: none;
 }
-.t-deck[data-open="true"] {
+/* The open deck is a full-screen layer above the landing UI, so only its cards
+   and controls take clicks — the empty stage passes them through to the split
+   CTA arrows underneath, which drive it. */
+.t-deck[data-open="true"] .t-deck-card,
+.t-deck[data-open="true"] .t-deck-cover-nav {
   pointer-events: auto;
 }
 .t-deck--desktop {
   display: none;
+  /* Cards are sized from viewport WIDTH, so a short window (Chrome with its
+     toolbar, vs Safari full-screen) kept the same-size deck with less room and
+     it ran into the subhead and the logo. Below the shortest full-screen
+     MacBook height (956px) the whole deck — cards, spacing, drops — scales with
+     the window height around the centre card: same composition, just smaller.
+     `tan(atan2(a, b))` is a/b as a plain number (CSS can't divide lengths).
+     Floored at 0.7 — below that the carousel's off-stage parking spots
+     (±1.6 / ±2 slots) would start to show at the viewport edges.
+     --deck-sunk is where cards park below the viewport (rise start, closed
+     deck), in deck coordinates: divided by the fit so it's still 110vh on
+     screen — otherwise a scaled deck parks its cards peeking up from the
+     bottom edge. Browsers without trig functions keep the unscaled deck
+     (both vars at their defaults) rather than an invalid transform. */
+  --deck-fit: 1;
+  --deck-sunk: 110vh;
+  scale: var(--deck-fit);
+  transform-origin: 50% calc(50% + var(--deck-band-y));
+}
+@supports (width: calc(1px * tan(atan2(1px, 1px)))) {
+  .t-deck--desktop {
+    --deck-fit: min(1, max(0.7, tan(atan2(100vh, 956px))));
+    --deck-sunk: calc(110vh / var(--deck-fit));
+  }
 }
 .t-deck--mobile {
   display: block;
@@ -254,6 +281,27 @@ html {
 .t-deck-card--right {
   --deck-brand: #ea4335;
   background: #ea4335;
+}
+
+/* Mat identity (carousel ring) — brand rim / fallback fill.
+ * Background shows through the PNG edge as the colored border; green/blue/red
+ * also inherit this from their entrance seats (left/center/right), but yellow
+ * has no entrance seat so it must set the fill here. */
+.t-deck-card--green {
+  --deck-brand: #34a853;
+  background: #34a853;
+}
+.t-deck-card--blue {
+  --deck-brand: #4285f4;
+  background: #4285f4;
+}
+.t-deck-card--red {
+  --deck-brand: #ea4335;
+  background: #ea4335;
+}
+.t-deck-card--yellow {
+  --deck-brand: #fbbc05;
+  background: #fbbc05;
 }
 
 /* Shared painted mat + inset interactive mac window. */
@@ -396,6 +444,17 @@ body.t-deck-dragging * {
   --deck-brand: #ea4335;
 }
 
+/* Yellow has no rise/spread entrance — park at slot +2 while the other three
+ * enter. Inline transforms take over once DesktopDeck seats. */
+.t-deck--desktop[data-open="true"] .t-deck-card--yellow {
+  transform: translate3d(
+    calc(-50% + var(--deck-side-x) * 2),
+    calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
+    0
+  );
+  z-index: 0;
+}
+
 /* ——— Desktop: rise + linear spread (16:9) ——— */
 .t-deck--desktop .t-deck-card {
   position: absolute;
@@ -406,7 +465,7 @@ body.t-deck-dragging * {
   aspect-ratio: 16 / 9;
   height: auto;
   will-change: transform;
-  transform: translate3d(-50%, calc(-50% + 110vh), 0);
+  transform: translate3d(-50%, calc(-50% + var(--deck-sunk)), 0);
 }
 .t-deck--desktop .t-deck-card--center {
   z-index: 3;
@@ -433,7 +492,7 @@ body.t-deck-dragging * {
 
 @keyframes t-deck-rise {
   from {
-    transform: translate3d(-50%, calc(-50% + 110vh), 0);
+    transform: translate3d(-50%, calc(-50% + var(--deck-sunk)), 0);
   }
   to {
     transform: translate3d(-50%, calc(-50% + var(--deck-band-y)), 0);

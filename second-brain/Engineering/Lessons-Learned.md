@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-10
+updated: 2026-09-11
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-11 — Sliding tabs: snap on paint/resize, tween on click
+Transitions.dev pill tabs need measured `offsetLeft`/`offsetWidth` written onto an absolutely positioned pill. On first paint and resize, suspend `transition`, write geometry, force reflow, restore — otherwise the pill animates in from `width: 0`. Clicks keep the transition so the pill slides. Honor `prefers-reduced-motion`. (Tried on the landing header then removed — pattern still useful if tabs return.) [[FEAT-landing-header-nav]]
 
 ## 2026-09-10 — `liquid-gooey` for the CTA pill→arrows, not full-page melt
 Full-bleed hero → next panel is still a bad fit for `liquid-gooey` melt (see entry below). Button-level morph is the right use: Get Started / spinner footprint stacks two `Liquid.Item`s in one CSS grid cell, then `x: ±42` + `morph.shape` + `transition="bouncy"` splits into ← → after the spinner beat. Transparent button chrome; `fill`/`shadow` on `<Liquid>` paint the merged silhouette. Stack with `inline-grid` + `gridArea: 1 / 1` or closed items sit side-by-side in normal flow and the goo never reads as one pill.
@@ -131,3 +134,37 @@ Across two rounds on the Get Started split, `tsc`, `next build`, compiled-CSS gr
 The original brief required both split daughters to start coincident at `x = 0`. Geometrically sound, but it produced *pill → one circle → two circles* — the user wanted the pill itself to divide. The invariant that actually guarantees a horizontal split is **shared centre + constant height + only x/width animating**, not a coincident starting point. The fix: each daughter starts as the *whole* parent (`width: 100%` of the parent box, both centred), so their union is pixel-identical to the parent; each then shrinks to its final size while sliding outward. The overlap shrinks, a furrow forms where the inner caps surface, the goo rounds it into a waist, then a neck, then it snaps — real cell-division topology for free.
 
 Mechanics in `liquid-gooey` 0.2.1: size-morphing needs `observe` (the `MirroredItem` path only animates translate/scale). With `observe`, the engine reads each child's `getBoundingClientRect()` relative to the group every frame, and wakes on `transitionrun`, style/class mutations and a per-item `ResizeObserver` — so plain CSS `width`/`transform` transitions (with a `transition-delay`, even) drive the silhouette correctly. `ObservedItem` wraps the child in a `display: contents` span; pass `style={{ display: "block", position: "absolute", inset: 0 }}` so layout stays fully owned by the child's own absolute positioning. Centre a width-animating element with `left: 50%` + `translateX(calc(-50% + Xpx))` — translate percentages resolve against the element's own (animating) width, so it stays centred every frame with no JS measurement. Verified with a per-frame Playwright recorder (see the "Reasoning about rendering" entry above): zero empty frames at the Layer-1 → liquid handoff, one vertical centre across ~190 frames.
+
+## 2026-09-10 — Carousel motion: four traps, each only visible in a per-frame trace
+
+Building [[FEAT-landing-deck-carousel]] with framer-motion `motionValue`s. Every one of these passed type-check and "looked fine" on a single click:
+
+1. **`set()` across a wrap is read as velocity.** Teleporting a value −1.96 → +2 with `mv.set()` and then `animate(mv, …)` flung the card to slot **+712** before springing back: framer seeds the spring with `mv.getVelocity()`, which saw a 4-slot leap in one frame. Use `mv.jump(v)` (resets velocity), and pass the real velocity explicitly via `animate(..., { velocity })` if you want continuity.
+2. **An ease-in tween restarted mid-flight gets overtaken.** A card that had to wrap while already moving restarted on an ease-in (zero start speed); the card behind it on a spring caught up and passed it — two cards coincident on screen, swapping layers (≈1000px overlap). Rule: every *on-screen* move shares one spring and inherits velocity; only off-screen time is free to choreograph (hold, delay, jump).
+3. **A listener waiting for a threshold never fires if you're already past it.** The "swap when fully off-screen" watcher was attached to an exit spring aimed at exactly where a parked card already sat — zero distance, no change events, card stranded off-screen. Check the threshold before subscribing.
+4. **Stagger can solve layering, not just pacing.** Adjacent 16:9 cards overlap at rest (76vw wide on 73vw spacing; 11.6vw at 1024px), so the incoming and outgoing centre cards must swap z-order somewhere. With z derived from distance-to-centre, the swap happens when they're equidistant; a 70ms stagger pulls them ~92vw apart at that instant (simulated first, then measured: 0px overlap at every swap). The cascade the user asked for is also what makes the layer swap invisible.
+
+Method that found all four: a rAF recorder in the page logging every card's rect + computed z-index per frame, and assertions for (a) overlap at each top-layer change, (b) any >25%-viewport jump while on-screen, (c) exact landing vs the seated rects — run for single, mirror, rapid (110ms) and reversal (150ms) clicks at two widths.
+
+## 2026-09-10 — A transparent full-screen layer can eat clicks for days without anyone seeing it
+
+The open deck (`.t-deck`, `z-20`, `pointer-events: auto`) covered the whole viewport above the landing UI, so the CTA arrows under it — fully visible through the transparent stage — never received a click. Someone had already wired them (`focusDeckSide`) without that ever working. No screenshot can show this; Playwright's click actionability check reported it instantly ("`<div class="t-deck …">` intercepts pointer events"). When a layer exists for its *children's* interactivity, give `pointer-events: auto` to the children, not the full-bleed container. And when adding a control, click it with a real input driver at least once — `element.click()` in `evaluate` bypasses hit-testing and would have hidden this too.
+
+## 2026-09-11 — Width-only sizing hides height bugs; test at real browser-window heights, not full-screen
+
+The desktop deck's cards are `min(84.6vw, 68.4rem)` at 16:9 — their height is a function of width alone. Every check this session (and the user's own in Safari full-screen) ran at full-screen heights (900–982px), where it fit. In an ordinary Chrome window the toolbar takes ~70–120px of height, the deck stays the same size, and it collided with the subhead and the logo. When a layout is sized along one axis, also sweep the *other* axis at realistic sizes — for desktop web that means the window heights people actually have (MacBook Chrome ≈ 780–860, a non-maximised window can be ~690), not screen resolutions. A small `gap.mjs`-style Playwright table (element-to-element gaps per viewport) made the failure and the fix both obvious in one run.
+
+Technique used for the fix: to scale something *uniformly* by a height ratio in pure CSS you need a unitless number, and CSS can't divide lengths — `tan(atan2(100vh, 956px))` returns `100vh / 956px` as a plain number (trig functions are supported Chrome 111+, Safari 15.4+, Firefox 108+; verified identical in Chromium and WebKit 26). Scaling the whole deck container (not just card width) preserved the composition — card-to-card overlap, drops, and the carousel's clear-air layer-swap maths from [[FEAT-landing-deck-carousel]] all scale together. The floor (0.7) comes from the carousel's off-stage geometry: below ≈0.67 a card at the ±1.6-slot swap threshold would be visible at the viewport edge.
+
+## 2026-09-11 — Don't run a formatter the repo doesn't use; it reformats everyone's code
+
+Ran `npx prettier --write` on `landing-hero.tsx` to tidy a fragment's indentation. The repo has no Prettier config or dependency, so it ran with defaults (80 columns) and rewrapped the whole file — code other people were actively editing — into a large whitespace-only diff. No pre-format copy existed anywhere (not staged; VS Code/Cursor local history predated recent edits; Turbopack's cache holds compiled output, not source). Program structure is unchanged (Prettier guarantees AST equivalence; typecheck/lint identical), but the diff noise and edit-collision risk are real. Rule: only run formatters the project itself configures (`package.json` scripts / config files); otherwise hand-indent the lines you touched. If you must experiment, copy the file to the scratchpad first.
+
+## 2026-09-11 — Scaling a container also scales its "off-screen" parking spots
+
+The height-fit `scale` on `.t-deck--desktop` shrank the deck around its centre — including the 110vh "parked below the viewport" position, which became ~76vh on screen and put card edges into view at short heights. Any distance defined *inside* a transformed container that must hold *on screen* (off-stage parking, rise start) has to be divided by the scale. Caught only because a probe counted on-screen cards after a close, then confirmed on a fresh load.
+
+## 2026-09-11 — Comparing text size by box height compares box models, not fonts
+
+"Features" (a block `<p>`, `leading-none` → box = 1× font-size) measured 34px tall vs "Take Control" (an inline `<span>` → box = the font's content area, ~1.3×) at 44.8px, which looked like a mismatch. Compare rendered font-size (computed size × accumulated ancestor scale) or render the same word in both styles and compare widths — both gave identical values (34.01px; 130.58 vs 130.56px).
+
