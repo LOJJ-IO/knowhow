@@ -9,6 +9,9 @@ related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"
 
 # Lessons Learned
 
+## 2026-09-12 — Guidelines grid: derive cols/rows from aspect for square cells
+Fixed 6×8 on a 16:9 viewport makes wide rectangles (`cell ≈ (W/H)×8/6`). For square cells: `cols ≈ rows × (W/H)` (or invert on portrait), with a fixed short-side density (`TARGET_SHORT`, currently 5). Ship that always; keep manual col/row only for desktop edit mode.
+
 ## 2026-09-12 — Click sound: await AudioContext.resume; don’t soft-nav stub hashes
 Browsers leave `AudioContext` suspended until a gesture; scheduling oscillators before `resume()` resolves plays silence. Chain play after `resume()`. Same-origin `#about` / `#privacy` stubs can trigger App Router soft-nav and throw `Router action dispatched before initialization` (esp. under Fast Refresh) — `preventDefault` on stub footer links until real routes exist.
 

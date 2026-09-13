@@ -640,14 +640,14 @@ type WindowBox = { x: number; y: number; w: number; h: number };
 
 /** Main feature window — matches reference (wide, top-left inset). */
 const DEFAULT_WINDOW_BOX: WindowBox = { x: 5.1, y: 8.9, w: 80.4, h: 79.8 };
-/** Resize floor. Width can go 10% below the width Notes opens at (39 → 35.1). */
+/** Resize floor (width was 39, −10%). Notes opens at it. */
 const MIN_WINDOW_W_PCT = 35.1;
 const MIN_WINDOW_H_PCT = 28;
-/** Notes opens at 39% wide and the height floor. Bottom-right overlap. */
+/** Notes opens at the resize floor (same as min w/h). Bottom-right overlap. */
 const NOTES_WINDOW_BOX: WindowBox = {
-  x: 57.7,
-  y: 63.5,
-  w: 39,
+  x: 61.7,
+  y: 66,
+  w: MIN_WINDOW_W_PCT,
   h: MIN_WINDOW_H_PCT,
 };
 
@@ -1840,7 +1840,7 @@ function LandingHero() {
             height-fit scale, then counter-scaled so the type stays true size.
             Fades in as the card seats; out as the deck closes. */}
         <div
-          className="pointer-events-none absolute left-1/2 z-[200] h-0 w-0 opacity-0 transition-opacity duration-300 group-data-[open=true]:opacity-100 group-data-[open=true]:delay-500"
+          className="pointer-events-none absolute left-[45%] z-[200] h-0 w-0 opacity-0 transition-opacity duration-300 group-data-[open=true]:opacity-100 group-data-[open=true]:delay-500"
           style={{
             top: "calc(50% + var(--deck-band-y) - var(--deck-card-w) * 9 / 32)",
             scale: "calc(1 / var(--deck-fit, 1))",

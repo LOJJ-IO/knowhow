@@ -10,12 +10,13 @@ import { useHydrated } from "@/lib/use-hydrated";
  * controls to tune them are dev-only and stay behind `editable`, since bare
  * numbers on the grid aren't part of the shipped design.
  *
- * Base structure is 6 columns × 8 rows. On mobile that stays in place; if the
- * viewport is wide enough that 6-col cells would be wider than tall, one
- * extra column (7) is added so cells stay closer to square without densifying
- * the grid. */
-const DEFAULT_COLUMNS = 6;
-const DEFAULT_ROWS = 8;
+ * Shipped (non-edit) layout picks cols/rows from the viewport aspect so cells
+ * stay roughly square. Edit mode still lets you override on desktop. */
+/** Cells along the short viewport side — sets grid density. */
+const TARGET_SHORT = 5;
+/** SSR / pre-hydration fallback assumes 16:9 (≈ square cells). */
+const DEFAULT_ROWS = TARGET_SHORT;
+const DEFAULT_COLUMNS = Math.round(TARGET_SHORT * (16 / 9));
 
 function readCount(key: string, fallback: number) {
   if (typeof window === "undefined") return fallback;
@@ -37,26 +38,30 @@ function subscribeViewport(onChange: () => void) {
   };
 }
 
-function useMobileGridMetrics() {
+function useViewportMetrics() {
   const isMobile = useSyncExternalStore(
     subscribeViewport,
     () => window.matchMedia("(max-width: 767px)").matches,
     () => false,
   );
-  // width / height — used to decide if a 7th column is needed
   const widthOverHeight = useSyncExternalStore(
     subscribeViewport,
     () => window.innerWidth / Math.max(window.innerHeight, 1),
-    () => DEFAULT_COLUMNS / DEFAULT_ROWS,
+    () => 16 / 9,
   );
   return { isMobile, widthOverHeight };
 }
 
-/** With fixed 8 rows, cells are square when cols = 8 * (W/H). Base is 6 cols;
- * add one column only when 6 would make cells wider than they are tall. */
-function mobileColumns(widthOverHeight: number) {
-  const cellWiderThanTall = widthOverHeight > DEFAULT_COLUMNS / DEFAULT_ROWS;
-  return cellWiderThanTall ? DEFAULT_COLUMNS + 1 : DEFAULT_COLUMNS;
+/** cols/rows so each cell ≈ square given viewport aspect (W/H). */
+function squareCounts(widthOverHeight: number) {
+  if (widthOverHeight >= 1) {
+    const rows = TARGET_SHORT;
+    const cols = Math.max(1, Math.round(TARGET_SHORT * widthOverHeight));
+    return { cols, rows };
+  }
+  const cols = TARGET_SHORT;
+  const rows = Math.max(1, Math.round(TARGET_SHORT / widthOverHeight));
+  return { cols, rows };
 }
 
 function GuidelinesOverlay({ editable }: { editable: boolean }) {
@@ -66,10 +71,15 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
   // fallback the server used, then updates to the real value as a normal
   // post-hydration render — avoiding a hydration mismatch.
   const mounted = useHydrated();
-  const { isMobile, widthOverHeight } = useMobileGridMetrics();
+  const { isMobile, widthOverHeight } = useViewportMetrics();
+  const auto = squareCounts(widthOverHeight);
 
-  const [columns, setColumns] = useState<number>(() => readCount("guidelines:columns", DEFAULT_COLUMNS));
-  const [rows, setRows] = useState<number>(() => readCount("guidelines:rows", DEFAULT_ROWS));
+  const [columns, setColumns] = useState<number>(() =>
+    readCount("guidelines:columns", DEFAULT_COLUMNS),
+  );
+  const [rows, setRows] = useState<number>(() =>
+    readCount("guidelines:rows", DEFAULT_ROWS),
+  );
 
   function updateColumns(next: number) {
     const clamped = Math.max(1, next);
@@ -83,18 +93,31 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
     localStorage.setItem("guidelines:rows", String(clamped));
   }
 
+  // Shipped grid is always aspect-square. Manual counts only while editing
+  // on desktop (mobile stays auto so the overlay doesn't go rectangular).
+  const useManual = mounted && editable && !isMobile;
   const displayColumns = mounted
-    ? isMobile
-      ? mobileColumns(widthOverHeight)
-      : columns
+    ? useManual
+      ? columns
+      : auto.cols
     : DEFAULT_COLUMNS;
-  const displayRows = mounted ? (isMobile ? DEFAULT_ROWS : rows) : DEFAULT_ROWS;
+  const displayRows = mounted
+    ? useManual
+      ? rows
+      : auto.rows
+    : DEFAULT_ROWS;
   const showControls = mounted && editable;
-  const cells = Array.from({ length: displayColumns * displayRows }, (_, i) => i + 1);
+  const cells = Array.from(
+    { length: displayColumns * displayRows },
+    (_, i) => i + 1,
+  );
 
   return (
     <>
-      <div className="pointer-events-none absolute inset-0 z-[1]" suppressHydrationWarning>
+      <div
+        className="pointer-events-none absolute inset-0 z-[1]"
+        suppressHydrationWarning
+      >
         <div
           className="grid size-full"
           style={{
@@ -103,8 +126,13 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
           }}
         >
           {cells.map((n) => (
-            <div key={n} className="flex items-start justify-start border border-white/40 p-2">
-              {showControls && <span className="font-mono text-xs text-white/70">{n}</span>}
+            <div
+              key={n}
+              className="flex items-start justify-start border border-white/40 p-2"
+            >
+              {showControls && (
+                <span className="font-mono text-xs text-white/70">{n}</span>
+              )}
             </div>
           ))}
         </div>
@@ -135,7 +163,7 @@ function GuidelinesOverlay({ editable }: { editable: boolean }) {
             </div>
           </div>
           <div className="flex items-center justify-between gap-3">
-            <span>Rows{isMobile ? " (fixed)" : ""}</span>
+            <span>Rows{isMobile ? " (auto)" : ""}</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"

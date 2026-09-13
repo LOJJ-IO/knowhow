@@ -18,7 +18,7 @@ Painted mats + a single empty mac window did not read clearly as a desktop. Need
 ## Solution
 - Main feature window defaults to `{ x: 5.1, y: 8.9, w: 80.4, h: 79.8 }` (reference layout).
 - **Notes** folder top-right `{ x: 86, y: 3 }`. Hover plate **4px** top / **10px** sides / **4.862px** bottom (+5% ×4 from 4px), radius **7.35px** (+5%). Card outer radius **10.5px** (+5%).
-- Notes window bottom-right `{ x: 57.7, y: 63.5, w: 39, h: 28 }`. Resize floor (`MIN_WINDOW_W_PCT` / `MIN_WINDOW_H_PCT`): width **35.1%** (39 −10%, 2026-09-12 per user), height **28%**. Applies to every inset window; Notes still opens at 39% wide.
+- Notes window bottom-right `{ x: 61.7, y: 66, w: 35.1, h: 28 }` — position measured from the user's reference screenshot (2026-09-12; right edge 96.8%, bottom 94%) — opens at the resize floor (`MIN_WINDOW_W_PCT` / `MIN_WINDOW_H_PCT`): width **35.1%** (39 −10%, 2026-09-12 per user), height **28%**. Floor applies to every inset window.
 - Body copy = proposal **Why It’s Good** per feature; Org-Chart uses agreed Option A.
 
 ## Out of scope
