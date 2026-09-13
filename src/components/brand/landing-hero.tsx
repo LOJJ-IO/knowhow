@@ -64,16 +64,29 @@ const GOOGLE_LETTERS = [
   { char: "e", color: "#EA4335" },
 ] as const;
 
-/** Card identity = painted mat. Desktop shows three at a time; yellow starts
- *  off-stage and joins the ring on the first ← (or the mirrored →). */
-const DECK_MATS = ["green", "blue", "red", "yellow"] as const;
-type DeckMat = (typeof DECK_MATS)[number];
-/** CSS entrance seats for the first three; yellow parks off-stage until seated. */
-const DECK_ENTRANCE: Partial<Record<DeckMat, "left" | "center" | "right">> = {
-  green: "left",
-  blue: "center",
-  red: "right",
-};
+/** One feature per card; carousel is a round-table ring of all seven. First
+ *  three rise/spread in; the rest park off-stage until seated. Mats cycle
+ *  green / blue / red / yellow. */
+const DECK_CARDS = [
+  {
+    id: "unified",
+    mat: "green",
+    title: "Unified Workspace",
+    entrance: "left",
+  },
+  { id: "auto-own", mat: "blue", title: "Auto-Own", entrance: "center" },
+  { id: "auto-share", mat: "red", title: "Auto-Share", entrance: "right" },
+  { id: "oversight", mat: "yellow", title: "Oversight" },
+  { id: "deepsearch", mat: "green", title: "DeepSearch" },
+  {
+    id: "org-chart",
+    mat: "blue",
+    title: "Org-Chart & Permissions",
+  },
+  { id: "offboard", mat: "red", title: "Instant Offboard" },
+] as const;
+type DeckCard = (typeof DECK_CARDS)[number];
+type DeckEntrance = "left" | "center" | "right";
 
 const EDITING_MODE_ENABLED =
   process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
@@ -529,8 +542,10 @@ function LogoLockup({ fontSize }: { fontSize: string }) {
 }
 
 function DeckChrome({
+  title,
   onDragPointerDown,
 }: {
+  title: string;
   onDragPointerDown?: (e: React.PointerEvent) => void;
 }) {
   return (
@@ -544,6 +559,7 @@ function DeckChrome({
         <span className="t-deck-dot t-deck-dot--min" />
         <span className="t-deck-dot t-deck-dot--max" />
       </div>
+      <span className={`${sohne.className} t-deck-title`}>{title}</span>
     </div>
   );
 }
@@ -574,7 +590,7 @@ function clampWindowBox(box: WindowBox): WindowBox {
 }
 
 /** Inset mac window — drag via title bar; resize from all edges/corners. */
-function InteractiveMacWindow() {
+function InteractiveMacWindow({ title }: { title: string }) {
   const shellRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState<WindowBox>(DEFAULT_WINDOW_BOX);
   const interactionRef = useRef<{
@@ -708,7 +724,10 @@ function InteractiveMacWindow() {
         height: `${box.h}%`,
       }}
     >
-      <DeckChrome onDragPointerDown={(e) => beginInteraction(e, "drag")} />
+      <DeckChrome
+        title={title}
+        onDragPointerDown={(e) => beginInteraction(e, "drag")}
+      />
       {RESIZE_HANDLES.map((handle) => (
         <div
           key={handle}
@@ -722,39 +741,47 @@ function InteractiveMacWindow() {
 }
 
 function DeckWindow({
-  mat,
+  card,
+  parkSlot,
   focused = false,
   ref,
   style,
   onPointerDownCapture,
   onClick,
 }: {
-  mat: DeckMat;
+  card: DeckCard;
+  /** Off-stage slot while CSS entrance plays (cards without an entrance seat). */
+  parkSlot?: number;
   focused?: boolean;
   ref?: React.Ref<HTMLDivElement>;
   style?: React.CSSProperties;
   onPointerDownCapture?: (e: React.PointerEvent) => void;
   onClick?: (e: React.MouseEvent) => void;
 }) {
-  const entrance = DECK_ENTRANCE[mat];
+  const entrance = "entrance" in card ? (card.entrance as DeckEntrance) : null;
   return (
     <div
       ref={ref}
-      style={style}
+      style={
+        parkSlot != null
+          ? { ...style, ["--deck-park-slot" as string]: parkSlot }
+          : style
+      }
       onPointerDownCapture={onPointerDownCapture}
       onClick={onClick}
       className={[
         "t-deck-card",
         "t-deck-card--mat",
-        `t-deck-card--${mat}`,
+        `t-deck-card--${card.mat}`,
         entrance ? `t-deck-card--${entrance}` : null,
+        parkSlot != null ? "t-deck-card--park" : null,
       ]
         .filter(Boolean)
         .join(" ")}
       data-focus={focused ? "true" : "false"}
     >
-      <div className={`t-deck-mat t-deck-mat--${mat}`} aria-hidden />
-      <InteractiveMacWindow />
+      <div className={`t-deck-mat t-deck-mat--${card.mat}`} aria-hidden />
+      <InteractiveMacWindow title={card.title} />
     </div>
   );
 }
@@ -798,7 +825,7 @@ function DeckCoverFlow({
   return (
     <div className="t-deck-cover">
       <div className="t-deck-cover-stage">
-        {DECK_MATS.map((mat, i) => {
+        {DECK_CARDS.map((card, i) => {
           const offset = i - activeIndex;
           const absOffset = Math.abs(offset);
           const isActive = offset === 0;
@@ -806,7 +833,7 @@ function DeckCoverFlow({
 
           return (
             <motion.div
-              key={mat}
+              key={card.id}
               className="t-deck-cover-item"
               initial={false}
               animate={{
@@ -820,7 +847,7 @@ function DeckCoverFlow({
               style={{ zIndex: 100 - absOffset }}
               onClick={() => onActiveIndexChange(i)}
             >
-              <DeckWindow mat={mat} focused={isActive} />
+              <DeckWindow card={card} focused={isActive} />
             </motion.div>
           );
         })}
@@ -836,11 +863,11 @@ function DeckCoverFlow({
           <ChevronLeftIcon />
         </button>
         <div className="t-deck-cover-dots">
-          {DECK_MATS.map((mat, i) => (
+          {DECK_CARDS.map((card, i) => (
             <button
-              key={mat}
+              key={card.id}
               type="button"
-              aria-label={`Show card ${i + 1}`}
+              aria-label={`Show ${card.title}`}
               className="t-deck-cover-dot"
               data-active={activeIndex === i ? "true" : "false"}
               onClick={() => onActiveIndexChange(i)}
@@ -850,9 +877,9 @@ function DeckCoverFlow({
         <button
           type="button"
           aria-label="Next card"
-          disabled={activeIndex === DECK_MATS.length - 1}
+          disabled={activeIndex === DECK_CARDS.length - 1}
           onClick={() =>
-            onActiveIndexChange(Math.min(DECK_MATS.length - 1, activeIndex + 1))
+            onActiveIndexChange(Math.min(DECK_CARDS.length - 1, activeIndex + 1))
           }
         >
           <ChevronRightIcon />
@@ -862,8 +889,8 @@ function DeckCoverFlow({
   );
 }
 
-/** Desktop carousel — mat order as first seated, left → right → off-stage. */
-const DESKTOP_DECK = DECK_MATS;
+/** Desktop carousel — feature order as first seated, left → right → off-stage. */
+const DESKTOP_DECK = DECK_CARDS;
 const DESKTOP_DECK_N = DESKTOP_DECK.length;
 
 /** Every on-screen move shares one spring (ζ≈0.91: soft, no wobble on a
@@ -945,7 +972,7 @@ function DesktopDeck({
 
   // Take over from the CSS entrance: the inline transform lands on its final
   // frame in the same commit that drops the animation, so nothing moves.
-  // Yellow (slot +2) has no CSS entrance — it appears parked off-stage right.
+  // Cards without an entrance seat park off-stage via CSS until seating.
   useLayoutEffect(() => {
     if (!seated) return;
     const els = cards.current;
@@ -1083,10 +1110,11 @@ function DesktopDeck({
 
   return (
     <>
-      {DESKTOP_DECK.map((mat, i) => (
+      {DESKTOP_DECK.map((card, i) => (
         <DeckWindow
-          key={mat}
-          mat={mat}
+          key={card.id}
+          card={card}
+          parkSlot={"entrance" in card ? undefined : i - 1}
           ref={(el) => {
             cards.current[i] = el;
           }}
@@ -1143,8 +1171,8 @@ function playClickSound() {
 
 /** Desktop header buttons that appear only after Get Started divides. */
 const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
-  { key: "login", label: "Log in" },
-  { key: "demo", label: "Book a demo" },
+  { key: "login", label: "Log In" },
+  { key: "demo", label: "Talk to Sales" },
 ];
 
 /** Subhead wave — a crest that travels left → right through the characters,
@@ -1273,7 +1301,7 @@ function LandingHero() {
   const backdropDown = useRef<{ x: number; y: number } | null>(null);
 
   function focusDeckSide(side: "left" | "right") {
-    setDeckIndex(side === "left" ? 0 : DECK_MATS.length - 1);
+    setDeckIndex(side === "left" ? 0 : DECK_CARDS.length - 1);
   }
 
   /** ← brings the left card to the centre — the cards travel right: right

@@ -247,6 +247,23 @@ html {
   border-bottom: 1px solid rgb(255 255 255 / 0.06);
 }
 
+.t-deck-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 5.5rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  font-size: 0.95832rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  color: rgb(255 255 255 / 0.72);
+}
+
 .t-deck-traffic {
   display: flex;
   align-items: center;
@@ -367,6 +384,11 @@ html {
   cursor: grab;
 }
 
+.t-deck-window .t-deck-title {
+  /* Light titlebar — muted stone on #d1cfcc */
+  color: rgb(28 25 23 / 0.55);
+}
+
 /* While dragging, keep the clenched hand over every element under the pointer. */
 html.t-deck-dragging,
 html.t-deck-dragging *,
@@ -444,11 +466,11 @@ body.t-deck-dragging * {
   --deck-brand: #ea4335;
 }
 
-/* Yellow has no rise/spread entrance — park at slot +2 while the other three
- * enter. Inline transforms take over once DesktopDeck seats. */
-.t-deck--desktop[data-open="true"] .t-deck-card--yellow {
+/* Cards without a rise/spread entrance park off-stage (slot from --deck-park-slot)
+ * while the first three enter. Inline transforms take over once DesktopDeck seats. */
+.t-deck--desktop[data-open="true"] .t-deck-card--park {
   transform: translate3d(
-    calc(-50% + var(--deck-side-x) * 2),
+    calc(-50% + var(--deck-side-x) * var(--deck-park-slot)),
     calc(-50% + var(--deck-band-y) + var(--deck-side-drop)),
     0
   );

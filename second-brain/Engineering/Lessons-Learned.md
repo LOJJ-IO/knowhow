@@ -168,3 +168,14 @@ The height-fit `scale` on `.t-deck--desktop` shrank the deck around its centre �
 
 "Features" (a block `<p>`, `leading-none` → box = 1× font-size) measured 34px tall vs "Take Control" (an inline `<span>` → box = the font's content area, ~1.3×) at 44.8px, which looked like a mismatch. Compare rendered font-size (computed size × accumulated ancestor scale) or render the same word in both styles and compare widths — both gave identical values (34.01px; 130.58 vs 130.56px).
 
+## 2026-09-11 — GSAP SplitText: `tag: "span"` gets no display, splitting kills kerning, and Fast Refresh can't test cleanup
+
+Building the subhead wave (GSAP 3.15 SplitText + `useGSAP`):
+
+1. **With `tag: "span"`, SplitText sets no `display` on its wrappers** (it only styles its default `<div>`s: `position: relative; display: inline-block`). Inline boxes can't be transformed, so `y` tweens silently do nothing. Give words/chars a class (`wordsClass`/`charsClass: "inline-block"`) — words too, so wrapping text can't break mid-word.
+2. **Inline-block characters lose kerning** (browsers don't kern across element boundaries): the subhead grew ~10px and glyphs moved up to 5.2px. Fix without touching typography: measure every glyph's position *before* splitting (Range over text nodes, after `document.fonts.ready`), then give each char the `margin-left` that restores the gap to its left neighbour (skip line starts). Matching every advance ⇒ same line width ⇒ same centring. Express it in `em` so it holds as the vw-based font size changes. Verified ≤0.11px per glyph, identical line boxes.
+3. **Fast Refresh does not re-run `useGSAP`'s layout effect** (0 DOM rewrites observed after a real code change + "[Fast Refresh] done"), so it can't be used to test unmount cleanup; neither can Strict Mode here, because the split is deferred to `fonts.ready` and the first mount is torn down before it ever splits. What worked: a throwaway route mounting the component behind a toggle — unmount, observe the held char nodes' `style` for two wave periods (0 writes = timeline killed), remount (exactly one split), then delete the route.
+4. React/SplitText caveat: SplitText rewrites (and on revert, re-creates) the DOM inside a React-rendered element. Fine while that content is static; if the subhead ever becomes state/prop-driven, re-key the element so React and SplitText don't fight over stale nodes.
+
+Also: Tailwind v4's `scale-95` is the individual `scale` property, and CSS composes `translate` → `rotate` → `scale` → `transform` — so pressing (scale) an element positioned with `transform` pulls it toward its untransformed box. Position with `translate` instead.
+
