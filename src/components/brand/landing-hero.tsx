@@ -640,13 +640,14 @@ type WindowBox = { x: number; y: number; w: number; h: number };
 
 /** Main feature window — matches reference (wide, top-left inset). */
 const DEFAULT_WINDOW_BOX: WindowBox = { x: 5.1, y: 8.9, w: 80.4, h: 79.8 };
-/** Notes opens at the resize floor (same as min w/h). Bottom-right overlap. */
-const MIN_WINDOW_W_PCT = 39;
+/** Resize floor. Width can go 10% below the width Notes opens at (39 → 35.1). */
+const MIN_WINDOW_W_PCT = 35.1;
 const MIN_WINDOW_H_PCT = 28;
+/** Notes opens at 39% wide and the height floor. Bottom-right overlap. */
 const NOTES_WINDOW_BOX: WindowBox = {
   x: 57.7,
   y: 63.5,
-  w: MIN_WINDOW_W_PCT,
+  w: 39,
   h: MIN_WINDOW_H_PCT,
 };
 
