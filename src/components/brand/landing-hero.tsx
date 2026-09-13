@@ -1840,7 +1840,7 @@ function LandingHero() {
             height-fit scale, then counter-scaled so the type stays true size.
             Fades in as the card seats; out as the deck closes. */}
         <div
-          className="pointer-events-none absolute left-[45%] z-[200] h-0 w-0 opacity-0 transition-opacity duration-300 group-data-[open=true]:opacity-100 group-data-[open=true]:delay-500"
+          className="pointer-events-none absolute left-1/2 z-[200] h-0 w-0 opacity-0 transition-opacity duration-300 group-data-[open=true]:opacity-100 group-data-[open=true]:delay-500"
           style={{
             top: "calc(50% + var(--deck-band-y) - var(--deck-card-w) * 9 / 32)",
             scale: "calc(1 / var(--deck-fit, 1))",
