@@ -16,7 +16,7 @@ related: ["[[Current-Context]]", "[[0004-landing-only-purge-old-app]]", "[[FEAT-
 Desktop landing header needed Log in and Talk to sales alongside Get Started.
 
 ## Solution
-Desktop top bar (md+): **Logo** on the left; **Log in → Talk to sales → Get Started** grouped on the right (tight `gap-2`). Shared `CTA_CLASS` (scaled −20% from the original Get Started lock: `h-[43.542px]`, `min-w-[121.92px]`). Sliding Home/Features/Contact tabs were tried then **removed** (2026-09-11). Copy: **Talk to sales** replaced earlier **Book a demo** (2026-09-12).
+Desktop top bar (md+): **Logo** on the left; **Log in → Talk to sales → Get Started** grouped on the right (tight `gap-2`). Shared `CTA_CLASS` (scaled −20% then **+10%**: `h-[47.896px]`, `min-w-[134.112px]`). Sliding Home/Features/Contact tabs were tried then **removed** (2026-09-11). Copy: **Talk to sales** replaced earlier **Book a demo** (2026-09-12).
 
 ## Out of scope
 - Mobile header actions (logo + bottom Get Started only until asked)

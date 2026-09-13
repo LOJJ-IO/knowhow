@@ -133,10 +133,10 @@ function Spinner({
 }
 
 const CTA_CLASS =
-  "relative inline-flex h-[43.542px] min-h-[26.944px] min-w-[121.92px] items-center justify-center rounded-full bg-black/80 px-[1.179938rem] text-[1.032445rem] text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "relative inline-flex h-[47.896px] min-h-[29.638px] min-w-[134.112px] items-center justify-center rounded-full bg-black/80 px-[1.297932rem] text-[1.13569rem] text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 /** One CTA body divides into two horizontally aligned daughters. */
-const CTA_DIAMETER = 43.542;
+const CTA_DIAMETER = 47.896;
 const CTA_GAP = 8;
 /** Half the final centre-to-centre distance. */
 const CTA_OFFSET = (CTA_DIAMETER + CTA_GAP) / 2;
@@ -231,9 +231,9 @@ const CTA_EXTRA_LIQUID_CLASS = cn(
 );
 
 /** Goo is only drawn within `filterPadding` of the group's box (the pill), so
- *  while extras are travelling it has to reach their furthest slot (~330px
+ *  while extras are travelling it has to reach their furthest slot (~360px
  *  left of the pill at current sizes). */
-const CTA_EXTRAS_REACH = 400;
+const CTA_EXTRAS_REACH = 440;
 
 /** Layers 2+3 — the pill divides in place. Each daughter starts as the WHOLE
  *  pill (`width: 100%` of the CTA box, so the two overlap into exactly the
@@ -432,7 +432,7 @@ function GetStartedCta({
       ))}
       <div
         ref={boxRef}
-        className="group/cta relative inline-flex h-[43.542px] items-center justify-center"
+        className="group/cta relative inline-flex h-[47.896px] items-center justify-center"
       >
         <button
           type="button"
@@ -457,7 +457,7 @@ function GetStartedCta({
             style={{ opacity: phase === "spinner" ? 1 : 0 }}
             aria-hidden
           >
-            <Spinner size={20.208} spinning={phase === "spinner"} />
+            <Spinner size={22.229} spinning={phase === "spinner"} />
           </span>
         </button>
 
@@ -479,13 +479,13 @@ function GetStartedCta({
           {CTA_DAUGHTERS.map(({ key, dir }) => (
             <span
               key={key}
-              className={`absolute left-1/2 top-1/2 -ml-[7.2px] -mt-[7.2px] flex transition-transform duration-150 ${CTA_CHEVRON_PRESS[key]}`}
+              className={`absolute left-1/2 top-1/2 -ml-[7.92px] -mt-[7.92px] flex transition-transform duration-150 ${CTA_CHEVRON_PRESS[key]}`}
               style={{ translate: `${dir * CTA_OFFSET}px 0` }}
             >
               {dir < 0 ? (
-                <ChevronLeftIcon size={14.4} />
+                <ChevronLeftIcon size={15.84} />
               ) : (
-                <ChevronRightIcon size={14.4} />
+                <ChevronRightIcon size={15.84} />
               )}
             </span>
           ))}
