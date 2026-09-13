@@ -552,7 +552,7 @@ function LogoLockup({ fontSize }: { fontSize: string }) {
       >
         <span className="inline-flex items-center">
           Kn
-          <LogoMark className="mx-[0.04em] h-[0.71em] w-[0.62em] shrink-0 translate-x-[8%] translate-y-[10%]" />
+          <LogoMark className="mx-[0.04em] h-[0.71em] w-[0.62em] shrink-0 translate-x-[5%] translate-y-[10%]" />
           how
         </span>
         <span
@@ -829,7 +829,7 @@ function InteractiveMacWindow({
 const DEFAULT_FOLDER_POS = { x: 86, y: 3 };
 const FOLDER_DRAG_THRESHOLD = 6;
 
-/** Finder-style desktop folder — draggable; click opens Notes. */
+/** Finder-style desktop folder — draggable; click toggles Notes. */
 function NotesFolder({
   note,
   open,
@@ -887,7 +887,10 @@ function NotesFolder({
       const wasDrag = active.moved;
       dragRef.current = null;
       clearDragChrome();
-      if (!wasDrag) onOpenChange(true);
+      if (!wasDrag) {
+        playClickSound();
+        onOpenChange(!open);
+      }
     }
 
     window.addEventListener("pointermove", onMove);
@@ -899,7 +902,7 @@ function NotesFolder({
       window.removeEventListener("pointercancel", onUp);
       clearDragChrome();
     };
-  }, [onOpenChange]);
+  }, [onOpenChange, open]);
 
   function onFolderPointerDown(e: React.PointerEvent) {
     if (e.button !== 0) return;
@@ -933,7 +936,7 @@ function NotesFolder({
         ref={folderRef}
         type="button"
         className="t-deck-folder"
-        aria-label="Open Notes"
+        aria-label={open ? "Close Notes" : "Open Notes"}
         aria-expanded={open}
         style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
         onPointerDown={onFolderPointerDown}
@@ -957,7 +960,6 @@ function NotesFolder({
           title="Notes"
           initialBox={NOTES_WINDOW_BOX}
           zIndex={4}
-          onClose={() => onOpenChange(false)}
         >
           <p className={`${sohne.className} t-deck-notes-copy`}>{note}</p>
         </InteractiveMacWindow>
@@ -1209,7 +1211,12 @@ function DesktopDeck({
   // Cards without an entrance seat park off-stage via CSS until seating.
   useLayoutEffect(() => {
     if (!seated) return;
-    const els = cards.current;
+    // Snapshot the nodes now: the card ref callbacks are recreated every
+    // render, so by the time this cleanup runs React has already called them
+    // with null — reading `cards.current` then found no nodes, the inline
+    // z-index from the close survived, and the next Get Started rose the
+    // centre card under the side cards.
+    const els = [...cards.current];
     const paint = (i: number) => {
       const el = els[i];
       if (!el) return;
@@ -1409,26 +1416,17 @@ function playClickSound() {
   }
 }
 
-/** Stub footer destinations — preventDefault so App Router soft-nav doesn't
- *  fire on `#…` before init (or during Fast Refresh). */
-function FooterStubLink({
-  href,
-  children,
-}: {
-  href: string;
-  children: React.ReactNode;
-}) {
+/** Stub footer destinations — buttons until real routes exist (avoids App
+ *  Router soft-nav on `<a href="#…">` during Fast Refresh). */
+function FooterStubLink({ children }: { children: React.ReactNode }) {
   return (
-    <a
-      href={href}
-      className="cursor-pointer underline underline-offset-2"
-      onClick={(e) => {
-        e.preventDefault();
-        playClickSound();
-      }}
+    <button
+      type="button"
+      className="cursor-pointer underline underline-offset-2 transition-transform duration-150 active:scale-95"
+      onClick={() => playClickSound()}
     >
       {children}
-    </a>
+    </button>
   );
 }
 
@@ -1755,8 +1753,8 @@ function LandingHero() {
           <div
             className={`${satoshi.className} mt-[2px] flex justify-between px-6 text-[0.908552rem] font-bold`}
           >
-            <FooterStubLink href="#about">About Us</FooterStubLink>
-            <FooterStubLink href="#privacy">Privacy Policy</FooterStubLink>
+            <FooterStubLink>About Us</FooterStubLink>
+            <FooterStubLink>Privacy Policy</FooterStubLink>
           </div>
         </div>
 
@@ -1813,8 +1811,8 @@ function LandingHero() {
           <div
             className={`${satoshi.className} mt-[2px] flex justify-between px-[clamp(0.75rem,2vw,1.5rem)] text-[0.908552rem] font-bold lg:px-6`}
           >
-            <FooterStubLink href="#about">About Us</FooterStubLink>
-            <FooterStubLink href="#privacy">Privacy Policy</FooterStubLink>
+            <FooterStubLink>About Us</FooterStubLink>
+            <FooterStubLink>Privacy Policy</FooterStubLink>
           </div>
         </div>
       </div>

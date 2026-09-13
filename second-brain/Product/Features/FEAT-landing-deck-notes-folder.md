@@ -29,10 +29,10 @@ Painted mats + a single empty mac window did not read clearly as a desktop. Need
 Folder default `left: 86%` / `top: 3%`. Plate pad `4px 10px 4.862px`, radius `7.35px`. Card radius `10.5px`.
 
 ## Technical approach
-`NotesFolder` + `InteractiveMacWindow` in `landing-hero.tsx`; styles in `globals.css` (`.t-deck-folder*`, `.t-deck-dot-x`, `.t-deck-notes-copy`). `DECK_CARDS[].note` holds copy. Window shell must **not** `stopPropagation` in the capture phase — that blocked title-bar / resize `pointerdown` (fixed 2026-09-12). **Side-slot swipe** uses `onClickCapture` on the card so wallpaper, window, and folder all step the carousel; centre slot never steps. Notes close (`.t-deck-dot--btn`) keeps a 13px visual but uses `::before` inset **−12px** (~37px hit).
+`NotesFolder` + `InteractiveMacWindow` in `landing-hero.tsx`; styles in `globals.css` (`.t-deck-folder*`, `.t-deck-dot-x`, `.t-deck-notes-copy`). `DECK_CARDS[].note` holds copy. Window shell must **not** `stopPropagation` in the capture phase — that blocked title-bar / resize `pointerdown` (fixed 2026-09-12). **Side-slot swipe** uses `onClickCapture` on the card so wallpaper, window, and folder all step the carousel; centre slot never steps. Folder click **toggles** Notes open/closed (no close X on the Notes window — decorative traffic lights only). Folder + footer stubs share CTA press (`active:scale-95`, 150ms) + click sound.
 
 ## Open questions
-- Whether clicking Notes again should toggle closed while open
+- None
 
 ## Related
 [[FEAT-landing-deck-carousel]] · [[Current-Context]]

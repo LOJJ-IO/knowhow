@@ -443,6 +443,18 @@ html {
   cursor: pointer;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms var(--default-transition-timing-function, ease);
+}
+
+.t-deck-folder:active {
+  transform: scale(0.95);
+}
+
+/* Don’t stay pressed while dragging the icon. */
+html.t-deck-dragging .t-deck-folder,
+html.t-deck-dragging .t-deck-folder:active {
+  transform: none;
+  transition: none;
 }
 
 .t-deck-folder-hit {
