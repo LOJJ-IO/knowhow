@@ -66,24 +66,54 @@ const GOOGLE_LETTERS = [
 
 /** One feature per card; carousel is a round-table ring of all seven. First
  *  three rise/spread in; the rest park off-stage until seated. Mats cycle
- *  green / blue / red / yellow. */
+ *  green / blue / red / yellow. `note` = proposal "Why It's Good" (Org-Chart
+ *  uses the agreed Option A — proposal had no Why for that feature). */
 const DECK_CARDS = [
   {
     id: "unified",
     mat: "green",
     title: "Unified Workspace",
     entrance: "left",
+    note: "Eliminates file clutter, ensures all Google Drive documents live in one predictable location, and prevents files from getting lost in personal drives.",
   },
-  { id: "auto-own", mat: "blue", title: "Auto-Own", entrance: "center" },
-  { id: "auto-share", mat: "red", title: "Auto-Share", entrance: "right" },
-  { id: "oversight", mat: "yellow", title: "Oversight" },
-  { id: "deepsearch", mat: "green", title: "DeepSearch" },
+  {
+    id: "auto-own",
+    mat: "blue",
+    title: "Auto-Own",
+    entrance: "center",
+    note: "Top Leaders can edit or move documents instantly without asking for permission, and critical files never stay trapped under an individual's account.",
+  },
+  {
+    id: "auto-share",
+    mat: "red",
+    title: "Auto-Share",
+    entrance: "right",
+    note: "Prevents human error, saves time spent asking for document links, and guarantees people have immediate access to the files they need.",
+  },
+  {
+    id: "oversight",
+    mat: "yellow",
+    title: "Oversight",
+    note: "Keeps Top Leaders fully informed without requiring individuals to send manual updates, links, or status emails.",
+  },
+  {
+    id: "deepsearch",
+    mat: "green",
+    title: "DeepSearch",
+    note: "Saves valuable work hours by allowing individuals and managers to instantly locate any document, even if it wasn't manually shared with them directly.",
+  },
   {
     id: "org-chart",
     mat: "blue",
     title: "Org-Chart & Permissions",
+    note: "Makes ownership and access rules follow your real teams, so the right people see the right work without anyone having to remember who to share with.",
   },
-  { id: "offboard", mat: "red", title: "Instant Offboard" },
+  {
+    id: "offboard",
+    mat: "red",
+    title: "Instant Offboard",
+    note: "Protects confidential company information, eliminates data leak security risks, and keeps all created assets safely inside the organization.",
+  },
 ] as const;
 type DeckCard = (typeof DECK_CARDS)[number];
 type DeckEntrance = "left" | "center" | "right";
@@ -133,7 +163,7 @@ function Spinner({
 }
 
 const CTA_CLASS =
-  "relative inline-flex h-[47.896px] min-h-[29.638px] min-w-[134.112px] items-center justify-center rounded-full bg-black/80 px-[1.297932rem] text-[1.13569rem] text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "relative inline-flex h-[47.896px] min-h-[29.638px] min-w-[134.112px] cursor-pointer items-center justify-center rounded-full bg-black/80 px-[1.297932rem] text-[1.13569rem] font-bold text-white shadow transition-transform duration-150 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 /** One CTA body divides into two horizontally aligned daughters. */
 const CTA_DIAMETER = 47.896;
@@ -204,7 +234,7 @@ function readSplitTiming() {
 /** `active:scale-95` is the same press as CTA_CLASS; its 150ms transition is
  *  inline (the button's `transition` also carries the split). */
 const CTA_DAUGHTER_CLASS =
-  "rounded-full active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
+  "cursor-pointer rounded-full active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white";
 
 /** The same press, on each arrow's chevron (it lives in its own layer so it
  *  could stay parked while the pill pinched) — driven by its circle's :active.
@@ -426,6 +456,7 @@ function GetStartedCta({
           type="button"
           className={CTA_CLASS}
           style={{ visibility: phase === "controls" ? "visible" : "hidden" }}
+          onClick={() => playClickSound()}
         >
           {label}
         </button>
@@ -544,9 +575,11 @@ function LogoLockup({ fontSize }: { fontSize: string }) {
 function DeckChrome({
   title,
   onDragPointerDown,
+  onClose,
 }: {
   title: string;
   onDragPointerDown?: (e: React.PointerEvent) => void;
+  onClose?: () => void;
 }) {
   return (
     <div
@@ -554,8 +587,35 @@ function DeckChrome({
       onPointerDown={onDragPointerDown}
       style={onDragPointerDown ? { touchAction: "none" } : undefined}
     >
-      <div className="t-deck-traffic" aria-hidden>
-        <span className="t-deck-dot t-deck-dot--close" />
+      <div className="t-deck-traffic" aria-hidden={!onClose}>
+        {onClose ? (
+          <button
+            type="button"
+            className="t-deck-dot t-deck-dot--close t-deck-dot--btn"
+            aria-label="Close"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+          >
+            <svg
+              className="t-deck-dot-x"
+              viewBox="0 0 12 12"
+              aria-hidden
+            >
+              <path
+                d="M3.2 3.2l5.6 5.6M8.8 3.2l-5.6 5.6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.55"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        ) : (
+          <span className="t-deck-dot t-deck-dot--close" />
+        )}
         <span className="t-deck-dot t-deck-dot--min" />
         <span className="t-deck-dot t-deck-dot--max" />
       </div>
@@ -578,21 +638,42 @@ const RESIZE_HANDLES: ResizeHandle[] = [
 
 type WindowBox = { x: number; y: number; w: number; h: number };
 
-const DEFAULT_WINDOW_BOX: WindowBox = { x: 6.25, y: 6.25, w: 87.5, h: 87.5 };
-const MIN_WINDOW_PCT = 32;
+/** Main feature window — matches reference (wide, top-left inset). */
+const DEFAULT_WINDOW_BOX: WindowBox = { x: 5.1, y: 8.9, w: 80.4, h: 79.8 };
+/** Notes opens at the resize floor (same as min w/h). Bottom-right overlap. */
+const MIN_WINDOW_W_PCT = 39;
+const MIN_WINDOW_H_PCT = 28;
+const NOTES_WINDOW_BOX: WindowBox = {
+  x: 57.7,
+  y: 63.5,
+  w: MIN_WINDOW_W_PCT,
+  h: MIN_WINDOW_H_PCT,
+};
 
 function clampWindowBox(box: WindowBox): WindowBox {
-  const w = Math.min(100, Math.max(MIN_WINDOW_PCT, box.w));
-  const h = Math.min(100, Math.max(MIN_WINDOW_PCT, box.h));
+  const w = Math.min(100, Math.max(MIN_WINDOW_W_PCT, box.w));
+  const h = Math.min(100, Math.max(MIN_WINDOW_H_PCT, box.h));
   const x = Math.min(100 - w, Math.max(0, box.x));
   const y = Math.min(100 - h, Math.max(0, box.y));
   return { x, y, w, h };
 }
 
 /** Inset mac window — drag via title bar; resize from all edges/corners. */
-function InteractiveMacWindow({ title }: { title: string }) {
+function InteractiveMacWindow({
+  title,
+  initialBox = DEFAULT_WINDOW_BOX,
+  zIndex = 1,
+  onClose,
+  children,
+}: {
+  title: string;
+  initialBox?: WindowBox;
+  zIndex?: number;
+  onClose?: () => void;
+  children?: React.ReactNode;
+}) {
   const shellRef = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState<WindowBox>(DEFAULT_WINDOW_BOX);
+  const [box, setBox] = useState<WindowBox>(initialBox);
   const interactionRef = useRef<{
     mode: "drag" | "resize";
     handle?: ResizeHandle;
@@ -624,7 +705,7 @@ function InteractiveMacWindow({ title }: { title: string }) {
       }
 
       const handle = active.handle!;
-      let next = { ...s };
+      const next = { ...s };
       if (handle.includes("e")) next.w = s.w + dx;
       if (handle.includes("w")) {
         next.x = s.x + dx;
@@ -722,12 +803,17 @@ function InteractiveMacWindow({ title }: { title: string }) {
         top: `${box.y}%`,
         width: `${box.w}%`,
         height: `${box.h}%`,
+        zIndex,
       }}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <DeckChrome
         title={title}
         onDragPointerDown={(e) => beginInteraction(e, "drag")}
+        onClose={onClose}
       />
+      {children ? <div className="t-deck-window-body">{children}</div> : null}
       {RESIZE_HANDLES.map((handle) => (
         <div
           key={handle}
@@ -740,6 +826,146 @@ function InteractiveMacWindow({ title }: { title: string }) {
   );
 }
 
+const DEFAULT_FOLDER_POS = { x: 86, y: 3 };
+const FOLDER_DRAG_THRESHOLD = 6;
+
+/** Finder-style desktop folder — draggable; click opens Notes. */
+function NotesFolder({
+  note,
+  open,
+  onOpenChange,
+}: {
+  note: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const folderRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState(DEFAULT_FOLDER_POS);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    parentW: number;
+    parentH: number;
+    pointerId: number;
+    moved: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    function clearDragChrome() {
+      document.documentElement.classList.remove("t-deck-dragging");
+      document.body.classList.remove("t-deck-dragging");
+      document.body.style.removeProperty("user-select");
+    }
+
+    function onMove(e: PointerEvent) {
+      const active = dragRef.current;
+      if (!active || e.pointerId !== active.pointerId) return;
+      const dxPx = e.clientX - active.startX;
+      const dyPx = e.clientY - active.startY;
+      if (
+        !active.moved &&
+        Math.hypot(dxPx, dyPx) > FOLDER_DRAG_THRESHOLD
+      ) {
+        active.moved = true;
+        document.documentElement.classList.add("t-deck-dragging");
+        document.body.classList.add("t-deck-dragging");
+      }
+      if (!active.moved) return;
+      const dx = (dxPx / active.parentW) * 100;
+      const dy = (dyPx / active.parentH) * 100;
+      setPos({
+        x: Math.min(92, Math.max(0, active.originX + dx)),
+        y: Math.min(88, Math.max(0, active.originY + dy)),
+      });
+    }
+
+    function onUp(e: PointerEvent) {
+      const active = dragRef.current;
+      if (!active || e.pointerId !== active.pointerId) return;
+      const wasDrag = active.moved;
+      dragRef.current = null;
+      clearDragChrome();
+      if (!wasDrag) onOpenChange(true);
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      clearDragChrome();
+    };
+  }, [onOpenChange]);
+
+  function onFolderPointerDown(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const parent = folderRef.current?.parentElement;
+    if (!parent) return;
+    const rect = parent.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: pos.x,
+      originY: pos.y,
+      parentW: rect.width,
+      parentH: rect.height,
+      pointerId: e.pointerId,
+      moved: false,
+    };
+    document.body.style.userSelect = "none";
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // capture optional — window listeners still drive the drag
+    }
+  }
+
+  return (
+    <>
+      <button
+        ref={folderRef}
+        type="button"
+        className="t-deck-folder"
+        aria-label="Open Notes"
+        aria-expanded={open}
+        style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+        onPointerDown={onFolderPointerDown}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="t-deck-folder-hit">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/deck/folder.png"
+            alt=""
+            width={98}
+            height={86}
+            className="t-deck-folder-icon"
+            draggable={false}
+          />
+        </span>
+        <span className={`${sohne.className} t-deck-folder-label`}>Notes</span>
+      </button>
+      {open ? (
+        <InteractiveMacWindow
+          title="Notes"
+          initialBox={NOTES_WINDOW_BOX}
+          zIndex={4}
+          onClose={() => onOpenChange(false)}
+        >
+          <p className={`${sohne.className} t-deck-notes-copy`}>{note}</p>
+        </InteractiveMacWindow>
+      ) : null}
+    </>
+  );
+}
+
 function DeckWindow({
   card,
   parkSlot,
@@ -747,7 +973,7 @@ function DeckWindow({
   ref,
   style,
   onPointerDownCapture,
-  onClick,
+  onClickCapture,
 }: {
   card: DeckCard;
   /** Off-stage slot while CSS entrance plays (cards without an entrance seat). */
@@ -756,9 +982,12 @@ function DeckWindow({
   ref?: React.Ref<HTMLDivElement>;
   style?: React.CSSProperties;
   onPointerDownCapture?: (e: React.PointerEvent) => void;
-  onClick?: (e: React.MouseEvent) => void;
+  /** Side-slot swipe: use capture so window/folder stopPropagation can't block it. */
+  onClickCapture?: (e: React.MouseEvent) => void;
 }) {
   const entrance = "entrance" in card ? (card.entrance as DeckEntrance) : null;
+  const [notesOpen, setNotesOpen] = useState(false);
+
   return (
     <div
       ref={ref}
@@ -768,7 +997,7 @@ function DeckWindow({
           : style
       }
       onPointerDownCapture={onPointerDownCapture}
-      onClick={onClick}
+      onClickCapture={onClickCapture}
       className={[
         "t-deck-card",
         "t-deck-card--mat",
@@ -782,6 +1011,11 @@ function DeckWindow({
     >
       <div className={`t-deck-mat t-deck-mat--${card.mat}`} aria-hidden />
       <InteractiveMacWindow title={card.title} />
+      <NotesFolder
+        note={card.note}
+        open={notesOpen}
+        onOpenChange={setNotesOpen}
+      />
     </div>
   );
 }
@@ -792,7 +1026,7 @@ function ChevronLeftIcon({ size = 14 }: { size?: number }) {
       <path
         d="M15 18l-6-6 6-6"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -806,7 +1040,7 @@ function ChevronRightIcon({ size = 14 }: { size?: number }) {
       <path
         d="M9 18l6-6-6-6"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="3"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -1119,13 +1353,14 @@ function DesktopDeck({
             cards.current[i] = el;
           }}
           style={seated ? { animation: "none" } : undefined}
-          // Capture, so the mac window's own drag/resize (which stops
-          // propagation) can't hide the press; a drag moves, so never counts.
+          // Capture on the card: side-slot swipe fires for wallpaper, window,
+          // folder — children's stopPropagation can't block capture. Centre
+          // slot never steps (p ≈ 0). Drags (>6px) don't count as a click.
           onPointerDownCapture={(e) => {
             cardDown.current =
               e.button === 0 ? { x: e.clientX, y: e.clientY } : null;
           }}
-          onClick={(e) => {
+          onClickCapture={(e) => {
             const down = cardDown.current;
             cardDown.current = null;
             if (!onCardStep || !down) return;
@@ -1144,29 +1379,57 @@ let clickAudio: AudioContext | null = null;
 
 /** Short sine tick (880→220Hz, 80ms). One shared AudioContext: a fresh one per
  *  click leaks, and browsers cap how many can exist — which matters once the
- *  deck arrows get clicked in quick succession. */
+ *  deck arrows get clicked in quick succession. Must wait for `resume()` when
+ *  suspended (autoplay policy) or the oscillator runs silently. */
 function playClickSound() {
   try {
     clickAudio ??= new AudioContext();
     const ctx = clickAudio;
-    if (ctx.state === "suspended") void ctx.resume();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      220,
-      ctx.currentTime + 0.08,
-    );
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.08);
+    const start = () => {
+      const t = ctx.currentTime;
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, t);
+      oscillator.frequency.exponentialRampToValueAtTime(220, t + 0.08);
+      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(t);
+      oscillator.stop(t + 0.08);
+    };
+    if (ctx.state === "suspended") {
+      void ctx.resume().then(start);
+    } else {
+      start();
+    }
   } catch {
     // Web Audio unavailable/blocked — sound is a nice-to-have, fail silently
   }
+}
+
+/** Stub footer destinations — preventDefault so App Router soft-nav doesn't
+ *  fire on `#…` before init (or during Fast Refresh). */
+function FooterStubLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      className="cursor-pointer underline underline-offset-2"
+      onClick={(e) => {
+        e.preventDefault();
+        playClickSound();
+      }}
+    >
+      {children}
+    </a>
+  );
 }
 
 /** Desktop header buttons that appear only after Get Started divides. */
@@ -1473,17 +1736,28 @@ function LandingHero() {
         <div className="relative z-0 min-h-[20vh] flex-1" aria-hidden />
 
         <div
-          className="t-handoff-shrink t-handoff-shrink--subhead relative z-10 mx-auto w-full max-w-[min(90%,42rem)] translate-y-[3vh] px-6 text-center text-[#1c1917]"
-          style={{ fontSize: MOBILE_SUBHEAD_FONT_SIZE }}
+          className="relative z-10 w-full translate-y-[3vh] text-[#1c1917]"
           data-open={openAttr}
         >
-          <p ref={mobSubheadRef} className="leading-snug">
-            <span className={`${sohne.className} tracking-tight`}>
-              Take Control of your
-            </span>
-            <br />
-            <GoogleWorkspaceMark />
-          </p>
+          <div
+            className="t-handoff-shrink t-handoff-shrink--subhead mx-auto w-full max-w-[min(90%,42rem)] px-6 text-center"
+            style={{ fontSize: MOBILE_SUBHEAD_FONT_SIZE }}
+            data-open={openAttr}
+          >
+            <p ref={mobSubheadRef} className="leading-snug">
+              <span className={`${sohne.className} tracking-tight`}>
+                Take Control of your
+              </span>
+              <br />
+              <GoogleWorkspaceMark />
+            </p>
+          </div>
+          <div
+            className={`${satoshi.className} mt-[2px] flex justify-between px-6 text-[0.908552rem] font-bold`}
+          >
+            <FooterStubLink href="#about">About Us</FooterStubLink>
+            <FooterStubLink href="#privacy">Privacy Policy</FooterStubLink>
+          </div>
         </div>
 
         <div className="relative z-30 flex -translate-y-[2vh] justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
@@ -1518,19 +1792,30 @@ function LandingHero() {
         </div>
 
         <div
-          className="t-handoff-shrink t-handoff-shrink--subhead absolute bottom-[clamp(1.25rem,6vh,3.5rem)] left-1/2 z-10 w-max -translate-x-1/2 translate-y-[3vh] text-center"
-          style={{ fontSize: DESKTOP_SUBHEAD_FONT_SIZE }}
+          className="pointer-events-auto absolute inset-x-0 bottom-[clamp(1.25rem,6vh,3.5rem)] z-10 translate-y-[3vh] text-[#1c1917]"
           data-open={openAttr}
         >
-          <p
-            ref={deskSubheadRef}
-            className="leading-none whitespace-nowrap text-[#1c1917]"
+          <div
+            className="t-handoff-shrink t-handoff-shrink--subhead mx-auto w-max text-center"
+            style={{ fontSize: DESKTOP_SUBHEAD_FONT_SIZE }}
+            data-open={openAttr}
           >
-            <span className={`${sohne.className} tracking-tight`}>
-              Take Control of your{" "}
-            </span>
-            <GoogleWorkspaceMark />
-          </p>
+            <p
+              ref={deskSubheadRef}
+              className="leading-none whitespace-nowrap"
+            >
+              <span className={`${sohne.className} tracking-tight`}>
+                Take Control of your{" "}
+              </span>
+              <GoogleWorkspaceMark />
+            </p>
+          </div>
+          <div
+            className={`${satoshi.className} mt-[2px] flex justify-between px-[clamp(0.75rem,2vw,1.5rem)] text-[0.908552rem] font-bold lg:px-6`}
+          >
+            <FooterStubLink href="#about">About Us</FooterStubLink>
+            <FooterStubLink href="#privacy">Privacy Policy</FooterStubLink>
+          </div>
         </div>
       </div>
 

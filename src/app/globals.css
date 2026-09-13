@@ -125,7 +125,7 @@ html {
   --deck-side-drop: 5vh;
   --deck-rise-dur: 700ms;
   --deck-spread-dur: 1331ms;
-  --deck-window-radius: 10px;
+  --deck-window-radius: 10.5px;
   --deck-mac-radius: 14px;
   --deck-titlebar-h: 2.75rem;
   --deck-dot: 13px;
@@ -377,6 +377,133 @@ html {
 
 .t-deck-window--interactive {
   overflow: visible;
+}
+
+.t-deck-window-body {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem 1rem 1rem;
+  background: #fbfaf8;
+  border-radius: 0 0 var(--deck-mac-radius) var(--deck-mac-radius);
+}
+
+.t-deck-notes-copy {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: rgb(28 25 23 / 0.82);
+}
+
+.t-deck-dot--btn {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Invisible hit pad — visual stays --deck-dot; click/tap ~37px. */
+.t-deck-dot--btn::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+/* macOS-style close glyph (darker red X, rounded caps). */
+.t-deck-dot-x {
+  width: 58%;
+  height: 58%;
+  color: rgb(77 0 0 / 0.72);
+  display: block;
+  pointer-events: none;
+}
+
+/* Finder-style desktop folder — tight like icon view. */
+.t-deck-folder {
+  --folder-icon: 98.4256px;
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.t-deck-folder-hit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  height: auto;
+  padding: 4px 10px 4.862px;
+  border-radius: 7.35px;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.t-deck-folder:hover .t-deck-folder-hit,
+.t-deck-folder:focus-visible .t-deck-folder-hit {
+  background: rgb(255 255 255 / 0.4);
+  box-shadow:
+    inset 0 0.5px 0 rgb(255 255 255 / 0.7),
+    inset 0 0 0 0.5px rgb(255 255 255 / 0.35);
+}
+
+.t-deck-folder:focus-visible {
+  outline: none;
+}
+
+.t-deck-folder-icon {
+  width: var(--folder-icon);
+  height: auto;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+
+.t-deck-folder-label {
+  width: max-content;
+  max-width: calc(var(--folder-icon) + 4px);
+  margin: 0;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: #fff;
+  text-shadow:
+    0 0 3px rgb(0 0 0 / 0.55),
+    0 1px 2px rgb(0 0 0 / 0.45);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    text-shadow 120ms ease;
+}
+
+.t-deck-folder:hover .t-deck-folder-label,
+.t-deck-folder:focus-visible .t-deck-folder-label {
+  background: rgb(255 255 255 / 0.5);
+  text-shadow: none;
+  color: rgb(28 25 23 / 0.92);
 }
 
 .t-deck-window .t-deck-titlebar {

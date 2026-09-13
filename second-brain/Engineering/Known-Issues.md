@@ -3,7 +3,7 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-10
+updated: 2026-09-12
 related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
@@ -16,6 +16,7 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-pur
 
 ## Open
 - **[dev env]** Local `next build` fails type-check on `.next/dev/types/validator.ts` referencing the purged `(app)` / `(auth)` routes. Cause: the `next dev` server (running since before the 2026-09-10 purge commit) keeps a stale route list and regenerates that file on every change; `tsconfig.json` includes `.next/dev/types/**`. Workaround: restart `next dev`. Vercel is unaffected (clean checkout has no `.next/dev`). App code type-checks clean with that dir excluded. (since 2026-09-10)
+- **[dev / landing]** Browser: `Router action dispatched before initialization` during Fast Refresh / soft-nav while App Router isn’t ready. Stub `#about` / `#privacy` footer links now `preventDefault` so they don’t soft-nav. Persistent after every HMR compile → restart `next dev` (same stale-dev cluster as validator issue above). (since 2026-09-12)
 - **[a11y / landing]** Hero text (`#1c1917`) sits on a looping background video with no dim overlay (explicit product choice, 2026-09-09). Contrast can fail WCAG 2.2 AA on darker video frames even when it passes on light ones. Tracked until a contrast strategy is chosen. (since 2026-09-09)
 - **[deploy / data]** No durable database in tree (Prisma/SQLite removed earlier). Auth/data/product routes were purged 2026-09-10 ([[0004-landing-only-purge-old-app]]). Next store needs a durable host — see [[0002-remove-prisma-for-vercel]]. (since 2026-09-05, updated 2026-09-10)
 - **[google-integration]** No Google API client in tree. When workspace seams return, keep them mocked until GCP + domain-wide delegation is provisioned — [[0001-mocked-data-first-prototype]]. (since 2026-08-31, updated 2026-09-10)

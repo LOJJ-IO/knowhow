@@ -4,7 +4,7 @@ status: in-progress
 tags: [area/frontend, landing, motion]
 created: 2026-09-10
 updated: 2026-09-12
-related: ["[[Current-Context]]", "[[Lessons-Learned]]", "[[Known-Issues]]"]
+related: ["[[Current-Context]]", "[[Lessons-Learned]]", "[[Known-Issues]]", "[[FEAT-landing-deck-notes-folder]]"]
 ---
 
 # FEAT: Landing deck carousel (split-CTA arrows)
@@ -16,7 +16,7 @@ related: ["[[Current-Context]]", "[[Lessons-Learned]]", "[[Known-Issues]]"]
 After Get Started, the CTA divides into ← → circles over a painted-mat deck. Circles were inert (and unclickable — see [[Known-Issues]]); desktop now drives a looping carousel.
 
 ## Solution
-**Desktop.** ~~Originally ← sent the cards left~~ — **inverted per user 2026-09-11: ← brings the left card to the centre** (cards travel right): the right card moves away, *then* the centre card takes the right slot, *then* the left card takes the centre, *then* the card beyond the left fills the left slot; → mirrors. Same cascade/physics as specified originally, just mirrored. Clicking the card in the left/right slot does exactly what that arrow does (a pointer that moves >6px — a window drag — never counts); the centre card isn't a control. The deck is a **seven-card feature ring** (2026-09-12) — Unified Workspace / Auto-Own / Auto-Share / Oversight / DeepSearch / Org-Chart & Permissions / Instant Offboard — with three visible slots (−1/0/+1) and the rest parked further off-stage. Mats cycle green / blue / red / yellow. First three rise/spread; park seats use `--deck-park-slot` until seating. Each mac title bar shows that card's feature name (centred, light-mode muted stone on `#d1cfcc`).
+**Desktop.** ~~Originally ← sent the cards left~~ — **inverted per user 2026-09-11: ← brings the left card to the centre** (cards travel right): the right card moves away, *then* the centre card takes the right slot, *then* the left card takes the centre, *then* the card beyond the left fills the left slot; → mirrors. Same cascade/physics as specified originally, just mirrored. Clicking the card in the left/right slot does exactly what that arrow does (a pointer that moves >6px — a window drag — never counts); the centre card isn't a control. The deck is a **seven-card feature ring** (2026-09-12) — Unified Workspace / Auto-Own / Auto-Share / Oversight / DeepSearch / Org-Chart & Permissions / Instant Offboard — with three visible slots (−1/0/+1) and the rest parked further off-stage. Mats cycle green / blue / red / yellow. First three rise/spread; park seats use `--deck-park-slot` until seating. Each mac title bar shows that card's feature name (centred, light-mode muted stone on `#d1cfcc`). **Notes folder** (2026-09-12): narrower main window + Finder-style **Notes** icon on the wallpaper; click opens a smaller Notes window with Why-It’s-Good copy — [[FEAT-landing-deck-notes-folder]].
 
 Motion (all on-screen moves share one spring, stiffness 120 / damping 20, ζ≈0.91, ~0.6s to rest, 0.07% overshoot):
 

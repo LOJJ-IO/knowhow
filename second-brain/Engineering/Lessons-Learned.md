@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-11
+updated: 2026-09-12
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-12 — Click sound: await AudioContext.resume; don’t soft-nav stub hashes
+Browsers leave `AudioContext` suspended until a gesture; scheduling oscillators before `resume()` resolves plays silence. Chain play after `resume()`. Same-origin `#about` / `#privacy` stubs can trigger App Router soft-nav and throw `Router action dispatched before initialization` (esp. under Fast Refresh) — `preventDefault` on stub footer links until real routes exist.
 
 ## 2026-09-11 — Sliding tabs: snap on paint/resize, tween on click
 Transitions.dev pill tabs need measured `offsetLeft`/`offsetWidth` written onto an absolutely positioned pill. On first paint and resize, suspend `transition`, write geometry, force reflow, restore — otherwise the pill animates in from `width: 0`. Clicks keep the transition so the pill slides. Honor `prefers-reduced-motion`. (Tried on the landing header then removed — pattern still useful if tabs return.) [[FEAT-landing-header-nav]]
