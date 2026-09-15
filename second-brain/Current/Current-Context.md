@@ -3,7 +3,7 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-12
+updated: 2026-09-15
 related: ["[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]"]
 ---
 
@@ -17,7 +17,7 @@ A complete FastAPI backend — auth/identity (Google OAuth login, domain-wide de
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.
 
-## What's true right now (2026-09-12) — landing only
+## What's true right now (2026-09-15) — landing only
 - **Old app purged** ([[0004-landing-only-purge-old-app]]). Live route: `/` → `<LandingHero />`.
 - Canvas: `--background: #F9F8F6`, `--foreground: #1c1917`.
 - **Desktop header** ([[FEAT-landing-header-nav]]): logo left; Log in + Talk to sales + Get Started right (shared `CTA_CLASS`, −20% then **+10%** → **~47.9px** height / matching type+padding; **`font-bold`**; tight group). Split arrow chevrons use **`strokeWidth={3}`** (was 2). Sliding tabs removed. Mobile header still logo-only (+ bottom Get Started).
@@ -28,13 +28,13 @@ The user is rebuilding the frontend from scratch, screen by screen — **not** a
   - **2026-09-12 (bug fix):** centre (blue) card no longer rises under the side cards on a Get Started after the carousel was stepped and closed — seat-effect cleanup now snapshots the card nodes. See [[Known-Issues]].
   - **2026-09-12 (later):** desktop metaphor — main `{5.1, 8.9, 80.4×79.8%}`; Notes `{61.7, 66, 35.1×28%}` (= resize floor; width 39 −10%, 2026-09-12); folder `{86, 3}`; radii +5% (card 10.5px, folder plate 7.35px). See [[FEAT-landing-deck-notes-folder]].
 - **Deck:** seven feature cards; painted mats cycle the four PNGs; outer radius **10px**; inset mac windows (**14px**, light well `#f3f2ef`, titlebar `#d1cfcc`) — **draggable** / **resizable**. Favicon = hex mark (`src/app/icon.svg`). Desktop seats three (±side + centre); cards 4–7 park via `--deck-park-slot` until seated.
-- **Desktop:** 16:9 rise + linear-spread. Deck scales with window height below 956px (`--deck-fit`, floor 0.7) so Chrome-height windows keep room above/below — see [[Known-Issues]] (resolved 2026-09-11). **Mobile:** phone aspect (`9 / 19.5`) Cover Flow (framer-motion).
+- **Desktop:** 16:9 rise + linear-spread. Deck scales with window height below 956px (`--deck-fit`, floor 0.7) so Chrome-height windows keep room above/below — see [[Known-Issues]] (resolved 2026-09-11). **Mobile (2026-09-14, resized 2026-09-15):** landscape (`16/9`) Cover Flow, same style as desktop just smaller and inset with visible gutters (`min(72vw, 21rem)`, was `82vw/26rem` then `9/19.5` portrait before that) — proportions matched to a user-supplied reference screenshot of a different site (for sizing only, not styling); 3D coverflow peek on neighbouring cards kept (explicit user call). Content (titlebar, dots) scales via a CSS container query so it doesn't read oversized on the shorter card. Own nav bar (‹ › + dots) removed — the split Get Started arrows are the only explicit navigation, plus a swipe on the stage (capture-phase, see [[Lessons-Learned]]). Windows are move-only on mobile (`.t-deck-resize` hidden below 768px). **Notes (2026-09-15):** no dialog on mobile at all now — the Notes folder icon is desktop-only (hidden on mobile), and the active card's note shows automatically in a plain panel stacked below the stage, updating as the user swipes/taps — [[FEAT-landing-deck-notes-folder]].
 - **Desktop footer links (2026-09-12):** **About Us** (left) + **Privacy Policy** (right) via `FooterStubLink` (button stubs + click sound + `active:scale-95` press until real routes), Satoshi bold + underline + `cursor-pointer`, size `0.908552rem` (CTA face −20%), same row, `mt-[2px]` under “Take Control…”. Mobile mirrors. CTA pills / Notes folder also press + click sound. Click sound awaits `AudioContext.resume()`. Real destinations not wired yet.
 - Subhead / logo / CTA size+position tweaks live in `landing-hero.tsx` + `globals.css` (see recent Lessons-Learned). Hero video grain `.t-hero-grain`; guidelines grid always on — **aspect-square** cols/rows (`TARGET_SHORT` 5; e.g. ~9×5 at 16:9). Manual col/row only in edit mode on desktop. Grid edit via `NEXT_PUBLIC_EDITING_MODE_ENABLED`.
 - `LogoMark` hex: `#4285F4` / `#34A853` / `#FBBC05` / `#EA4335`. Lockup mark offset `translate-x-[5%]` / `translate-y-[10%]` (nudged left from 8% x, 2026-09-12).
 
 ## Open questions / next
-1. **Mobile arrow semantics + aria-labels (awaiting user)** — see [[FEAT-landing-deck-carousel]] open questions. Also: tune middle-band geometry; card body content; swipe later.
+1. **Mobile CTA-split "twitch" — fixed 2026-09-14, still awaiting phone re-verify** (no device available this session either). Root cause + fix in [[Known-Issues]] / [[FEAT-landing-deck-carousel]] (a live `%`-based `translate` resolving against its own animating `width`, fragile under the forced reflow a real phone's browser-chrome collapse triggers — never reproducible in headless Chromium). Also: mobile "Features" label; tune middle-band geometry; card body content.
 2. **Header action destinations** — Log in / Talk to sales wire-up; mobile treatment — [[FEAT-landing-header-nav]].
 3. Auth / data / Google seams return only when explicitly asked (or when `backend/auth-foundation` is merged).
 4. Hero video contrast strategy ([[Known-Issues]]).

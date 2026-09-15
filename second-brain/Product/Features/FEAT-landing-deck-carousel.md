@@ -3,14 +3,14 @@ type: feature
 status: in-progress
 tags: [area/frontend, landing, motion]
 created: 2026-09-10
-updated: 2026-09-12
+updated: 2026-09-15
 related: ["[[Current-Context]]", "[[Lessons-Learned]]", "[[Known-Issues]]", "[[FEAT-landing-deck-notes-folder]]"]
 ---
 
 # FEAT: Landing deck carousel (split-CTA arrows)
 
 ## Status
-`in-progress` — desktop shipped 2026-09-10; mobile behaviour awaiting user decision.
+`in-progress` — desktop shipped 2026-09-10; mobile Cover Flow reworked 2026-09-14 (landscape cards, swipe, own nav bar removed) — see below. The reported CTA-split "twitch" is fixed (2026-09-14), not yet re-verified on the phone that showed it. **2026-09-15:** mobile arrows fixed to step one card at a time (were jumping to the first/last card — leftover `focusDeckSide` from before the nav-bar-removal made them the only navigation); titlebar + traffic dots on mobile cards made slimmer/smaller per user request.
 
 ## Problem
 After Get Started, the CTA divides into ← → circles over a painted-mat deck. Circles were inert (and unclickable — see [[Known-Issues]]); desktop now drives a looping carousel.
@@ -42,8 +42,16 @@ Above the middle card, desktop only. Same rendered size as "Take Control of your
 The arrow circles press in exactly like the other header buttons (`active:scale-95`, 150ms, Tailwind's default curve). Their split position moved from `transform` to the `translate` property: CSS composes `translate` → `scale` → `transform`, so a `scale` press on a `transform`-positioned element pulls it toward its untransformed box (the ← circle slid ~2.4px). Chevrons live in a separate layer, so they follow their circle's `:active` via `group-has-[[data-step=…]:active]/cta:scale-95`. Verified: ×0.950, centre moves 0.00px, same as Log in.
 
 ## Out of scope
-- Mobile: circles still call the pre-existing `focusDeckSide` (Cover Flow index 0 / last) — open question below.
 - Card content; side-slot scaling.
+
+## Mobile (2026-09-14 → 2026-09-15, user-specified)
+- **Landscape cards, not portrait.** `.t-deck-cover-item` is `aspect-ratio: 16/9` (was `9/19.5`), same style as desktop's mac windows, just smaller and inset with visible gutters (`width: min(72vw, 21rem)`; was `82vw/26rem` right after the portrait→landscape switch, resized 2026-09-15 to match a user-supplied reference screenshot's proportions) — replaces the old phone-shaped Cover Flow card. 3D coverflow peek on the neighbouring cards kept (explicit user call, even though the reference had none).
+- **Content scales with the card.** `.t-deck-cover-item` is a CSS container (`container-type: inline-size`); titlebar height, traffic-dot size, and title font-size are `cqw`-based inside it, so they shrink with the (much shorter, 16:9 vs 9:19.5) card instead of keeping desktop's fixed px/rem sizes. **2026-09-15:** titlebar/dots sized down further per user request (`--deck-titlebar-h: 6.5cqw`, `--deck-dot: 1.7cqw`; were `10cqw`/`2.6cqw`).
+- **Own nav bar removed.** `DeckCoverFlow` no longer renders `.t-deck-cover-nav` (the dark pill with its own ‹ › + dot row) — the split Get Started ← → circles (`stepMobileDeck`) are the only explicit navigation now, plus swipe. Dead CSS removed; `isDeckKeepZone`'s click-outside selector no longer references it.
+- **Arrow stepping (bug, fixed 2026-09-15).** Once the nav bar was removed, `stepMobileDeck` was still calling the *original* `focusDeckSide`, a leftover from when the arrows only had to jump Cover Flow to the very first/last card (its own ‹ › handled single-step, back when both existed). With no other control left, that made ← / → jump straight to the ends instead of moving one card — not caught earlier because nothing had exercised arrow-only navigation end-to-end. Fixed: `stepMobileDeck` now moves `activeIndex` ±1 clamped to `[0, DECK_CARDS.length - 1]`, mirroring the swipe/tap-select logic already in `DeckCoverFlow`; `focusDeckSide` deleted.
+- **Swipe.** `DeckCoverFlow`'s stage tracks a pointer gesture and steps `activeIndex` ±1 past a 40px, more-horizontal-than-vertical threshold (short/vertical drags still tap-select whichever card the pointer landed on, via `data-cover-index`). **Trap:** this has to be `onPointerDownCapture`/`onPointerUpCapture`, not the bubble-phase `onPointerDown`/`onPointerUp` — `InteractiveMacWindow`'s shell calls `e.stopPropagation()` on its own `onPointerDown` (so a tap inside the window isn't misread elsewhere), and since a window fills ~80% of the card, a bubble listener on the stage almost never saw the down event. Same reason `DesktopDeck`'s own `onCardStep` already uses capture — verified with a native `addEventListener` on the stage next to the React handler: the native listener fired, the React bubble handler never did, until switched to capture. A down that starts on a titlebar, the Notes folder, or a resize handle is explicitly excluded from starting a swipe (`closest(".t-deck-titlebar, .t-deck-folder, .t-deck-resize")`) so window-drag and folder-tap don't fight it.
+- **Windows are move-only.** `.t-deck-resize` is `display: none` under `max-width: 767px` (CSS-only — no React prop threading needed since `InteractiveMacWindow` is shared with desktop). Title-bar drag is untouched.
+- **Notes shows inline, automatically** — no dialog, no tap — in a panel below the stage; see [[FEAT-landing-deck-notes-folder]] (superseded a same-week bottom-sheet iteration).
 
 ## UI/UX
 Desktop side slots are the **same size** as the centre (pushed out ±`--deck-side-x`, dropped 5vh), so the centre card does not literally shrink when it moves aside — it recedes behind the viewport edge. If a visible shrink is wanted, that's a side-slot scale decision for the user.
@@ -56,7 +64,8 @@ Verified in Playwright at 1440 and 1024 wide (three-card build): ←, →, ←�
 ## Open questions
 - **Mobile "Features" label** — not added (request was made while looking at desktop).
 - **Keyboard close** — click-outside has no keyboard equivalent (e.g. Escape); not requested.
-- **Mobile:** should the circles drive the Cover Flow with the same semantics (← sends cards left = shows the next card)? That's the opposite direction of the Cover Flow's own ‹ button, and the Cover Flow doesn't loop — so it's a real choice: loop Cover Flow + same semantics, keep the current focus behaviour, or hide the Cover Flow's own arrows.
+- ~~**CTA-split "twitch"**~~ — resolved 2026-09-14, full root-cause writeup in [[Known-Issues]]. Short version: the split daughters centred via a live `translate: calc(-50% + Npx)`, which resolves against the element's own currently-animating `width` every frame — fragile under a forced reflow, confirmed real-phone-only (e.g. Safari's address bar collapsing mid-gesture), never reproducible in headless Chromium since nothing there forces that reflow. Fixed by pinning the un-spread width as a fixed px custom property and writing both `translate` endpoints as literal px instead of `%`.
+- ~~**Mobile nav semantics**~~ — resolved 2026-09-14 per user: removed the Cover Flow's own nav bar entirely; the split CTA arrows are the only navigation (see Mobile section above).
 - ~~**aria-labels** mismatch on desktop~~ — resolved by the 2026-09-11 inversion: "Show left card" / "Show right card" are now accurate on both viewports.
 
 ## Related

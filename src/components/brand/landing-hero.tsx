@@ -372,8 +372,11 @@ function CtaSplitLayer({
                 // Position via `translate`, not `transform`: CSS applies
                 // `scale` before `transform` but after `translate`, so the
                 // press shrinks the circle about its own centre instead of
-                // pulling it towards where its box started.
-                translate: `calc(-50% + ${spread ? dir * CTA_OFFSET : 0}px) 0`,
+                // pulling it towards where its box started. A literal px
+                // offset, not `-50%` — see the `--cta-box-w` note above.
+                translate: spread
+                  ? `calc(${-CTA_DIAMETER / 2}px + ${dir * CTA_OFFSET}px) 0`
+                  : "calc(var(--cta-box-w, 100%) * -0.5) 0",
                 transition: `${move("width")}, ${move("translate")}, scale 150ms var(--default-transition-timing-function)`,
                 pointerEvents: settled ? "auto" : "none",
               }}
@@ -415,10 +418,27 @@ function GetStartedCta({
   // The extras already occupy their slots (just invisible), so their liquid
   // copies can be aimed at them exactly: offset of each slot's centre from the
   // pill's centre, and its width. Measured once, before the split first paints.
+  //
+  // Also pin the pill's own width here (`--cta-box-w`): the daughters centre
+  // themselves with `left: 50%; translate: calc(-50% + Npx)`, and while
+  // un-spread their `width` is `100%` of this box. A CSS `%` in `translate`
+  // resolves against the *element's own* box each frame — so mid-transition,
+  // with `width` also animating, the browser has to resolve both from the
+  // same live layout every frame. That's fine under a steady refresh, but a
+  // real mobile browser can force a synchronous reflow mid-gesture (Safari's
+  // address bar collapsing changes the viewport height it's animating
+  // against) and the two dependent interpolations can read back
+  // out-of-step for a frame — the pill visibly lurches to one side and
+  // corrects itself next frame. Not reproducible in headless Chromium
+  // (nothing there ever forces that reflow), only confirmed on a real phone.
+  // Pinning the un-spread width as a *fixed* px custom property lets the
+  // un-spread `translate` below use a literal number instead of a live `%`,
+  // so it no longer depends on `width`'s own animated value at all.
   useLayoutEffect(() => {
     const box = boxRef.current;
     if (!splitting || !box) return;
     const b = box.getBoundingClientRect();
+    box.style.setProperty("--cta-box-w", `${b.width}px`);
     extras.forEach(({ key }, i) => {
       const el = extraRefs.current[i];
       if (!el) return;
@@ -830,7 +850,11 @@ function InteractiveMacWindow({
 const DEFAULT_FOLDER_POS = { x: 86, y: 3 };
 const FOLDER_DRAG_THRESHOLD = 6;
 
-/** Finder-style desktop folder — draggable; click toggles Notes. */
+/** Finder-style desktop folder — draggable; click toggles the Notes window.
+ *  Desktop-only: on mobile the folder is hidden (`globals.css`) and the
+ *  active card's note shows automatically in a panel below the Cover Flow
+ *  stage instead (`DeckCoverFlow`) — a tiny landscape card has no room for a
+ *  second floating, draggable window, and there's no need to tap for it. */
 function NotesFolder({
   note,
   open,
@@ -957,13 +981,15 @@ function NotesFolder({
         <span className={`${sohne.className} t-deck-folder-label`}>Notes</span>
       </button>
       {open ? (
-        <InteractiveMacWindow
-          title="Notes"
-          initialBox={NOTES_WINDOW_BOX}
-          zIndex={4}
-        >
-          <p className={`${sohne.className} t-deck-notes-copy`}>{note}</p>
-        </InteractiveMacWindow>
+        <div className="hidden md:contents">
+          <InteractiveMacWindow
+            title="Notes"
+            initialBox={NOTES_WINDOW_BOX}
+            zIndex={4}
+          >
+            <p className={`${sohne.className} t-deck-notes-copy`}>{note}</p>
+          </InteractiveMacWindow>
+        </div>
       ) : null}
     </>
   );
@@ -1051,7 +1077,19 @@ function ChevronRightIcon({ size = 14 }: { size?: number }) {
   );
 }
 
-/** Mobile Cover Flow — phone-aspect mac windows (CardCoverFlow pattern). */
+/** Swipe past this many px, more horizontal than vertical, to step the deck. */
+const COVER_SWIPE_THRESHOLD = 40;
+/** Below this, a pointer down/up counts as a tap (select the tapped card). */
+const COVER_TAP_THRESHOLD = 8;
+
+/** Mobile Cover Flow — landscape mac windows, same as desktop, scaled down
+ *  (CardCoverFlow pattern). Navigation is the split Get Started arrows below
+ *  it (no separate nav bar) plus a swipe on the stage itself. `InteractiveMacWindow`
+ *  stops propagation on its own pointerdown (so it isn't misread as a deck
+ *  click elsewhere) — same reason `DesktopDeck`'s card-step detection uses
+ *  capture, so it does here too. A down that starts on a titlebar (window
+ *  drag), the Notes folder, or a resize handle never starts a swipe, so
+ *  those gestures don't fight it. */
 function DeckCoverFlow({
   activeIndex,
   onActiveIndexChange,
@@ -1059,9 +1097,55 @@ function DeckCoverFlow({
   activeIndex: number;
   onActiveIndexChange: (index: number) => void;
 }) {
+  const swipeStart = useRef<{ x: number; y: number; id: number } | null>(
+    null,
+  );
+
+  function onStagePointerDownCapture(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    if (
+      (e.target as HTMLElement).closest(
+        ".t-deck-titlebar, .t-deck-folder, .t-deck-resize",
+      )
+    ) {
+      swipeStart.current = null;
+      return;
+    }
+    swipeStart.current = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  }
+
+  function onStagePointerUpCapture(e: React.PointerEvent) {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || e.pointerId !== start.id) return;
+    const dx = e.clientX - start.x;
+    const dy = e.clientY - start.y;
+    if (
+      Math.abs(dx) > COVER_SWIPE_THRESHOLD &&
+      Math.abs(dx) > Math.abs(dy)
+    ) {
+      const dir = dx < 0 ? 1 : -1;
+      onActiveIndexChange(
+        Math.min(DECK_CARDS.length - 1, Math.max(0, activeIndex + dir)),
+      );
+      return;
+    }
+    if (Math.hypot(dx, dy) > COVER_TAP_THRESHOLD) return;
+    const target = (e.target as HTMLElement).closest("[data-cover-index]");
+    if (!target) return;
+    onActiveIndexChange(Number(target.getAttribute("data-cover-index")));
+  }
+
   return (
     <div className="t-deck-cover">
-      <div className="t-deck-cover-stage">
+      <div
+        className="t-deck-cover-stage"
+        onPointerDownCapture={onStagePointerDownCapture}
+        onPointerUpCapture={onStagePointerUpCapture}
+        onPointerCancel={() => {
+          swipeStart.current = null;
+        }}
+      >
         {DECK_CARDS.map((card, i) => {
           const offset = i - activeIndex;
           const absOffset = Math.abs(offset);
@@ -1071,10 +1155,11 @@ function DeckCoverFlow({
           return (
             <motion.div
               key={card.id}
+              data-cover-index={i}
               className="t-deck-cover-item"
               initial={false}
               animate={{
-                x: offset * 42,
+                x: offset * 80,
                 rotateY: isActive ? 0 : isPast ? 38 : -38,
                 z: isActive ? 50 : -absOffset * 50,
                 scale: isActive ? 1.08 : 1 - absOffset * 0.08,
@@ -1082,7 +1167,6 @@ function DeckCoverFlow({
               }}
               transition={{ type: "spring", stiffness: 200, damping: 25 }}
               style={{ zIndex: 100 - absOffset }}
-              onClick={() => onActiveIndexChange(i)}
             >
               <DeckWindow card={card} focused={isActive} />
             </motion.div>
@@ -1090,37 +1174,16 @@ function DeckCoverFlow({
         })}
       </div>
 
-      <div className="t-deck-cover-nav">
-        <button
-          type="button"
-          aria-label="Previous card"
-          disabled={activeIndex === 0}
-          onClick={() => onActiveIndexChange(Math.max(0, activeIndex - 1))}
-        >
-          <ChevronLeftIcon />
-        </button>
-        <div className="t-deck-cover-dots">
-          {DECK_CARDS.map((card, i) => (
-            <button
-              key={card.id}
-              type="button"
-              aria-label={`Show ${card.title}`}
-              className="t-deck-cover-dot"
-              data-active={activeIndex === i ? "true" : "false"}
-              onClick={() => onActiveIndexChange(i)}
-            />
-          ))}
-        </div>
-        <button
-          type="button"
-          aria-label="Next card"
-          disabled={activeIndex === DECK_CARDS.length - 1}
-          onClick={() =>
-            onActiveIndexChange(Math.min(DECK_CARDS.length - 1, activeIndex + 1))
-          }
-        >
-          <ChevronRightIcon />
-        </button>
+      {/* Auto-open: the active card's note shows here without a tap — a
+       *  landscape card this small has no room for a second floating window,
+       *  and the folder-click affordance is desktop-only (hidden here). */}
+      <div className="t-deck-cover-notes">
+        <p className={`${sohne.className} t-deck-cover-notes-title`}>
+          {DECK_CARDS[activeIndex].title}
+        </p>
+        <p className={`${sohne.className} t-deck-cover-notes-copy`}>
+          {DECK_CARDS[activeIndex].note}
+        </p>
       </div>
     </div>
   );
@@ -1562,10 +1625,6 @@ function LandingHero() {
   useSubheadWave(deskSubheadRef);
   const backdropDown = useRef<{ x: number; y: number } | null>(null);
 
-  function focusDeckSide(side: "left" | "right") {
-    setDeckIndex(side === "left" ? 0 : DECK_CARDS.length - 1);
-  }
-
   /** ← brings the left card to the centre — the cards travel right: right
    *  card off, centre to the right slot, left card to centre, the thrown card
    *  back in on the left. → mirrors. */
@@ -1574,9 +1633,16 @@ function LandingHero() {
     deckRef.current?.shift(side === "left" ? 1 : -1);
   }
 
+  /** Mobile Cover Flow doesn't loop — ← / → move one card at a time, clamped
+   *  to the ends, same as a swipe or tapping a side card. */
   function stepMobileDeck(side: "left" | "right") {
     playClickSound();
-    focusDeckSide(side);
+    setDeckIndex((i) =>
+      Math.min(
+        DECK_CARDS.length - 1,
+        Math.max(0, i + (side === "left" ? -1 : 1)),
+      ),
+    );
   }
 
   useEffect(() => {
@@ -1658,9 +1724,7 @@ function LandingHero() {
     );
     const rects = deck
       ? [
-          ...deck.querySelectorAll(
-            ".t-deck-card, .t-deck-cover-nav, [data-deck-label]",
-          ),
+          ...deck.querySelectorAll(".t-deck-card, [data-deck-label]"),
         ]
           .map((n) => n.getBoundingClientRect())
           .filter(

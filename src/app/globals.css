@@ -711,19 +711,29 @@ body.t-deck-dragging * {
   position: relative;
   display: flex;
   width: 100%;
-  height: min(58vh, 28rem);
+  height: min(30vh, 14rem);
   align-items: center;
   justify-content: center;
   perspective: 1000px;
   transform-style: preserve-3d;
+  touch-action: none;
 }
 
+/* Landscape mac windows on mobile too (was portrait phone cards) — same
+ * proportions as desktop, just smaller and inset with visible gutters either
+ * side (a framed screenshot, not an edge-to-edge card). `container-type`
+ * lets the chrome inside (titlebar, traffic dots, Notes folder) scale with
+ * the card instead of keeping desktop's fixed px/rem sizes, which read
+ * oversized once the card's height dropped from a 9:19.5 phone to 16:9. */
 .t-deck-cover-item {
   position: absolute;
-  width: min(52vw, 13.5rem);
-  aspect-ratio: 9 / 19.5;
+  container-type: inline-size;
+  width: min(72vw, 21rem);
+  aspect-ratio: 16 / 9;
   cursor: pointer;
   transform-style: preserve-3d;
+  --deck-titlebar-h: 6.5cqw;
+  --deck-dot: 1.7cqw;
 }
 
 .t-deck-cover-item .t-deck-card {
@@ -733,66 +743,54 @@ body.t-deck-dragging * {
   aspect-ratio: unset;
 }
 
-.t-deck-cover-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  z-index: 20;
-  border-radius: 9999px;
-  border: 1px solid rgb(255 255 255 / 0.12);
-  background: #2a2a2c;
-  padding: 0.2rem 0.45rem;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+.t-deck-cover-item .t-deck-title {
+  font-size: 3.4cqw;
 }
 
-.t-deck-cover-nav button {
-  display: grid;
-  place-items: center;
-  width: 1.925rem;
-  height: 1.925rem;
-  border: 0;
-  border-radius: 9999px;
-  background: transparent;
-  color: rgb(255 255 255 / 0.75);
-  cursor: pointer;
-}
-.t-deck-cover-nav button:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: #fff;
-}
-.t-deck-cover-nav button:disabled {
-  opacity: 0.35;
-  cursor: default;
+/* The Notes folder is desktop-only: on mobile the active card's note shows
+ * automatically below the stage (`.t-deck-cover-notes`) — no tap needed. */
+.t-deck-cover-item .t-deck-folder {
+  display: none;
 }
 
-.t-deck-cover-dots {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0 0.15rem;
+/* Auto-open Notes panel — stacked below the demo workspace, for whichever
+ * card is currently active/centred. Plain content flow (no dialog): the
+ * card's own gap gives the spacing. */
+.t-deck-cover-notes {
+  width: 100%;
+  max-width: min(72vw, 21rem);
+  background: #fbfaf8;
+  border: 1px solid rgb(0 0 0 / 0.08);
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.12);
+  padding: 0.85rem 1.1rem 1rem;
 }
 
-.t-deck-cover-dot {
-  height: 0.25rem;
-  width: 0.25rem;
-  border-radius: 9999px;
-  border: 0;
-  padding: 0;
-  background: rgb(255 255 255 / 0.3);
-  cursor: pointer;
-  transition:
-    width 200ms ease,
-    background-color 200ms ease;
+.t-deck-cover-notes-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #1c1917;
 }
-.t-deck-cover-dot[data-active="true"] {
-  width: 1rem;
-  background: #fff;
+
+.t-deck-cover-notes-copy {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.48;
+  letter-spacing: -0.01em;
+  color: rgb(28 25 23 / 0.78);
 }
 
 @media (max-width: 767px) {
   :root {
     --deck-titlebar-h: 2.25rem;
     --deck-dot: 11px;
+  }
+  /* Windows are move-only on mobile — no resize handles to grab. */
+  .t-deck-resize {
+    display: none;
   }
 }
 

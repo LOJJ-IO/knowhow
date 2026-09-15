@@ -3,14 +3,14 @@ type: feature
 status: shipped
 tags: [area/frontend, landing, priority/high]
 created: 2026-09-12
-updated: 2026-09-12
+updated: 2026-09-15
 related: ["[[FEAT-landing-deck-carousel]]", "[[Current-Context]]"]
 ---
 
 # FEAT: Deck desktop Notes folder
 
 ## Status
-`shipped` (2026-09-12) — UI shell; main feature window body still empty pending product animation.
+`shipped` (2026-09-12) — UI shell; main feature window body still empty pending product animation. **2026-09-14:** mobile got a bottom-sheet dialog, superseded same day — see below. **2026-09-15 (current):** mobile shows the active card's note inline, always-visible, in a panel stacked below the Cover Flow stage — no tap needed, no dialog at all on mobile.
 
 ## Problem
 Painted mats + a single empty mac window did not read clearly as a desktop. Needed a Finder-style affordance that peeks wallpaper and explains each feature.
@@ -30,6 +30,10 @@ Folder default `left: 86%` / `top: 3%`. Plate pad `4px 10px 4.862px`, radius `7.
 
 ## Technical approach
 `NotesFolder` + `InteractiveMacWindow` in `landing-hero.tsx`; styles in `globals.css` (`.t-deck-folder*`, `.t-deck-dot-x`, `.t-deck-notes-copy`). `DECK_CARDS[].note` holds copy. Window shell must **not** `stopPropagation` in the capture phase — that blocked title-bar / resize `pointerdown` (fixed 2026-09-12). **Side-slot swipe** uses `onClickCapture` on the card so wallpaper, window, and folder all step the carousel; centre slot never steps. Folder click **toggles** Notes open/closed (no close X on the Notes window — decorative traffic lights only). Folder + footer stubs share CTA press (`active:scale-95`, 150ms) + click sound.
+
+**2026-09-14 — mobile Notes as a bottom sheet (superseded 2026-09-15):** `NotesFolder` rendered both a desktop `InteractiveMacWindow` (`hidden md:contents`) and a mobile `NotesSheet` (fixed backdrop + `translateY` rise-in panel, portaled to `document.body` via `createPortal`, since `.t-deck-cover-item`'s framer-motion `transform` would otherwise become the containing block for a `position: fixed` descendant and clip it inside `.t-deck-card`'s `overflow: hidden`). Cascade trap: the sheet's own `.t-deck-notes-sheet { display: flex }` (this file, after Tailwind's `@import`) beat a `md:hidden` Tailwind class on the same element at equal specificity — fixed with an explicit `@media (min-width: 768px)` override rather than relying on the utility class. **General rule kept for future work:** a custom CSS rule and a Tailwind utility touching the same property on the same element are a latent bug regardless of which "should" win by convention.
+
+**2026-09-15 — replaced with an always-visible inline panel:** per user direction (working from a reference screenshot of a differently-styled site, for proportions only), the demo workspace on mobile now sits smaller and inset (`min(72vw, 21rem)`, was `min(82vw, 26rem)` — visible gutters either side, like a framed screenshot rather than edge-to-edge) with the 3D coverflow peek on neighbouring cards kept (explicit user call — the reference had no peeking cards, but the user chose to keep the effect over matching that exactly). The Notes folder icon is now **desktop-only** (`.t-deck-cover-item .t-deck-folder { display: none }`); on mobile, `DeckCoverFlow` renders a plain content-flow panel (`.t-deck-cover-notes`) directly below the stage showing `DECK_CARDS[activeIndex]`'s title + note — no dialog, no tap, updates automatically as the user swipes or taps a side card. `NotesSheet` and its CSS were deleted (dead code once nothing rendered it). The arrow buttons (split Get Started circles) are unchanged — separate from this panel, still the primary explicit way to change feature.
 
 ## Open questions
 - None
