@@ -3,14 +3,14 @@ type: decision
 status: active
 tags: [area/backend, area/security]
 created: 2026-09-09
-updated: 2026-09-09
+updated: 2026-09-15
 related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[Current-Context]]"]
 ---
 
 # ADR-0004: Split into Next.js frontend + separate FastAPI/Railway backend for auth, identity, and real Google Workspace integration
 
 ## Status
-`active` — decided and built (branch `backend/auth-foundation`), **not yet merged into `main`**. See [[Current-Context]] for live merge status.
+`active` — decided, built, and merged into `main` (2026-09-15, user go-ahead). `backend/` now lives on `main` alongside the Next.js app. Not yet deployed — see [[Current-Context]] for what's still open (GCP project, Railway/Postgres provisioning).
 
 ## Context
 [[0001-mocked-data-first-prototype]] established two invariants that this ADR now partially revises: (1) the Next.js app is the single chokepoint, no separate backend service, and (2) nothing calls a real Google API until an ADR records that a GCP project + domain-wide delegation has actually been provisioned. Both were correct for the first build pass, but the user directed the next phase of work: a real auth/identity/security foundation, plus org chart, sharing/ownership, and search — built as a standalone FastAPI (Python 3.12) service on Railway with a Railway-managed Postgres instance, under a new top-level `/backend` directory.

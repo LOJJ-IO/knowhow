@@ -9,10 +9,10 @@ related: ["[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FE
 
 # Current Context
 
-## 🔔 Backend is built and ready to merge into `main` (2026-09-09)
-A complete FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — is built, tested, and consolidated onto branch `backend/auth-foundation`. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
+## ✅ Backend merged into `main` (2026-09-15)
+The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
 
-**Not merged into `main` yet — only on the user's explicit request.** Per [`CLAUDE.md`](../../CLAUDE.md)'s standing reminder, every response in this repo should note the backend is ready to merge until that happens. Deployment (Railway, managed Postgres, GCP) is out of scope until then.
+**Still not deployed.** Merging the code is not provisioning it: no GCP project, no Railway/Postgres instance, no OAuth verification review submitted yet. `src/lib/` (the Next.js app) still mocks Google Workspace entirely per [[0001-mocked-data-first-prototype]] — that invariant is unchanged by this merge, it only narrows for `/backend`. Wiring the frontend to call the backend, and actually provisioning GCP/Railway, are separate asks — don't start either without the user requesting it.
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.
@@ -36,10 +36,10 @@ The user is rebuilding the frontend from scratch, screen by screen — **not** a
 ## Open questions / next
 1. **Mobile CTA-split "twitch" — fixed 2026-09-14, still awaiting phone re-verify** (no device available this session either). Root cause + fix in [[Known-Issues]] / [[FEAT-landing-deck-carousel]] (a live `%`-based `translate` resolving against its own animating `width`, fragile under the forced reflow a real phone's browser-chrome collapse triggers — never reproducible in headless Chromium). Also: mobile "Features" label; tune middle-band geometry; card body content.
 2. **Header action destinations** — Log in / Talk to sales wire-up; mobile treatment — [[FEAT-landing-header-nav]].
-3. Auth / data / Google seams return only when explicitly asked (or when `backend/auth-foundation` is merged).
+3. Auth / data / Google seams in the **Next.js app** (`src/lib/`) return only when explicitly asked — unaffected by the backend merge (item 6 below), which is a separate codebase.
 4. Hero video contrast strategy ([[Known-Issues]]).
 5. GitHub remote `LOJJ-IO/knowhow`; Vercel from `main`.
-6. `backend/auth-foundation` merge into `main` — user go-ahead only.
+6. ~~`backend/auth-foundation` merge into `main`~~ — done 2026-09-15. Next open item: GCP/Railway/Postgres provisioning, whenever the user asks.
 7. **Viewport growth / short heights (awaiting user decisions)** — **proposal prototyped + tested (55 → 11 colliding sizes, unchanged at 1470×956)**, awaiting go-ahead to apply; sweep findings + open questions in [[Known-Issues]] (`[landing / viewport]`): desktop overlap below ~700px tall, side cards off-screen on wide screens, mobile Cover Flow not height-aware, phone landscape falls into the desktop layout.
 8. **Restart `next dev`** — it predates the purge commit and keeps regenerating a stale `.next/dev/types/validator.ts` that fails local `next build` ([[Known-Issues]]).
 
