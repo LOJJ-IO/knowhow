@@ -3,7 +3,7 @@ type: product
 status: active
 tags: [area/product]
 created: 2026-08-31
-updated: 2026-08-31
+updated: 2026-09-16
 related: ["[[FEAT-doc-visibility-dashboard]]", "[[FEAT-onboarding-offboarding-automation]]", "[[FEAT-org-chart-builder]]"]
 ---
 
@@ -19,6 +19,8 @@ Knowhow gives every organization a structured org chart (owner → teams → lea
 1. **Makes document visibility a policy, not a habit** — a dashboard shows every team's recent docs/sheets/slides with a status indicator (shared with the owner or not), and a per-team sharing policy controls whether new documents auto-share with the leader/owner.
 2. **Automates onboarding** — adding a person to a team grants their app access and enrolls their future documents in the team's sharing policy, logged to an activity feed.
 3. **Automates offboarding** — removing a person transfers their owned documents to a successor (their team leader, or the org owner), revokes their access, and logs every step.
+
+**Direction added 2026-09-16:** help organizations reclaim company knowledge living in employees' personal Drives — classify company vs personal files with the least invasive mechanism first and a human deciding ([[FEAT-drive-file-classification]]); onboarding built so the setup person, owner and Workspace Super Admin can be different people ([[FEAT-workspace-onboarding-flow]]).
 
 ## Who it's for
 

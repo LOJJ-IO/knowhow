@@ -397,11 +397,13 @@ function GetStartedCta({
   phase,
   onClick,
   onStep,
+  onExtraClick,
   extras = [],
 }: {
   phase: CtaPhase;
   onClick: () => void;
   onStep?: (side: "left" | "right") => void;
+  onExtraClick?: (key: string) => void;
   /** Rendered as real buttons to the left, hidden until the pill has divided. */
   extras?: readonly CtaExtra[];
 }) {
@@ -474,6 +476,7 @@ function GetStartedCta({
             extraRefs.current[i] = el;
           }}
           type="button"
+          onClick={() => onExtraClick?.(key)}
           className={CTA_CLASS}
           style={{ visibility: phase === "controls" ? "visible" : "hidden" }}
         >
@@ -1444,6 +1447,91 @@ function DesktopDeck({
   );
 }
 
+/** Log In panel sky — deterministic (seeded) so server and client render the
+ *  same stars. Stars sit in the top half, where signinbg.png is dark blue, and
+ *  thin out towards the horizon glow. */
+function seeded(seed: number) {
+  let t = seed;
+  return () => {
+    t = (t + 0x6d2b79f5) | 0;
+    let r = Math.imul(t ^ (t >>> 15), 1 | t);
+    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Seeding alone isn't enough: `Math.pow` can differ in the last bit between
+ *  Node and the browser, and a style string that differs by one digit is a
+ *  hydration mismatch. Rounding every value makes them identical. */
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+const LOGIN_STARS = (() => {
+  const rand = seeded(7);
+  return Array.from({ length: 90 }, () => {
+    const y = Math.pow(rand(), 1.6) * 52;
+    return {
+      x: round3(rand() * 100),
+      y: round3(y),
+      size: rand() < 0.15 ? 2.5 : rand() < 0.5 ? 1.75 : 1.25,
+      /** Dimmer lower down, where the sky is lighter. */
+      peak: round3(0.95 - (y / 52) * 0.55),
+      dur: round3(2.5 + rand() * 4),
+      delay: round3(-rand() * 6),
+    };
+  });
+})();
+
+/** Each streak runs on its own long loop and is only visible for the first
+ *  few percent of it, so they cross at staggered, irregular-feeling times. */
+const LOGIN_SHOOTING_STARS = [
+  { x: 22, y: 6, loop: 7, delay: 1.2, len: 140 },
+  { x: 55, y: 12, loop: 11, delay: 4.5, len: 110 },
+  { x: 8, y: 22, loop: 13, delay: 8, len: 170 },
+];
+
+function LoginSky({ active }: { active: boolean }) {
+  return (
+    <div
+      className="t-login-sky pointer-events-none absolute inset-0 overflow-hidden"
+      data-active={active ? "true" : "false"}
+      aria-hidden
+    >
+      {LOGIN_STARS.map((star, i) => (
+        <span
+          key={i}
+          className="t-login-star"
+          style={
+            {
+              left: `${star.x}%`,
+              top: `${star.y}%`,
+              width: star.size,
+              height: star.size,
+              "--star-peak": star.peak,
+              animationDuration: `${star.dur}s`,
+              animationDelay: `${star.delay}s`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+      {LOGIN_SHOOTING_STARS.map((star, i) => (
+        <span
+          key={i}
+          className="t-login-shooting-star"
+          style={
+            {
+              left: `${star.x}%`,
+              top: `${star.y}%`,
+              width: star.len,
+              animationDuration: `${star.loop}s`,
+              animationDelay: `${star.delay}s`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 /** Stub footer destinations — buttons until real routes exist (avoids App
  *  Router soft-nav on `<a href="#…">` during Fast Refresh). */
 function FooterStubLink({ children }: { children: React.ReactNode }) {
@@ -1573,6 +1661,9 @@ function LandingHero() {
   });
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  /** The Log In panel has finished sliding up — square corners from then on. */
+  const [loginAtTop, setLoginAtTop] = useState(false);
   /** Cover Flow index — driven by the split CTA arrows on mobile. */
   const [deckIndex, setDeckIndex] = useState(1);
   const mounted = useHydrated();
@@ -1697,9 +1788,12 @@ function LandingHero() {
     return y >= top && y <= bottom;
   }
 
+  /** Never while the Log In panel is up: it covers the whole page, so a click
+   *  on it outside the card band would otherwise close the deck behind it. */
   function handleBackdropPointerDown(e: React.PointerEvent) {
     backdropDown.current =
       ctaPhase === "controls" &&
+      !loginOpen &&
       e.button === 0 &&
       !isDeckKeepZone(e.target, e.clientY)
         ? { x: e.clientX, y: e.clientY }
@@ -1711,7 +1805,7 @@ function LandingHero() {
   function handleBackdropClick(e: React.MouseEvent) {
     const down = backdropDown.current;
     backdropDown.current = null;
-    if (ctaPhase !== "controls" || !down) return;
+    if (ctaPhase !== "controls" || loginOpen || !down) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
     if (isDeckKeepZone(e.target, e.clientY)) return;
     reverseCta();
@@ -1725,6 +1819,12 @@ function LandingHero() {
       onPointerDown={handleBackdropPointerDown}
       onClick={handleBackdropClick}
     >
+      <div
+        className={cn(
+          "absolute inset-0 origin-center transition-transform duration-900 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          loginOpen ? "scale-[0.9]" : "scale-100"
+        )}
+      >
       {/* Background video — keeps playing under the card deck */}
       <div className="absolute inset-0 z-0 isolate" aria-hidden>
         <video
@@ -1809,6 +1909,9 @@ function LandingHero() {
               phase={ctaPhase}
               onClick={handleCtaClick}
               onStep={stepDesktopDeck}
+              onExtraClick={(key) => {
+                if (key === "login") setLoginOpen(true);
+              }}
               extras={DESKTOP_HEADER_EXTRAS}
             />
           </div>
@@ -1907,6 +2010,58 @@ function LandingHero() {
           </button>
         </div>
       )}
+      </div>
+
+      {/* The Veil */}
+      <div
+        className={cn(
+          "pointer-events-none absolute inset-0 z-[300] bg-[rgb(28_25_23/0.35)] transition-opacity duration-900 ease-[cubic-bezier(0.16,1,0.3,1)]",
+          loginOpen ? "opacity-100" : "opacity-0"
+        )}
+        aria-hidden
+      />
+
+      {/* The Slide-Up Panel (Log In) */}
+      <div
+        className={cn(
+          "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col",
+          loginOpen ? "translate-y-0" : "translate-y-full",
+          loginAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
+        )}
+        // Slides at 992ms (the recess + veil stay 900ms). Only the panel's own
+        // slide counts — the Close button's press transition bubbles here too.
+        onTransitionEnd={(e) => {
+          if (
+            loginOpen &&
+            e.target === e.currentTarget &&
+            e.propertyName === "translate"
+          )
+            setLoginAtTop(true);
+        }}
+      >
+        <LoginSky active={loginOpen} />
+        <div className={`${satoshi.className} relative z-10 flex justify-end p-6`}>
+          <button
+            type="button"
+            onClick={() => {
+              setLoginAtTop(false);
+              setLoginOpen(false);
+            }}
+            className={CTA_CLASS}
+          >
+            Close
+          </button>
+        </div>
+        <div className="pointer-events-none absolute bottom-6 left-6 z-10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hero/edmonton.png"
+            alt="Proudly from Edmonton"
+            className="h-8 w-auto md:h-10"
+          />
+        </div>
+        {/* Intentionally left blank as per strict scope requirement */}
+      </div>
     </div>
   );
 }
