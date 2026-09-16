@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, priority/high]
 created: 2026-09-11
-updated: 2026-09-12
+updated: 2026-09-16
 related: ["[[Current-Context]]", "[[0004-landing-only-purge-old-app]]", "[[FEAT-landing-deck-carousel]]"]
 ---
 
@@ -24,7 +24,7 @@ Desktop top bar (md+): **Logo** on the left; **Log in → Talk to sales → Get 
 - Primary nav tabs (removed)
 
 ## UI/UX
-- Log in + Talk to sales + Get Started: same black-pill chrome/size; all three play `playClickSound` (gain 0.1)
+- Log in + Talk to sales + Get Started: same black-pill chrome/size. Click sounds removed 2026-09-16.
 - Desktop only for Log in / Talk to sales
 
 ## Technical approach

@@ -476,7 +476,6 @@ function GetStartedCta({
           type="button"
           className={CTA_CLASS}
           style={{ visibility: phase === "controls" ? "visible" : "hidden" }}
-          onClick={() => playClickSound()}
         >
           {label}
         </button>
@@ -913,7 +912,6 @@ function NotesFolder({
       dragRef.current = null;
       clearDragChrome();
       if (!wasDrag) {
-        playClickSound();
         onOpenChange(!open);
       }
     }
@@ -1446,40 +1444,6 @@ function DesktopDeck({
   );
 }
 
-let clickAudio: AudioContext | null = null;
-
-/** Short sine tick (880→220Hz, 80ms). One shared AudioContext: a fresh one per
- *  click leaks, and browsers cap how many can exist — which matters once the
- *  deck arrows get clicked in quick succession. Must wait for `resume()` when
- *  suspended (autoplay policy) or the oscillator runs silently. */
-function playClickSound() {
-  try {
-    clickAudio ??= new AudioContext();
-    const ctx = clickAudio;
-    const start = () => {
-      const t = ctx.currentTime;
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(880, t);
-      oscillator.frequency.exponentialRampToValueAtTime(220, t + 0.08);
-      gain.gain.setValueAtTime(0.1, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start(t);
-      oscillator.stop(t + 0.08);
-    };
-    if (ctx.state === "suspended") {
-      void ctx.resume().then(start);
-    } else {
-      start();
-    }
-  } catch {
-    // Web Audio unavailable/blocked — sound is a nice-to-have, fail silently
-  }
-}
-
 /** Stub footer destinations — buttons until real routes exist (avoids App
  *  Router soft-nav on `<a href="#…">` during Fast Refresh). */
 function FooterStubLink({ children }: { children: React.ReactNode }) {
@@ -1487,7 +1451,6 @@ function FooterStubLink({ children }: { children: React.ReactNode }) {
     <button
       type="button"
       className="cursor-pointer underline underline-offset-2 transition-transform duration-150 active:scale-95"
-      onClick={() => playClickSound()}
     >
       {children}
     </button>
@@ -1629,14 +1592,12 @@ function LandingHero() {
    *  card off, centre to the right slot, left card to centre, the thrown card
    *  back in on the left. → mirrors. */
   function stepDesktopDeck(side: "left" | "right") {
-    playClickSound();
     deckRef.current?.shift(side === "left" ? 1 : -1);
   }
 
   /** Mobile Cover Flow doesn't loop — ← / → move one card at a time, clamped
    *  to the ends, same as a swipe or tapping a side card. */
   function stepMobileDeck(side: "left" | "right") {
-    playClickSound();
     setDeckIndex((i) =>
       Math.min(
         DECK_CARDS.length - 1,
@@ -1660,7 +1621,6 @@ function LandingHero() {
 
   function handleCtaClick() {
     if (ctaPhase !== "idle" || nextOpen) return;
-    playClickSound();
     setCtaPhase("spinner");
 
     const at = (ms: number, run: () => void) => {

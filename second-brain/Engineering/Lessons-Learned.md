@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-12
+updated: 2026-09-16
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-16 — Button sound effects removed
+Removed Web Audio API sine tick click sound effects (`playClickSound` and `AudioContext`) from all button and control interaction handlers in `landing-hero.tsx` per user request.
 
 ## 2026-09-14 — A live `%` in `translate`/`transform` that resolves against its own animating `width` is fragile under a forced reflow — pin it to a measured px instead
 The mobile Get Started CTA's split circles centred themselves with `left: 50%; translate: calc(-50% + Npx)` while `width` was *also* transitioning (100% → a fixed diameter) on the same element. In a steady render loop this is fine — CSS resolves `%` in `translate` against the element's own box every frame, and both properties interpolate in lockstep. The user reported a "teleport left, then snap back" right at the split, but it never reproduced in headless Chromium even with per-frame instrumentation (button-centre polling at ~15ms resolution, and a CDP `Page.startScreencast` capture at true per-paint framerate — see the "Reasoning about rendering from library source is not verification" entry below for why frame-level evidence, not source-reading, is the right first move). Asking the user narrowed it in one question: real phone only, never in desktop dev tools' mobile emulation. That's the tell — a real mobile browser can force a *synchronous reflow* mid-gesture that headless Chromium never triggers (Safari's address bar collapsing/expanding is the classic case, and it changes the very viewport height several of this deck's `vh`-based vars animate against); under that forced reflow the two dependent interpolations (`width` and the `%` that reads it) can read back out of step for a single frame. Fix: measure the pre-transition width once (`getBoundingClientRect`), store it as a fixed px custom property, and write *both* transition endpoints as literal `px` `calc()`s instead of `-50%` — the transition then interpolates between two fixed numbers with no live width dependency at any point, immune to whatever the reflow does to layout mid-frame. General rule: a `%` inside `translate`/`transform` is only as stable as the property it resolves against — if that property is itself animating, on a *real* device (not just this browser, this session) it's one forced layout away from a visible glitch, and no amount of steady-state testing will catch it.
