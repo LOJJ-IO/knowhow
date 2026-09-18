@@ -1621,9 +1621,11 @@ function DemoForm() {
         ))}
       </div>
       {/* Same pill as the header buttons (user: "match the header"). */}
-      <button type="submit" className={cn(CTA_CLASS, satoshi.className, "mt-3")}>
-        Continue
-      </button>
+      <div className="mt-3 flex justify-end">
+        <button type="submit" className={cn(CTA_CLASS, satoshi.className)}>
+          Continue
+        </button>
+      </div>
     </form>
   );
 }
