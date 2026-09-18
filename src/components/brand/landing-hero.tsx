@@ -1489,6 +1489,41 @@ const LOGIN_SHOOTING_STARS = [
   { x: 8, y: 22, loop: 13, delay: 8, len: 170 },
 ];
 
+/** Log In panel's centred modal. Height can't transition to/from `auto`, so
+ *  the body is measured and the shell gets an explicit px height for
+ *  `.t-resize` to tween whenever the content changes size. */
+function LoginModal({ children }: { children?: React.ReactNode }) {
+  const shellRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+
+  useLayoutEffect(() => {
+    const shell = shellRef.current;
+    const body = bodyRef.current;
+    if (!shell || !body) return;
+    const measure = () => {
+      const border = shell.offsetHeight - shell.clientHeight;
+      setHeight(body.offsetHeight + border);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(body);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={shellRef}
+      className="t-login-modal t-resize pointer-events-auto"
+      style={{ height }}
+    >
+      <div ref={bodyRef} className="t-login-modal-body">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function LoginSky({ active }: { active: boolean }) {
   return (
     <div
@@ -2067,7 +2102,10 @@ function LandingHero() {
             className="h-8 w-auto md:h-10"
           />
         </div>
-        {/* Intentionally left blank as per strict scope requirement */}
+        {/* Sign-in modal — centred in the panel. Content not specified yet. */}
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <LoginModal />
+        </div>
       </div>
     </div>
   );

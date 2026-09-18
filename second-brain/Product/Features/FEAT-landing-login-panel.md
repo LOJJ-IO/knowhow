@@ -3,14 +3,14 @@ type: feature
 status: in-progress
 tags: [area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-17
 related: ["[[Current-Context]]", "[[Patterns-landing-mc-recess-deck]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-carousel]]"]
 ---
 
 # FEAT: Landing Log In panel
 
 ## Status
-`in-progress` — animation shipped 2026-09-16; panel content not yet specified.
+`in-progress` — animation shipped 2026-09-16; empty centred modal added 2026-09-17; modal content not yet specified.
 
 ## Problem
 Clicking "Log In" did nothing. User asked for the [[Patterns-landing-mc-recess-deck]] recess, with a full-page slide-up (a bottom sheet the full height of the page, not a small one).
@@ -23,10 +23,12 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 - **Sky (2026-09-16, per user "add stars and shooting stars"):** `LoginSky` layer over the image — 90 seeded (hydration-safe) white stars in the top 52% where the image is dark blue, denser/brighter higher up, each twinkling on its own 2.5–6.5s loop; 3 shooting-star streaks (bright head, fading tail, ~25° down-right, ~360px run) on 7/11/13s loops, visible ~8% of each. CSS in `globals.css` (`.t-login-star`, `.t-login-shooting-star`); animations paused unless the panel is open (`data-active`); reduced motion → static stars, no shooting stars.
 - Panel slide **992ms** (900ms +5% → 945ms, then +5% again → 992ms, 2026-09-16); recess + veil still `900ms`. All three, `cubic-bezier(0.16, 1, 0.3, 1)` (the pattern's ease). No `filter` / `backdrop-filter`.
 - A "Close" button (top right) reverses it — same pill as the header CTAs (`CTA_CLASS`, Satoshi bold, `bg-black/80`, `active:scale-95`; 2026-09-16, was a small underlined text link).
+- **Sign-in modal (2026-09-17, user: "a modal in the center but the text and what it's asking for are unknown"):** `LoginModal` centred in the panel (absolute `inset-0` flex centre, `z-10`; wrapper `pointer-events-none`, so Close stays clickable). **Empty** — no copy, fields or buttons until the user specifies them. Surface matches the mobile Notes panel (`.t-deck-cover-notes`, user's pick): `#fbfaf8`, 1px `rgb(0 0 0 / 0.08)` border, 14px radius, `0 8px 20px rgb(0 0 0 / 0.12)` shadow, padding `0.85rem 1.1rem 1rem` (on `.t-login-modal-body`). Width `min(420px, 100% - 32px)`; height follows content (user's pick: fixed width, content height) — empty it's 32px (padding + border).
+  - **Smooth resize (user-supplied Transitions.dev "Card resize" CSS):** `.t-resize` + `--resize-dur: 300ms` / `--resize-ease: cubic-bezier(0.22, 1, 0.36, 1)` in `globals.css`, reduced motion → no transition. CSS can't tween `height: auto`, so `LoginModal` measures its body with a `ResizeObserver` and sets an explicit px height on the shell (`overflow: hidden`); `.t-resize` tweens that. Verified: injecting 240px of content eases 32 → 272px over ~300ms; removing it eases back.
 - **Logo (2026-09-16):** "Proudly from Edmonton" (`public/hero/edmonton.png`, alt text set) at the panel's bottom left (`bottom-6 left-6`, `z-10`, `pointer-events-none`), `h-8` / `md:h-10`. The source had faint near-zero-alpha pixels across the whole canvas, so a plain `getbbox()` crop barely trimmed it — cropped to alpha > 8 instead (1557×399) so the artwork reaches the file edges and the 24px inset is the real inset.
 
 ## Out of scope
-- Panel content — still empty. **Decided 2026-09-17:** it will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
+- Modal content — still empty (the modal exists, 2026-09-17). It will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
 - Talk to Sales — still does nothing.
 
 ## Technical approach
