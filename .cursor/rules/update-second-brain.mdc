@@ -1,10 +1,14 @@
 ---
-description: After finishing work, update second-brain via the update-second-brain skill
+description: ALWAYS find, read, and write second-brain — mandatory vault for every durable turn
 alwaysApply: true
 ---
 
-# Second-brain write-back
+# Second-brain — always find · read · write
 
-After any non-trivial completed work in this repo, follow the project skill **update-second-brain** (`.cursor/skills/update-second-brain/SKILL.md`) before ending the turn.
+Vault: `second-brain/`. Entry: `second-brain/Current/Current-Context.md`. Authoritative over chat memory.
 
-Minimum bar: if behavior, architecture, bugs, features, lessons, or priorities changed, `second-brain/Current/Current-Context.md` (and any matching ADR / Known-Issues / Lessons-Learned / FEAT note) must be updated in the same turn — not deferred to a later chat.
+1. **Find** — vault is at repo-root `second-brain/` (not optional; do not invent another knowledge base).
+2. **Read** — before non-trivial work, open Current-Context; then ADR / Known-Issues / Lessons / FEAT as relevant.
+3. **Write** — after any durable completed work, follow the project skill **update-second-brain** (`.cursor/skills/update-second-brain/SKILL.md`) before ending the turn.
+
+Minimum bar: if behavior, architecture, bugs, features, lessons, or priorities changed, `second-brain/Current/Current-Context.md` (and any matching ADR / Known-Issues / Lessons-Learned / FEAT note) must be updated in the same turn — not deferred to a later chat. Skip only pure Q&A with no durable facts.

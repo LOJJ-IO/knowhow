@@ -18,12 +18,11 @@ The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegatio
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.
 
 ## Agent tooling (2026-09-18)
-Antigravity **customizations for this repo** live in the workspace (not under `~/.gemini/antigravity/builtin/…` — that tree is built-in product docs/skills only):
-- Always-on directory rules: root [`GEMINI.md`](../../GEMINI.md) + [`AGENTS.md`](../../AGENTS.md) (loaded by walking up from CWD)
-- `.agents/rules/` — Always On + glob rules (`knowhow-invariants`, `second-brain`, `mcp-policy`, frontend/backend)
-- `.agents/skills/` — `update-second-brain`, `knowhow-mcps`
-- `.agents/mcp_config.json` — **github** (OAuth, `LOJJ-IO/knowhow`) + **context7** (library docs)
-Machine-global MCP file `~/.gemini/config/mcp_config.json` exists but is empty; prefer workspace MCP for Knowhow. Forbidden: Prisma MCP, Google Drive MCP against `src/`, DB MCPs until Postgres is provisioned. Cursor still uses `.cursor/rules/` + `.cursor/skills/`. Keep Antigravity surfaces in sync when invariants change.
+Antigravity **customizations for this repo** live in the workspace (not under `~/.gemini/antigravity/builtin/…` — that tree is built-in product docs only):
+- **Second-brain always on:** root [`GEMINI.md`](../../GEMINI.md) + Always On rule `.agents/rules/second-brain.md` + **PreInvocation hook** [`.agents/hooks.json`](../../.agents/hooks.json) → `scripts/second-brain-pre.py` injects `Current/Current-Context.md` into every model turn; skill `update-second-brain` for write-back. Cursor: `.cursor/rules/update-second-brain.mdc` (alwaysApply) + `.cursor/skills/update-second-brain/`.
+- Other Always On / glob rules: `knowhow-invariants`, `mcp-policy`, frontend/backend
+- MCP: `.agents/mcp_config.json` — github + context7 (authenticate github in Customizations if needed). Forbidden: Prisma MCP, Drive MCP against `src/`, DB MCPs until Postgres provisioned.
+Keep Antigravity surfaces in sync when invariants change.
 
 ## What's true right now (2026-09-16) — landing only
 - **Old app purged** ([[0004-landing-only-purge-old-app]]). Live route: `/` → `<LandingHero />`.

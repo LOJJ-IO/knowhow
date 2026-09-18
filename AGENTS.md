@@ -1,10 +1,12 @@
 # Knowhow — agent entry (all tools)
 
-Before non-trivial work: read `second-brain/Current/Current-Context.md` and follow `CLAUDE.md` invariants.
+**Second-brain is mandatory:** always find, read, and write `second-brain/` (entry: `second-brain/Current/Current-Context.md`). Authoritative over chat memory. Write back the same turn after durable work.
 
-**Google Antigravity:** customizations for this repo are in workspace `.agents/` + root `GEMINI.md` / `AGENTS.md`. (`~/.gemini/antigravity/builtin/skills/*` is built-in product documentation, not where Knowhow rules are stored.) MCP: `.agents/mcp_config.json`. See `mcp-policy` rule.
+Before non-trivial work: read Current-Context and follow `CLAUDE.md` / `GEMINI.md` invariants.
 
-**Cursor:** also `.cursor/rules/` and `.cursor/skills/`.
+**Google Antigravity:** customizations in workspace `.agents/` + root `GEMINI.md` / `AGENTS.md`. PreInvocation hook injects Current-Context every turn (`.agents/hooks.json`). (`~/.gemini/antigravity/builtin/skills/*` is built-in product documentation, not Knowhow config.) MCP: `.agents/mcp_config.json`.
+
+**Cursor:** `.cursor/rules/` + `.cursor/skills/` (including always-on second-brain write-back).
 
 <!-- BEGIN:nextjs-agent-rules -->
 

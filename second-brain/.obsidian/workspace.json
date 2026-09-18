@@ -4,17 +4,21 @@
     "type": "split",
     "children": [
       {
-        "id": "9dce8e4ff0e34b77",
+        "id": "0cf03cedda9bbfbc",
         "type": "tabs",
         "children": [
           {
-            "id": "9ff7d1caf02c1f44",
+            "id": "131902d57546c591",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "Current/Current-Context.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Current-Context"
             }
           }
         ]
@@ -162,8 +166,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "9ff7d1caf02c1f44",
+  "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Daily.md",
     "Templates/ADR.md",
     "Current/Current-Context.md",
     "Architecture/Decisions/0007-shared-drive-support.md",

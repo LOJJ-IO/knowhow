@@ -1,0 +1,11 @@
+{
+  "second-brain": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python3 scripts/second-brain-pre.py",
+        "timeout": 15
+      }
+    ]
+  }
+}

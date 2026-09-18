@@ -1,11 +1,13 @@
 ---
 trigger: always_on
-description: Non-negotiable Knowhow architecture invariants. Always apply.
+description: Non-negotiable Knowhow architecture invariants. Always apply. Second-brain mandatory.
 ---
 
 # Knowhow invariants — do not violate
 
 If a request conflicts with these, **stop and ask**. Do not unilaterally “improve” them.
+
+**Second-brain first:** always find/read/write `second-brain/` (see Always On rule `second-brain.md` + PreInvocation hook). Entry `@../../second-brain/Current/Current-Context.md`.
 
 Full detail: `@../../CLAUDE.md` · ADRs in `@../../second-brain/Architecture/Decisions/`
 
@@ -21,7 +23,3 @@ Full detail: `@../../CLAUDE.md` · ADRs in `@../../second-brain/Architecture/Dec
 
 - Frontend: Next.js App Router · TypeScript · Tailwind v4 · landing-only (`/` → `LandingHero`) · framer-motion · liquid-gooey · no ORM · no auth/session in `src/` currently.
 - Backend: FastAPI · Python 3.12 · SQLAlchemy 2.x + Alembic · Railway + Postgres (**not provisioned yet**).
-
-## Before non-trivial work
-
-Read `@../../second-brain/Current/Current-Context.md` first. Treat the vault as authoritative over chat memory.

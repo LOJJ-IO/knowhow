@@ -1,14 +1,17 @@
 # Knowhow — Antigravity / Gemini rules
 
-Always active for this repo (no frontmatter). Full detail: `CLAUDE.md`. Workspace extras: `.agents/rules/`, `.agents/skills/`, `.agents/mcp_config.json` (see Antigravity customizations guide).
+Always active for this repo (no frontmatter). Full detail: `CLAUDE.md`. Workspace: `.agents/rules/`, `.agents/skills/`, `.agents/mcp_config.json`, `.agents/hooks.json`.
 
-## Before non-trivial work
+## SECOND-BRAIN (mandatory — every turn)
 
-1. Read `second-brain/Current/Current-Context.md`
-2. For system design / auth / Google: `second-brain/Architecture/` + ADRs
-3. Implement **only** what the user explicitly asked — never invent copy, layout, or visual decisions
+Vault: `second-brain/`. Authoritative over chat memory.
 
-## Non-negotiable
+1. **Always find it.** Path is repo-root `second-brain/`. Entry: `second-brain/Current/Current-Context.md`.
+2. **Always read it** before non-trivial work (Current-Context first; then ADR / Known-Issues / Lessons / FEAT as relevant). A PreInvocation hook also injects Current-Context — still open the real files when editing.
+3. **Always write it** after durable work in the **same turn**: update Current-Context; add/update ADR, Known-Issues, Lessons-Learned, or FEAT as needed. Skill: `update-second-brain`. Do not end until the vault matches reality (skip only pure Q&A with no durable facts).
+4. Link `[[Note-Name]]`; keep YAML frontmatter; bump `updated`. Prefer edit over new notes.
+
+## Other non-negotiables
 
 1. Next.js is the frontend chokepoint. `backend/` is the one sanctioned separate service — do not add another.
 2. Nothing under `src/` calls a real Google API until an ADR records GCP + domain-wide delegation is provisioned.
@@ -16,8 +19,8 @@ Always active for this repo (no frontmatter). Full detail: `CLAUDE.md`. Workspac
 4. Secrets from env only.
 5. Independent of Sage_v1 — no Sage `ui/` / navy tokens.
 6. No Prisma/SQLite on Vercel.
-7. After durable work: update `second-brain/` the same turn (Current-Context / ADR / Known-Issues / Lessons / FEAT).
+7. Implement **only** what the user explicitly asked — never invent copy, layout, or visual decisions.
 
 ## MCP
 
-Use workspace `.agents/mcp_config.json` (github + context7). Do not enable Prisma MCP, Google Drive MCP against `src/`, or DB MCPs until Postgres is provisioned. Authenticate github in Customizations if tools are missing.
+Use `.agents/mcp_config.json` (github + context7). No Prisma MCP, no Google Drive MCP against `src/`, no DB MCPs until Postgres is provisioned.

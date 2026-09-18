@@ -1,12 +1,11 @@
 ---
 name: update-second-brain
 description: >-
-  Writes finished work back into the Knowhow second-brain Obsidian vault
-  (Current-Context, ADRs, Known-Issues, Lessons-Learned, feature specs).
-  Use after completing any non-trivial task, when shipping a feature, fixing
-  a bug, making an architecture decision, learning something non-obvious,
-  changing priorities, or when the user asks to update the knowledge base /
-  second-brain / vault.
+  ALWAYS write finished work into the Knowhow second-brain vault
+  (Current-Context, ADRs, Known-Issues, Lessons-Learned, FEAT specs).
+  Use after any durable task, and whenever the user mentions second-brain,
+  vault, ADR, or knowledge base. Do not end the turn until the vault matches
+  reality.
 ---
 
 # Update second-brain after work

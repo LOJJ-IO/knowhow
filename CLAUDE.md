@@ -2,7 +2,7 @@
 
 # Knowhow — Repo Guide for AI Agents
 
-> **Antigravity / Gemini agents:** this file alone is not enough — Always On rules are in [`.agents/rules/`](.agents/rules/) (`knowhow-invariants.md`, `second-brain.md`, plus glob rules for `src/` and `backend/`). Keep those in sync when invariants change.
+> **Antigravity / Gemini agents:** Always On rules in [`.agents/rules/`](.agents/rules/). **Second-brain is mandatory every turn** — rule `second-brain.md` + PreInvocation hook [`.agents/hooks.json`](.agents/hooks.json) injects `Current-Context.md`. Root [`GEMINI.md`](GEMINI.md) repeats the same. Keep all of these in sync when invariants change.
 
 ## Persistent memory lives in `second-brain/`
 
