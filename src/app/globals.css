@@ -126,6 +126,10 @@ html {
   --deck-rise-dur: 700ms;
   --deck-spread-dur: 1331ms;
   --deck-window-radius: 10.5px;
+  /* Nested radii follow inner = max(0, outer − inset)
+   * (craft.gustavofior.com/nested-border-radius) where corners are
+   * concentric. Mac windows float well inside the cards (not concentric), so
+   * they keep their own radius; their titlebar/body nest inside it. */
   --deck-mac-radius: 14px;
   --deck-titlebar-h: 2.75rem;
   --deck-dot: 13px;
@@ -231,7 +235,8 @@ html {
   position: absolute;
   inset: 0;
   z-index: 2;
-  border-radius: inherit;
+  /* Sits inside the card's 1px border. */
+  border-radius: max(0px, calc(var(--deck-window-radius) - 1px));
   pointer-events: none;
   box-shadow: inset 0 0 0 var(--deck-brand-border) var(--deck-brand);
 }
@@ -387,7 +392,9 @@ html {
   overflow: auto;
   padding: 0.85rem 1rem 1rem;
   background: #fbfaf8;
-  border-radius: 0 0 var(--deck-mac-radius) var(--deck-mac-radius);
+  /* Inside the window's 1px border. */
+  border-radius: 0 0 max(0px, calc(var(--deck-mac-radius) - 1px))
+    max(0px, calc(var(--deck-mac-radius) - 1px));
 }
 
 .t-deck-notes-copy {
@@ -521,7 +528,9 @@ html.t-deck-dragging .t-deck-folder:active {
 .t-deck-window .t-deck-titlebar {
   background: #d1cfcc;
   border-bottom: 1px solid rgb(0 0 0 / 0.08);
-  border-radius: var(--deck-mac-radius) var(--deck-mac-radius) 0 0;
+  /* Inside the window's 1px border. */
+  border-radius: max(0px, calc(var(--deck-mac-radius) - 1px))
+    max(0px, calc(var(--deck-mac-radius) - 1px)) 0 0;
   cursor: grab;
 }
 
@@ -785,18 +794,23 @@ body.t-deck-dragging * {
 
 /* Log In panel's centred sign-in modal — same surface as the mobile Notes
  * panel (`.t-deck-cover-notes`). Fixed width; height follows content via
- * `LoginModal` (measured → explicit px, so `.t-resize` can tween it). */
+ * `LoginModal` (measured → explicit px, so `.t-resize` can tween it).
+ * Nested radius: outer = button radius + side padding + 1px border. */
 .t-login-modal {
+  --login-button-radius: 10px;
+  --login-modal-pad-x: 1.1rem;
   width: min(420px, 100% - 32px);
   overflow: hidden;
   background: #fbfaf8;
   border: 1px solid rgb(0 0 0 / 0.08);
-  border-radius: 14px;
+  border-radius: calc(
+    var(--login-button-radius) + var(--login-modal-pad-x) + 1px
+  );
   box-shadow: 0 8px 20px rgb(0 0 0 / 0.12);
 }
 
 .t-login-modal-body {
-  padding: 0.85rem 1.1rem 1rem;
+  padding: 2.5rem var(--login-modal-pad-x);
 }
 
 /* Transitions.dev — Card resize (user-supplied, 2026-09-17). Put `.t-resize`
