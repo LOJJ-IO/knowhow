@@ -99,6 +99,9 @@ Relevant existing backend (as of 2026-09-16):
 - DeepSearch queries Drive live and persists nothing from bodies.
 - Scopes: backend currently requests full `drive` everywhere (needed for ownership/permission changes); constraint 6 means classification must use `drive.metadata.readonly` instead.
 
+## Framing: the AI librarian (2026-09-17, user)
+The user's preferred encapsulation of this feature: Knowhow acts as an **AI librarian** — classifying and organizing personal vs company files and handing the company (owner/leader) a catalogue to index, sort and take ownership of. Useful as product vocabulary; it does not change any rule below. A librarian catalogues and shelves; it doesn't decide what's yours (constraint 4: employee proposes, company confirms) and doesn't read what isn't the library's (constraints 2–3, 6).
+
 ## Terms (decided 2026-09-16)
 - **Private** = a **company file**, restricted from coworkers (leaders with background access still see it). This is what the backend's existing `sharing_state.personal` / `mark_file_personal` actually implements — that code is **misnamed** and must be renamed to "private" before this feature is built (see [[Known-Issues]]).
 - **Personal** = **the employee's own non-company file** (e.g. Sarah's). Not company property; the company — leaders included — never sees it.

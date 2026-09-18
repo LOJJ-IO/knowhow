@@ -26,7 +26,7 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 - **Logo (2026-09-16):** "Proudly from Edmonton" (`public/hero/edmonton.png`, alt text set) at the panel's bottom left (`bottom-6 left-6`, `z-10`, `pointer-events-none`), `h-8` / `md:h-10`. The source had faint near-zero-alpha pixels across the whole canvas, so a plain `getbbox()` crop barely trimmed it — cropped to alpha > 8 instead (1557×399) so the artwork reaches the file edges and the 24px inset is the real inset.
 
 ## Out of scope
-- Panel content (form, Google sign-in) — intentionally empty until the user specifies it.
+- Panel content — still empty. **Decided 2026-09-17:** it will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
 - Talk to Sales — still does nothing.
 
 ## Technical approach

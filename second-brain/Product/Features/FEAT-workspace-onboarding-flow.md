@@ -46,18 +46,104 @@ The owner confirms by **signing in with Google as the invited account** — the 
   - A personal account **may belong to** a domain-backed org, but only once the owner verifies them — membership is granted, never self-asserted.
 - **Domainless org constraints (2026-09-17):** no `verified_domain`; **exactly one owner**; a person **cannot hold more than one active** domainless org.
 - **Adding a domain to a domainless org (2026-09-17):** binding a verified domain changes the org's **identity/authority metadata only — not its membership**. Existing members are **not** reclassified by the new domain: their membership already exists; the domain just gives the org a stronger identity. (Any later auth-type/Drive-path change follows from each member's own authorization, per "no authority inferred".)
+- **Workspace authority is proven by Google, never self-declared (2026-09-17, user direction):** the strong signal is *walking the account in via Google* — an admin-only Google call that only a Super Admin of that domain can make succeeding **is** the evidence of control over that Workspace, and so of the org's claim to the domain. The "Are you a Super Admin?" answer only routes the flow; it never grants anything. Two distinct proofs, not to be conflated:
+  1. **Admin proof** — Admin SDK Directory `users.get(userKey="me")` → `isAdmin`, under that person's own Google authorization. Proves *this account is a Super Admin of domain X*. Candidate gate for **binding the domain** to the org.
+  2. **Delegation proof** — an impersonated call actually succeeding after the Admin console step. Proves *Knowhow itself is authorized Workspace-wide*. Gate for the Workspace-wide column.
+- **Every org starts unbound (2026-09-17):** signup never creates a domain-backed org. The org is created with no `verified_domain`, and **binds a domain only when an admin arrives and passes admin proof**. An employee's `hd` at signup is an *observed* domain — a routing/deduplication signal, never authority.
+- **Observation creates the candidate; verification upgrades it (2026-09-17):** an observed domain (`hd` at signup) creates the *organizational candidate*. **At most one active Knowhow organization may exist per observed domain, verified or not.** Verification changes that org's **authority state in place** — it never creates a second org and never splits or reassigns its existing members. Full rationale: [[0006-observed-domain-tenant-identity]].
 - **Domain control must be explicitly verified (2026-09-17):** an email that merely *looks* like a domain (`john@johnconsulting.com`) proves nothing. Verification must be explicit — the DNS-record model Google itself uses for domain ownership. Membership in a Workspace (the `hd` claim) proves the account belongs to that domain, **not** that the holder controls it.
+- **What an email domain can and cannot do (2026-09-17):** the account's domain affects *affiliation and joining* only — never authority.
+
+| Action | Company email | Personal Gmail |
+| --- | --- | --- |
+| Create an identity | ✅ | ✅ |
+| Claim/request membership | ✅ | ✅ |
+| Be a member | ✅ | ✅ |
+| Automatically establish org affiliation | Maybe | ❌ |
+| Join an existing org without approval | Potentially | ❌ |
+| Become Super Admin | ❌ | ❌ |
+| Transfer ownership/control | ❌ | ❌ |
+| Approve another member | Only if already authorized | Only if already authorized |
+
+  - **Super Admin is Google's role, not Knowhow's** — Knowhow can never confer it on any account; it is only ever *proven* (admin proof above).
+  - **Matching company email auto-affiliates even with an *unverified* candidate org (2026-09-17, user: "less friction")** — the "Maybe"/"Potentially" cells resolve to ✅, not gated on domain verification. Safe because Google vouches for *each* account's `hd` independently: two accounts with the same `hd` are both proven members of that Workspace, so putting them in one org asserts nothing unproven. What auto-affiliation does **not** settle is **standing** — what the joining member may see or do (below).
+  - **Personal Gmail never self-joins** a domain-backed or candidate org; entry is always by approval from someone already authorized. A matching company email *may* auto-affiliate — the "Maybe"/"Potentially" cells are deliberately not yet settled (see Open questions).
 - **Individual Google data access (2026-09-16):** requires authorization from *that* Google account **and** must satisfy the Workspace's app-access controls. Organization confirmation establishes organizational authority only — it never authorizes access to any user's Google data. Before ownership is confirmed, an individual may still authorize access to their own data if Google and the Workspace's app-access policies permit it. So the table's Individual Drive column means *may be authorized by that person*, not *granted by the state*; "Potentially" = subject to their consent + their Workspace's app-access policy.
+
+## Three independent layers (2026-09-17, user's correction)
+
+Do not conflate these — each is established differently and none implies another:
+1. **Membership** — *is John part of Acme?* (`John → Acme member`)
+2. **Google identity & access** — *which Google accounts does John control, and what has each authorized?* (`john@gmail.com`, `john@acme.com`). Linking proves **same person**, and **does not merge their Google data**.
+3. **Authority** — *what may John do for Acme?* (member · may sponsor · may approve members · may **not** confirm company IP)
+
+**Knowhow cannot change Google ownership by asserting it (invariant).** A Knowhow role/session says nothing about Drive. The only backend mechanism is `app/google/ownership.py::transfer_ownership` → Drive `permissions.create(transferOwnership=True)`, which Google restricts to **within one Workspace domain** and refuses between a consumer account and a Workspace. So "the company owns what the contractor creates" is achievable only by:
+- **a Shared Drive** — org-owned at creation, no transfer needed, and the only option that works for an outside account (**backend has no Shared Drive support at all**: no `driveId`, no `supportsAllDrives`);
+- **giving them a Workspace account** (then normal in-domain transfer applies); or
+- **asking them to transfer each file** — voluntary, per file, refusable.
+Any other framing is Knowhow claiming ownership it does not have. Constrains Auto-Own as well as onboarding.
+
+**Auto-affiliated ≠ member (definition corrected 2026-09-17):** *Knowhow has automatically associated this person with an organization based on evidence; nobody with organizational authority has approved it.* A matching `hd` (`john@acme.com`) auto-affiliates; a personal account (`john@gmail.com`) **never** does, even if the person genuinely works there — approval is the only door in. The earlier "matching company email auto-affiliates even into an unverified candidate" decision is about *affiliation*, not approved membership.
+
+## Sponsorship and member standing (2026-09-17)
+
+- **Sponsorship is vouched-only and non-transitive.** Only a member with a **Google-vouched** account (valid `hd`) may sponsor someone into the org; **sponsorship never confers the power to sponsor**. Otherwise one sponsored outsider invites the next and the org fills with people no employee ever vouched for.
+- **A sponsored member appears in the org chart immediately, marked as sponsored** (user, 2026-09-17) — not held back until the owner places them.
+- **Auto-affiliated** (evidence only, nobody approved): sees the org exists/its name/their association; classifies and proposes **their own** files; authorizes their own Google account; sees nothing about other members and accepts nothing.
+- **Approved/sponsored adds:** appears in the member list and org chart (as sponsored); can be assigned a role/place; can be shared with and searched for; can be offboarded (only someone the org acknowledges can be).
+- **Reserved to the confirmed owner:** assigning roles/org-chart placement, confirming files as company property, offboarding, and approving another *sponsor*.
+
+Affiliation is Knowhow's guess; sponsorship is the org's statement. Neither touches [[FEAT-drive-file-classification]] authority — *who belongs* and *what is official* stay separate.
+
+## Acting as the organization — contractors (2026-09-17, user direction)
+
+Ownership and **execution identity** are independent: who a file belongs to vs whose credentials an action runs under. The contractor problem is the second.
+
+- **Contractors act *as the org*, never as a person's credentials.** The contractor signs into Knowhow; Knowhow performs the work through the service account it already holds (domain-wide delegation, `backend/app/auth/`). No password, no session sharing, nothing stranded when they leave. Password/session sharing stays forbidden — it destroys 2FA and the audit trail, which is the problem being solved.
+- **Act as a dedicated automation account, not the owner (user's call):** `automations@acme.com` — a Workspace account nobody logs into. Costs a seat; keeps the owner's history clean; never leaves the company; removes the human dependency behind triggers, deployments and scheduled work generally (Apps Script is just one instance of it).
+- **Scoped and time-limited.** A contractor gets neither the full feature set nor the full org: no Auto-Share, no offboarding, no global org chart. Candidate scope: their own team, the work they were brought in for. See **local vs global org chart** in [[FEAT-org-chart-builder]].
+- **Attribution lives in Knowhow.** Google's logs name the impersonated/automation account; only Knowhow's audit log knows which human asked. That makes the audit log load-bearing, not decorative.
+- **Delegation only covers Workspace accounts** — a contractor's personal account can never be impersonated, which is consistent: they act as the org, not as themselves.
+
+**Deliberately deferred (user, 2026-09-17: "I don't know right now... that's something we'll need to learn in the future"):** exactly which actions a contractor may have performed as the org (create/edit only, or also share, delete, change permissions — the limit is Knowhow's, not Google's); whether the owner approves per action, per scope, or per time window; what the contractor may *read* while acting as the org.
+
+## Claims, acceptance and identity (2026-09-17)
+
+**Anyone may claim; only standing accepts; a claim does nothing until accepted.** The [[FEAT-drive-file-classification]] chain (employee proposes → company confirms) generalized to all of onboarding.
+
+| Claim | Who may claim | Who accepts |
+| --- | --- | --- |
+| Org name ("this is Acme") | anyone | nobody — a label, never authority |
+| "John is the owner" | founder / any member | John, by signing in as that account |
+| "This domain is ours" | anyone | **Google**, via admin proof |
+| "I belong here" (personal account) | the person | someone with standing |
+| "These files are company property" | the employee | owner / leader ([[FEAT-drive-file-classification]] constraint 4) |
+
+**Standing ladder** — an acceptor must stand strictly higher than the claim:
+1. **Unvouched** — personal Google account; nobody vouches for them.
+2. **Google-vouched member** — a valid `hd`; Google confirms Workspace membership.
+3. **Confirmed owner** — proved by signing in as the invited account.
+4. **Proven Super Admin** — proved by an admin-only Google call.
+
+**A founder is not a role — just the first claimant.** They may nominate an owner, name the org, invite people and propose a domain; none of it takes effect until something with more standing accepts. Owner confirmation doesn't strip their specialness, it makes it unnecessary.
+
+**Identity linking (2026-09-17, user):** a person may **add further Google emails to one identity** — notably a Gmail founder adding their Workspace email. Consequences:
+- **Standing is per person, raised by their highest-vouched linked email.** A founder who links a Google-vouched work email reaches level 2 and can then accept company docs (subject to the acceptor threshold for that claim type).
+- **Linking must itself be proven** by signing in with that account. A typed address links nothing — same reason a lookalike domain proves nothing.
+- **Data access stays per account.** Linking grants no access to either account's Google data; each still authorizes separately (see Individual Google data access above). Personal-account data stays out of org scope.
+- **It supplies an observed domain**, which is the clean path out of the domainless/candidate collision below: the founder links their acme.com account rather than a second org being created.
 
 ## Out of scope
 - Multi-domain organizations (`acme.com` + `acme.ca`) — `Organization.verified_domain` is a single unique column.
 - File classification of the setup person's Drive — see [[FEAT-drive-file-classification]].
 
 ## UI/UX
-Not designed. Entry is the Log In slide-up panel. Copy above is the agreed wording direction, not final copy — user designs screens.
+Not designed. **The sign-in and onboarding screens live inside the Log In slide-up panel** ([[FEAT-landing-login-panel]]) — decided 2026-09-17; not a separate route. Copy above is the agreed wording direction, not final copy — user designs screens.
 
 ## Technical approach
 The backend already asks the two authority questions separately (`create_org_chart(is_owner, is_super_admin, owner_email)`, owner confirmation tokens) — see `backend/app/onboarding/service.py`. Gaps against this spec (as of 2026-09-16):
+- **No `observed_domain` column** — nothing records the candidate domain, and `Organization.verified_domain` is a plain unique column with no notion of "active", so the one-org-per-observed-domain rule is unenforceable today.
+- **`verified_domain` is set from an attestation, not a proof** — `approve_delegation()` takes the admin's word that they completed the Admin console step and copies `grant.verified_domain` onto the org (its own docstring says "records the client's attestation, not a proof"). Under the decision above, the domain must be bound only after a real Google call succeeds.
 - **No notion of a domainless org** — `bootstrap_organization` treats every signup the same; `_infer_auth_type`'s free-mail heuristic would mark a domainless org's own founder `personal_oauth` (correct by accident, wrong by construction).
 - **Blocked consent not handled** — no handling in `app/auth` for Google refusing authorization (e.g. the Workspace's app-access controls block Knowhow, or the user declines); the flow needs a distinct state for each.
 - **No `hd` check anywhere** — `_infer_auth_type` guesses Workspace vs personal from the email string + a free-mail list.
@@ -72,7 +158,18 @@ The backend already asks the two authority questions separately (`create_org_cha
 - **Two trust axes, not one:** capabilities before *owner confirmation* vs before *Super Admin authorization*. Candidate: before owner confirms — no assigning top roles, no offboarding/removing members. Before Super Admin — no Directory-sourced org chart, no reading others' Drive data, no ownership changes / Auto-Own / domain-wide operations. Manual org chart + invites allowed early.
 - **Owner declines** ("that's not me") path, and letting the setup person re-nominate.
 - ~~Owner outside the domain / non-Workspace users~~ — resolved: personal Gmail allowed (2026-09-16); may create a **domainless** org (2026-09-17, see Decisions).
-- **What counts as explicit domain verification** — DNS TXT record only, or does a Google Workspace **Super Admin** signing in with a matching `hd` also count (they demonstrably control the Workspace)? This also decides whether *signup* can create a domain-backed org directly, or whether every org starts domainless and binds a domain afterwards.
+- **Is a DNS path needed at all?** If Workspace admin proof is the mechanism, a domain with no Workspace behind it has no Workspace to control — possibly no DNS flow is ever required. Decide before building the domain-binding screen.
+- ~~Does signup ever create a domain-backed org directly?~~ — no; every org starts unbound (2026-09-17, see Decisions).
+- ~~Does the step-2 duplicate check use the *observed* domain?~~ — yes, one active org per observed domain (2026-09-17, [[0006-observed-domain-tenant-identity]]).
+- ~~The "Maybe" / "Potentially" cells~~ — resolved 2026-09-17: auto-affiliate regardless of verification.
+- **Shared Drives** — [[0007-shared-drive-support]] (open question, `draft`): unsupported today, and the contractor/outside-account case has no answer without it.
+- ~~What does an Approved Member gain over an Auto-affiliated Member~~ — settled 2026-09-17, see "Sponsorship and member standing".
+- **Context (superseded by the section above): member acceptance is a product decision, not an architectural consequence.** Two separate questions, not one: *who may establish that someone belongs to Acme?* vs *who may establish that something is official Acme knowledge?* The second is already answered (owner/leader; member acceptance grants no file-confirmation authority) — so a broader set may be allowed to **sponsor** members without ever deciding what becomes organizational IP. **Next question to settle: what exactly does an Approved Member gain over an Auto-affiliated Member, and what may a Google-vouched member sponsor without owner approval?**
+- **Domainless ↔ candidate collision (no merge path):** a domainless org reserves no domain, so if an Acme employee has already created the acme.com candidate, the Gmail founder's org and that candidate are two orgs describing one company — and nothing merges or links them. Identity linking avoids *creating* the split; it doesn't repair an existing one.
+- **Per-user-consent mode:** when no Super Admin is available or the Workspace blocks third-party apps, the org runs on individually authorized accounts only. Treat as a **supported mode**, not a failure state — the owner sees company files of everyone who consented. Needs its own UI state; nothing in the backend distinguishes it.
+- **Marking Workspace-external members:** an approved personal-account member is an ordinary member today; nothing records "in the org but not in the Workspace" (delegation can never cover them).
+- **Member standing / capabilities — being specified next (2026-09-17).** Auto-affiliation makes this the load-bearing question: joining is now easy, so what a member may see and do must carry the weight.
+- **What makes an org "active"** for the uniqueness rule — and how is a dead/abandoned candidate released?
 - **Who may verify a domain** for an org, and what happens if two orgs race for the same one.
 - ~~"Individual Drive" row~~ — resolved 2026-09-16 (see Decisions).
 - **"Limited" org access before owner** — the candidate list below is not yet confirmed.

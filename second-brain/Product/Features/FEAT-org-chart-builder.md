@@ -3,8 +3,8 @@ type: feature
 status: shipped
 tags: [area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-08-31
-related: ["[[Product-Vision]]", "[[FEAT-doc-visibility-dashboard]]", "[[Architecture-Overview]]"]
+updated: 2026-09-17
+related: ["[[Product-Vision]]", "[[FEAT-doc-visibility-dashboard]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]"]
 ---
 
 # FEAT: Org chart builder
@@ -21,6 +21,7 @@ Every other feature (doc visibility, sharing policy, onboarding/offboarding) nee
 
 ## Out of scope
 - Nested teams / sub-teams.
+- Viewer-scoped reads (local chart) — direction recorded above, not designed or built.
 - Bulk import (CSV, Google Directory sync) — single-person-at-a-time only this pass.
 - Real Google Workspace org unit sync.
 
@@ -29,6 +30,16 @@ Matches the mockup deck's "Build Your Organization Chart" screen (Step 1 owner, 
 
 ## Technical approach
 `src/lib/queries.ts` (`getOrgTeams`, `getTeamWithRoster`) for reads, `src/app/(app)/org-chart/actions.ts` and `src/app/(app)/team/[teamId]/actions.ts` for mutations. All scoped by `organizationId`.
+
+## Local vs global org chart (2026-09-17, user direction — not built)
+
+Two distinct charts, not one chart with a UI filter:
+- **Local** — what an employee (or a scoped contractor) sees: their own team and the parts of the structure their standing justifies. Everything else is **not sent**, not merely hidden.
+- **Global** — the whole organization; the confirmed owner sees and interacts with it.
+
+**Blurring is not scoping.** Anything greyed out, blurred or collapsed client-side has already been sent to the browser and is readable. Scoping must happen server-side, in the shape of the response.
+
+**Backend gap:** `get_org_chart(org_id, db)` (`backend/app/org_chart/service.py`) takes **no viewer** and returns every team and every membership in the org — the endpoint is deliberately "generic and field-complete rather than shaped for any particular screen". A local chart needs a viewer-scoped read, which does not exist. See [[FEAT-workspace-onboarding-flow]] for the standing ladder that would drive it.
 
 ## Open questions
 - Should team leader promotion require the person to already be a member of that team, or can any org member be promoted cross-team? Currently `setTeamLeader` moves them onto the team (`teamId` update) — no cross-team leadership yet.
