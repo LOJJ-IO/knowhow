@@ -40,7 +40,7 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 
 ## Out of scope
 - What Continue with Google does, and every screen after it — not specified yet. The modal will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
-- Book a Demo — still does nothing.
+- Book a Demo — now opens the **same sheet** with a demo-request form: [[FEAT-landing-book-a-demo]] (2026-09-17). State renamed `loginOpen`/`loginAtTop` → `sheetOpen`/`sheetAtTop` + `sheetKind`.
 
 ## Technical approach
 `LandingHero` in `landing-hero.tsx`. Log In only appears after Get Started splits, so the deck is always at `controls` while the panel is open. The landing's click-outside-closes-the-deck handlers (`handleBackdropPointerDown` / `handleBackdropClick`) ignore everything while `loginOpen` — before that guard (fixed 2026-09-16), a click on the empty panel outside the card band's y-range reversed the deck behind the panel. See [[Known-Issues]].

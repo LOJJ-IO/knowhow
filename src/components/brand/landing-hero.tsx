@@ -1620,31 +1620,11 @@ function DemoForm() {
           </div>
         ))}
       </div>
-      <button
-        type="submit"
-        className={`${satoshi.className} relative mt-3 flex h-[47.896px] w-full cursor-pointer items-center rounded-full bg-black/80 px-[1.297932rem] text-[1.13569rem] font-bold text-white shadow transition-transform duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]`}
-      >
+      {/* Same pill as the header buttons (user: "match the header"). */}
+      <button type="submit" className={cn(CTA_CLASS, satoshi.className, "mt-3")}>
         Continue
-        {/* Concentric with the pill: same inset on the right as top/bottom. */}
-        <span className="absolute top-1/2 right-[8.948px] flex size-[30px] -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#1c1917]">
-          <ArrowRightIcon />
-        </span>
       </button>
     </form>
-  );
-}
-
-function ArrowRightIcon({ size = 14 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M5 12h14M13 6l6 6-6 6"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

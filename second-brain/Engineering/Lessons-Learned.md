@@ -216,3 +216,6 @@ User rule for **all** nested rounded elements ([craft.gustavofior.com/nested-bor
 ## Headless Chromium frame rates lie about compositing cost (2026-09-17)
 Measuring the Log In sheet's slide with rAF deltas: default headless Playwright (CPU compositing) showed ~25fps and pointed at the hero video under the recess scale (hiding it → ~48fps). With `--use-angle=metal --enable-gpu --ignore-gpu-blocklist` the same slide ran at 60fps once warmed up (first run ~15fps). Use headless numbers only to rank layers against each other; confirm with GPU flags before calling something janky, and discard the first run. See [[FEAT-landing-login-panel]].
 
+## Don't run Prettier on `landing-hero.tsx` (2026-09-17)
+The repo has **no Prettier config**, and the file isn't Prettier-formatted — `npx prettier --write` rewrote ~600 unrelated lines (default config) around a 150-line change. Recovered by restoring the committed file and re-applying only the intended edits. Match the surrounding style by hand; `tsc` + `eslint` are the checks.
+
