@@ -1514,6 +1514,140 @@ function GoogleG({ className }: { className?: string }) {
   );
 }
 
+const DEMO_FIELDS = [
+  { name: "firstName", label: "First name", type: "text", autoComplete: "given-name" },
+  { name: "lastName", label: "Last name", type: "text", autoComplete: "family-name" },
+  { name: "email", label: "Work email", type: "email", autoComplete: "email" },
+  { name: "website", label: "Company website", type: "text", autoComplete: "url" },
+] as const;
+
+/** ms an error stays up before border + message fade back (`--revert-hold`). */
+const DEMO_ERROR_HOLD_MS = 3000;
+
+/** Book a Demo sheet's form. Checks required fields + email format itself
+ *  (no browser bubbles): each invalid field shakes, turns red and shows the
+ *  browser's validation message, then reverts after `DEMO_ERROR_HOLD_MS`
+ *  (Transitions.dev error-state CSS in globals.css). A valid submit does
+ *  nothing yet — nothing is sent anywhere. Classes are toggled on the DOM so
+ *  the shake can restart without a re-render. */
+function DemoForm() {
+  const wraps = useRef<Record<string, HTMLDivElement | null>>({});
+  const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const timers = useRef<Record<string, number>>({});
+  const [messages, setMessages] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => Object.values(pending).forEach((id) => window.clearTimeout(id));
+  }, []);
+
+  function flagError(name: string, message: string) {
+    const wrap = wraps.current[name];
+    const input = inputs.current[name];
+    if (!wrap || !input) return;
+    setMessages((m) => ({ ...m, [name]: message }));
+    wrap.classList.add("is-error");
+    input.classList.add("is-error");
+    input.setAttribute("aria-invalid", "true");
+    input.classList.remove("is-shaking");
+    void input.offsetWidth; // reflow so the shake restarts
+    input.classList.add("is-shaking");
+    window.clearTimeout(timers.current[name]);
+    timers.current[name] = window.setTimeout(() => {
+      wrap.classList.remove("is-error");
+      input.classList.remove("is-error");
+      input.removeAttribute("aria-invalid");
+    }, DEMO_ERROR_HOLD_MS);
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    let first: HTMLInputElement | null = null;
+    for (const { name } of DEMO_FIELDS) {
+      const input = inputs.current[name];
+      if (!input || input.checkValidity()) continue;
+      flagError(name, input.validationMessage);
+      first ??= input;
+    }
+    first?.focus();
+  }
+
+  return (
+    <form noValidate onSubmit={handleSubmit}>
+      <h2
+        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      >
+        Book a Demo
+      </h2>
+      <div className="mt-6 grid grid-cols-2 gap-x-2 gap-y-1">
+        {DEMO_FIELDS.map((f, i) => (
+          <div
+            key={f.name}
+            ref={(el) => {
+              wraps.current[f.name] = el;
+            }}
+            className={cn(
+              `t-input-wrap ${satoshi.className} flex min-w-0 flex-col`,
+              i > 1 && "col-span-2",
+            )}
+          >
+            <label
+              htmlFor={`demo-${f.name}`}
+              className="mb-1.5 text-[0.8rem] text-[rgb(28_25_23/0.6)]"
+            >
+              {f.label}
+            </label>
+            <input
+              ref={(el) => {
+                inputs.current[f.name] = el;
+              }}
+              id={`demo-${f.name}`}
+              name={f.name}
+              type={f.type}
+              autoComplete={f.autoComplete}
+              inputMode={f.name === "website" ? "url" : undefined}
+              required
+              aria-describedby={`demo-${f.name}-error`}
+              className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+            />
+            <p
+              id={`demo-${f.name}-error`}
+              aria-live="polite"
+              className="t-error-msg m-0 mt-1 min-h-[1.2rem] text-[0.75rem] leading-[1.2rem] text-[#EA4335]"
+            >
+              {messages[f.name]}
+            </p>
+          </div>
+        ))}
+      </div>
+      <button
+        type="submit"
+        className={`${satoshi.className} relative mt-3 flex h-[47.896px] w-full cursor-pointer items-center rounded-full bg-black/80 px-[1.297932rem] text-[1.13569rem] font-bold text-white shadow transition-transform duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]`}
+      >
+        Continue
+        {/* Concentric with the pill: same inset on the right as top/bottom. */}
+        <span className="absolute top-1/2 right-[8.948px] flex size-[30px] -translate-y-1/2 items-center justify-center rounded-full bg-white text-[#1c1917]">
+          <ArrowRightIcon />
+        </span>
+      </button>
+    </form>
+  );
+}
+
+function ArrowRightIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 12h14M13 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Log In panel's centred modal. Closed it's a thin line (border only); once
  *  `open` it grows to its content. Height can't transition to/from `auto`, so
  *  the body is measured and the shell gets an explicit px height for
@@ -1616,7 +1750,7 @@ function FooterStubLink({ children }: { children: React.ReactNode }) {
 /** Desktop header buttons that appear only after Get Started divides. */
 const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
   { key: "login", label: "Log In" },
-  { key: "demo", label: "Talk to Sales" },
+  { key: "demo", label: "Book a Demo" },
 ];
 
 /** Subhead wave — a crest that travels left → right through the characters,
@@ -1729,9 +1863,12 @@ function LandingHero() {
   });
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
-  /** The Log In panel has finished sliding up — square corners from then on. */
-  const [loginAtTop, setLoginAtTop] = useState(false);
+  /** The slide-up sheet (Log In / Book a Demo) is open. */
+  const [sheetOpen, setSheetOpen] = useState(false);
+  /** Which modal the sheet shows — kept after Close so it slides down intact. */
+  const [sheetKind, setSheetKind] = useState<"login" | "demo">("login");
+  /** The sheet has finished sliding up — square corners from then on. */
+  const [sheetAtTop, setSheetAtTop] = useState(false);
   /** Cover Flow index — driven by the split CTA arrows on mobile. */
   const [deckIndex, setDeckIndex] = useState(1);
   const mounted = useHydrated();
@@ -1775,9 +1912,9 @@ function LandingHero() {
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-    if (loginOpen) video.pause();
+    if (sheetOpen) video.pause();
     else void video.play().catch(() => {});
-  }, [loginOpen]);
+  }, [sheetOpen]);
 
   function toggleEditMode() {
     setEditMode((v) => {
@@ -1870,7 +2007,7 @@ function LandingHero() {
   function handleBackdropPointerDown(e: React.PointerEvent) {
     backdropDown.current =
       ctaPhase === "controls" &&
-      !loginOpen &&
+      !sheetOpen &&
       e.button === 0 &&
       !isDeckKeepZone(e.target, e.clientY)
         ? { x: e.clientX, y: e.clientY }
@@ -1882,7 +2019,7 @@ function LandingHero() {
   function handleBackdropClick(e: React.MouseEvent) {
     const down = backdropDown.current;
     backdropDown.current = null;
-    if (ctaPhase !== "controls" || loginOpen || !down) return;
+    if (ctaPhase !== "controls" || sheetOpen || !down) return;
     if (Math.hypot(e.clientX - down.x, e.clientY - down.y) > 6) return;
     if (isDeckKeepZone(e.target, e.clientY)) return;
     reverseCta();
@@ -1899,7 +2036,7 @@ function LandingHero() {
       <div
         className={cn(
           "absolute inset-0 origin-center transition-transform duration-900 ease-[cubic-bezier(0.16,1,0.3,1)]",
-          loginOpen ? "scale-[0.9]" : "scale-100"
+          sheetOpen ? "scale-[0.9]" : "scale-100"
         )}
       >
       {/* Background video — keeps playing under the card deck */}
@@ -1991,7 +2128,10 @@ function LandingHero() {
               onClick={handleCtaClick}
               onStep={stepDesktopDeck}
               onExtraClick={(key) => {
-                if (key === "login") setLoginOpen(true);
+                if (key === "login" || key === "demo") {
+                  setSheetKind(key);
+                  setSheetOpen(true);
+                }
               }}
               extras={DESKTOP_HEADER_EXTRAS}
             />
@@ -2100,36 +2240,36 @@ function LandingHero() {
       <div
         className={cn(
           "pointer-events-none absolute inset-0 z-[300] bg-[rgb(28_25_23/0.35)] transition-opacity duration-900 ease-[cubic-bezier(0.16,1,0.3,1)]",
-          loginOpen ? "opacity-100" : "opacity-0"
+          sheetOpen ? "opacity-100" : "opacity-0"
         )}
         aria-hidden
       />
 
-      {/* The Slide-Up Panel (Log In) */}
+      {/* The Slide-Up Sheet (Log In / Book a Demo) */}
       <div
         className={cn(
           "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
-          loginOpen ? "translate-y-0" : "translate-y-full",
-          loginAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
+          sheetOpen ? "translate-y-0" : "translate-y-full",
+          sheetAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
         )}
         // Slides at 992ms (the recess + veil stay 900ms). Only the panel's own
         // slide counts — the Close button's press transition bubbles here too.
         onTransitionEnd={(e) => {
           if (
-            loginOpen &&
+            sheetOpen &&
             e.target === e.currentTarget &&
             e.propertyName === "translate"
           )
-            setLoginAtTop(true);
+            setSheetAtTop(true);
         }}
       >
-        <LoginSky active={loginOpen} />
+        <LoginSky active={sheetOpen} />
         <div className={`${satoshi.className} relative z-10 flex justify-end p-6`}>
           <button
             type="button"
             onClick={() => {
-              setLoginAtTop(false);
-              setLoginOpen(false);
+              setSheetAtTop(false);
+              setSheetOpen(false);
             }}
             className={CTA_CLASS}
           >
@@ -2144,39 +2284,45 @@ function LandingHero() {
             className="h-8 w-auto md:h-10"
           />
         </div>
-        {/* Sign-in modal — centred in the panel. Content not specified yet. */}
+        {/* Centred modal — Log In or Book a Demo content. */}
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <LoginModal open={loginAtTop}>
-            <h2
-              className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
-            >
-              Log in or sign up in seconds
-            </h2>
-            <p
-              className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
-            >
-              Use your Google account to continue with Knohow.
-            </p>
-            <button
-              type="button"
-              className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
-            >
-              <GoogleG className="absolute left-[13px] size-5" />
-              Continue with Google
-            </button>
-            <p
-              className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
-            >
-              By continuing, you agree to Knohow&rsquo;s{" "}
-              <span className="font-bold">
-                <FooterStubLink>Terms of Use</FooterStubLink>
-              </span>
-              . Read our{" "}
-              <span className="font-bold">
-                <FooterStubLink>Privacy Policy</FooterStubLink>
-              </span>
-              .
-            </p>
+          <LoginModal open={sheetAtTop}>
+            {sheetKind === "login" ? (
+              <>
+                <h2
+                  className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+                >
+                  Log in or sign up in seconds
+                </h2>
+                <p
+                  className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+                >
+                  Use your Google account to continue with Knohow.
+                </p>
+                <button
+                  type="button"
+                  className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
+                >
+                  <GoogleG className="absolute left-[13px] size-5" />
+                  Continue with Google
+                </button>
+                <p
+                  className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+                >
+                  By continuing, you agree to Knohow&rsquo;s{" "}
+                  <span className="font-bold">
+                    <FooterStubLink>Terms of Use</FooterStubLink>
+                  </span>
+                  . Read our{" "}
+                  <span className="font-bold">
+                    <FooterStubLink>Privacy Policy</FooterStubLink>
+                  </span>
+                  .
+                </p>
+              </>
+            ) : (
+              <DemoForm />
+            )}
           </LoginModal>
         </div>
       </div>

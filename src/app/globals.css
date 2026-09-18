@@ -833,6 +833,90 @@ body.t-deck-dragging * {
   }
 }
 
+/* Book a Demo inputs — default / focus / error borders (the error-state
+ * stylesheet below only owns the tween). Constant 1px width in every state. */
+.t-demo-input {
+  border-color: #d9d9de;
+}
+.t-demo-input:focus-visible {
+  border-color: #1c1917;
+}
+.t-demo-input.is-error {
+  border-color: #ea4335;
+}
+
+/* Transitions.dev — Error state shake (user-supplied, 2026-09-17).
+ * Add `.is-error` to .t-input-wrap and .t-input; restart the shake by
+ * removing `.is-shaking`, forcing a reflow, re-adding it. After
+ * --revert-hold drop both `.is-error` classes so border + message fade back
+ * over --revert-dur. Each keyframe stop carries its own easing. */
+:root {
+  --shake-distance: 6px;
+  --shake-overshoot: 4px;
+  --shake-dur-a: 80ms;
+  --shake-dur-b: 60ms;
+  --shake-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --revert-hold: 3000ms;
+  --revert-dur: 280ms;
+}
+
+.t-input {
+  transition: border-color 150ms ease-out;
+  will-change: transform;
+}
+.t-input.is-error {
+  transition: border-color var(--revert-dur, 280ms) ease-out;
+}
+
+.t-error-msg {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear var(--revert-dur, 280ms);
+}
+.t-input-wrap.is-error .t-error-msg {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--revert-dur, 280ms) ease-out,
+    visibility 0s linear 0s;
+}
+
+/* %-stops are cumulative durations (80, 60, 80, 60 = 280ms). */
+.t-input.is-shaking {
+  animation: t-input-shake
+    calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+}
+@keyframes t-input-shake {
+  0% {
+    transform: translateX(0);
+    animation-timing-function: var(--shake-ease);
+  }
+  28.57% {
+    transform: translateX(var(--shake-distance));
+    animation-timing-function: var(--shake-ease);
+  }
+  57.14% {
+    transform: translateX(calc(var(--shake-distance) * -1));
+    animation-timing-function: var(--shake-ease);
+  }
+  78.57% {
+    transform: translateX(var(--shake-overshoot));
+    animation-timing-function: var(--shake-ease);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-input {
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
 @media (max-width: 767px) {
   :root {
     --deck-titlebar-h: 2.25rem;

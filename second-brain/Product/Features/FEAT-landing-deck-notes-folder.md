@@ -3,7 +3,7 @@ type: feature
 status: shipped
 tags: [area/frontend, landing, priority/high]
 created: 2026-09-12
-updated: 2026-09-15
+updated: 2026-09-17
 related: ["[[FEAT-landing-deck-carousel]]", "[[Current-Context]]"]
 ---
 
@@ -29,7 +29,7 @@ Painted mats + a single empty mac window did not read clearly as a desktop. Need
 Folder default `left: 86%` / `top: 3%`. Plate pad `4px 10px 4.862px`, radius `7.35px`. Card radius `10.5px`.
 
 ## Technical approach
-`NotesFolder` + `InteractiveMacWindow` in `landing-hero.tsx`; styles in `globals.css` (`.t-deck-folder*`, `.t-deck-dot-x`, `.t-deck-notes-copy`). `DECK_CARDS[].note` holds copy. Window shell must **not** `stopPropagation` in the capture phase — that blocked title-bar / resize `pointerdown` (fixed 2026-09-12). **Side-slot swipe** uses `onClickCapture` on the card so wallpaper, window, and folder all step the carousel; centre slot never steps. Folder click **toggles** Notes open/closed (no close X on the Notes window — decorative traffic lights only). Folder + footer stubs share CTA press (`active:scale-95`, 150ms) + click sound.
+`NotesFolder` + `InteractiveMacWindow` in `landing-hero.tsx`; styles in `globals.css` (`.t-deck-folder*`, `.t-deck-dot-x`, `.t-deck-notes-copy`). `DECK_CARDS[].note` holds copy. Window shell must **not** `stopPropagation` in the capture phase — that blocked title-bar / resize `pointerdown` (fixed 2026-09-12). **Side-slot swipe** uses `onClickCapture` on the card so wallpaper, window, and folder all step the carousel; centre slot never steps. Notes window **starts open** on every desktop card (2026-09-17, user: "by default the notes modal should be open" — `useState(true)` in `DeckWindow`); folder click **toggles** it closed/open (no close X on the Notes window — decorative traffic lights only). Folder + footer stubs share CTA press (`active:scale-95`, 150ms) (click sound removed 2026-09-16).
 
 **2026-09-14 — mobile Notes as a bottom sheet (superseded 2026-09-15):** `NotesFolder` rendered both a desktop `InteractiveMacWindow` (`hidden md:contents`) and a mobile `NotesSheet` (fixed backdrop + `translateY` rise-in panel, portaled to `document.body` via `createPortal`, since `.t-deck-cover-item`'s framer-motion `transform` would otherwise become the containing block for a `position: fixed` descendant and clip it inside `.t-deck-card`'s `overflow: hidden`). Cascade trap: the sheet's own `.t-deck-notes-sheet { display: flex }` (this file, after Tailwind's `@import`) beat a `md:hidden` Tailwind class on the same element at equal specificity — fixed with an explicit `@media (min-width: 768px)` override rather than relying on the utility class. **General rule kept for future work:** a custom CSS rule and a Tailwind utility touching the same property on the same element are a latent bug regardless of which "should" win by convention.
 

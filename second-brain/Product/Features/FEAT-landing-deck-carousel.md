@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, landing, motion]
 created: 2026-09-10
-updated: 2026-09-15
+updated: 2026-09-17
 related: ["[[Current-Context]]", "[[Lessons-Learned]]", "[[Known-Issues]]", "[[FEAT-landing-deck-notes-folder]]"]
 ---
 
@@ -30,10 +30,10 @@ Motion (all on-screen moves share one spring, stiffness 120 / damping 20, ζ≈0
 Each click also plays the existing Get Started click sound (mobile circles too).
 
 ### Closing (2026-09-11, user-specified)
-Clicking outside the card band or the logo cluster reverses the Get Started animation. Implemented as the entrance played backwards with time-reversed curves: CTA pieces (arrows + Log in / Talk to sales) flow back into the pill while the visible cards fold under the centre card (1331ms) → the pill holds while the deck sinks and logo/subhead un-shrink (700ms) → arrows fade (280ms) → Get Started label returns (220ms). Keep zones: any `button`/`a`, the header CTA row (`[data-cta-row]`), the logo lockup, and the vertical band spanned by the visible cards (+ Features label / Cover Flow bar). A pointer that moves >6px between down and up (a drag) never closes. After closing, the ring resets so the next open replays the standard entrance (first three features). Centre card keeps the top layer throughout the fold (z bias). Spinner is not replayed (it's a loading beat).
+Clicking outside the card band or the logo cluster reverses the Get Started animation. Implemented as the entrance played backwards with time-reversed curves: CTA pieces (arrows + Log in / Book a Demo) flow back into the pill while the visible cards fold under the centre card (1331ms) → the pill holds while the deck sinks and logo/subhead un-shrink (700ms) → arrows fade (280ms) → Get Started label returns (220ms). Keep zones: any `button`/`a`, the header CTA row (`[data-cta-row]`), the logo lockup, and the vertical band spanned by the visible cards (+ Features label / Cover Flow bar). A pointer that moves >6px between down and up (a drag) never closes. After closing, the ring resets so the next open replays the standard entrance (first three features). Centre card keeps the top layer throughout the fold (z bias). Spinner is not replayed (it's a loading beat).
 
 ### Header extras (2026-09-11, user-specified)
-Desktop "Log in" and "Talk to sales" stay hidden (layout slot reserved, `visibility: hidden`) until the split; liquid copies start as the whole pill and stream into the measured slots, labels fade in on arrival, then the real buttons take over with zero offset. Group `filterPadding` is raised to 400px while they travel (goo is only drawn near the group box).
+Desktop "Log in" and "Book a Demo" stay hidden (layout slot reserved, `visibility: hidden`) until the split; liquid copies start as the whole pill and stream into the measured slots, labels fade in on arrival, then the real buttons take over with zero offset. Group `filterPadding` is raised to 400px while they travel (goo is only drawn near the group box).
 
 ### "Features" label (2026-09-11, user-specified)
 Above the middle card, desktop only. Same rendered size as "Take Control of your" when open (`DESKTOP_SUBHEAD_FONT_SIZE × --logo-shrink`), Söhne, `tracking-tight`, `#1c1917`; anchored to the centre card's top edge in deck coordinates and counter-scaled by `--deck-fit`. Gap above the card: 0.5em (not specified by the user — adjustable).
