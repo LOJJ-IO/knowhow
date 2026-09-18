@@ -3,7 +3,7 @@ type: feature
 status: draft
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-17
+updated: 2026-09-18
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]"]
 ---
 
@@ -154,6 +154,7 @@ The backend already asks the two authority questions separately (`create_org_cha
 - **Owner confirmation is possession-only** — `confirm_owner(token)` doesn't require the confirmer to be authenticated as `owner_email`.
 - **Owner email unrestricted** — any address accepted.
 - **Confirmation email never sent** — delivery marked out of scope in the service.
+- **Identity linking not implemented (noted 2026-09-18, user)** — multiple Google emails as one person is designed ("Identity linking" above) but not built: `complete_login` / `complete_signup` look up a single `OrgMember` by exact email, so a second email is treated as a different person, and a new one bootstraps a separate org. **User, 2026-09-18: build it together with the domain checks** (`hd` check + observed-domain lookup) — a linked Workspace email is what supplies the observed domain.
 
 ## Open questions
 - **Domain squatting / recovery:** first signup holds the domain. How does the real org reclaim it (e.g. anyone who proves Workspace Super Admin)?

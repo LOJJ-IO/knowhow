@@ -7,10 +7,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_member, get_db
 from app.auth.login import complete_login, start_login
 from app.auth.personal_oauth import complete_personal_oauth_consent, start_personal_oauth_consent
-from app.auth.pkce import InvalidOAuthState
+from app.auth.pkce import InvalidOAuthState, peek_state_purpose
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.models.org_member import OrgMember
+from app.onboarding.service import SIGNUP_STATE_PURPOSE, complete_signup
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -42,9 +43,16 @@ def login() -> RedirectResponse:
 def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
     settings = get_settings()
     try:
-        result = complete_login(code, state, db)
+        # Signup shares this redirect URI with login (one GOOGLE_OAUTH_REDIRECT_URI),
+        # so Google returns a signup here too — route it by its state purpose.
+        if peek_state_purpose(state) == SIGNUP_STATE_PURPOSE:
+            result = complete_signup(code, state, db)
+        else:
+            result = complete_login(code, state, db)
     except InvalidOAuthState as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired login state: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except MemberNotProvisioned as exc:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,

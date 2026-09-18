@@ -30,9 +30,10 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 
 ## Repo layout
 
-- `src/app/` — Next.js App Router. Currently **landing only** (`/` → `LandingHero`). No auth or product app routes.
+- `src/app/` — Next.js App Router. Landing (`/` → `LandingHero`) plus static legal pages `/terms` and `/privacy`. No auth or product app routes.
 - `src/lib/` — small shared helpers (`utils.ts`, `use-hydrated.ts`). No data/auth/workspace layer in tree right now.
-- `src/components/brand/` — landing UI (`landing-hero`, `logo-mark`, `guidelines-overlay`).
+- `src/components/brand/` — landing UI (`landing-hero`, `logo-mark`, `logo-lockup`, `fonts`).
+- `src/components/legal/` — shared layout for the legal pages.
 - `second-brain/` — persistent engineering memory (see above).
 - `backend/` — merged into `main` 2026-09-15. A separate FastAPI (Python 3.12) service — real Google OAuth/Drive/Admin-SDK integration, SQLAlchemy 2.x + Alembic, meant for Railway + Postgres. Not deployed/provisioned yet (no GCP project, no Railway instance). See [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md)'s "Backend integration contract" section before writing any frontend code that calls it.
 
@@ -40,7 +41,7 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 
 ## Knowhow — architecture invariants (non-negotiable)
 
-These are locked design decisions for this build phase, not defaults. If one seems wrong, **stop and ask** — don't unilaterally "improve" it. Landing-only purge: [`0004-landing-only-purge-old-app.md`](second-brain/Architecture/Decisions/0004-landing-only-purge-old-app.md). Prisma/SQLite removal: [`0002-remove-prisma-for-vercel.md`](second-brain/Architecture/Decisions/0002-remove-prisma-for-vercel.md). Mocked Google (when reintroduced): [`0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md). FastAPI backend (merged): [`0004-fastapi-backend-for-auth-and-identity.md`](second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md).
+These are locked design decisions for this build phase, not defaults. If one seems wrong, **stop and ask** — don't unilaterally "improve" it. Landing-only purge: [`0004-landing-only-purge-old-app.md`](second-brain/Architecture/Decisions/0004-landing-only-purge-old-app.md). Prisma/SQLite removal: [`0002-remove-prisma-for-vercel.md`](second-brain/Architecture/Decisions/0002-remove-prisma-for-vercel.md). Mocked Google (when reintroduced): [`0001-mocked-data-first-prototype.md`](second-brain/Architecture/Decisions/0001-mocked-data-first-prototype.md). FastAPI backend (merged): [`0004-fastapi-backend-for-auth-and-identity.md`](second-brain/Architecture/Decisions/0004-fastapi-backend-for-auth-and-identity.md). Real Google sign-in via the backend (frontend only redirects; data seams stay mocked): [`0008-continue-with-google-via-backend.md`](second-brain/Architecture/Decisions/0008-continue-with-google-via-backend.md).
 
 1. **The Next.js app is the single chokepoint for the frontend.** Server Components read; Server Actions (`"use server"`) mutate. Don't introduce a second API layer *for the frontend*. `backend/` (merged from `backend/auth-foundation` per the FastAPI ADR) is the one sanctioned separate service — don't add a *second* backend beyond it.
 2. **Google Workspace integration stays mocked in `src/` until provisioned.** Nothing under `src/` may call a real Google API until an ADR records that a GCP project + domain-wide delegation has actually been provisioned by the user. When a workspace seam returns, extend the simulation there — don't bolt a real call on elsewhere. `backend/` does real Google calls; that does not lift this rule for `src/`.

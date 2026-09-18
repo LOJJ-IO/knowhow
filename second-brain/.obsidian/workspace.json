@@ -168,6 +168,8 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0008-continue-with-google-via-backend.md",
+    "Product/Features/FEAT-legal-pages.md",
     "Product/Features/FEAT-landing-book-a-demo.md",
     "Daily.md",
     "Templates/ADR.md",

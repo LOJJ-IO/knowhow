@@ -3,7 +3,7 @@ type: architecture
 status: active
 tags: [area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-10
+updated: 2026-09-18
 related: ["[[0001-mocked-data-first-prototype]]", "[[0002-remove-prisma-for-vercel]]", "[[0003-cookie-only-sessions-demo-roster]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Product-Vision]]", "[[Current-Context]]"]
 ---
 
@@ -40,7 +40,8 @@ this is the one branch to merge into main).
 ## Components
 
 - **`src/app/page.tsx`** — renders `<LandingHero />` only (no session redirect).
-- **`src/components/brand/`** — `landing-hero`, `logo-mark` (hex mark + Söhne), `guidelines-overlay`.
+- **`src/app/terms/page.tsx`, `src/app/privacy/page.tsx`** — static legal pages (2026-09-17) built on `src/components/legal/legal-page.tsx` — [[FEAT-legal-pages]].
+- **`src/components/brand/`** — `landing-hero`, `logo-mark` (hex mark + Söhne), `logo-lockup` (Kn⬡how™ by LOJJ.io), `fonts.ts` (Satoshi, LOJJ face). (`guidelines-overlay` removed 2026-09-18.)
 - **`src/lib/`** — `utils.ts`, `use-hydrated.ts` only.
 - **`src/app/globals.css`** — landing canvas `#F9F8F6` / `#1c1917`, `.t-shimmer`, handoff + deck chrome (desktop linear-spread / mobile Cover Flow). No navy/oklch design-system palette, no dark theme, no sidebar tokens.
 
@@ -48,9 +49,9 @@ this is the one branch to merge into main).
 
 For whoever wires the Next.js frontend up to `/backend` once `backend/auth-foundation` is merged into `main`. Not deployed anywhere yet (no Railway project provisioned) — this describes the contract for calling it locally (`uvicorn app.main:app`, see `backend/.env.example`) until a real URL exists.
 
-- **Base URL**: no frontend env var for this exists yet — introduce `NEXT_PUBLIC_BACKEND_API_URL` (client-readable; the OAuth flows below are full-page browser redirects, not server-to-server calls, so the browser needs to know this URL directly). Point it at `http://localhost:8000` locally; a real value lands once Railway deploy happens (out of scope for now).
+- **Base URL**: `NEXT_PUBLIC_BACKEND_API_URL` (added 2026-09-18 for Continue with Google — [[0008-continue-with-google-via-backend]]; `.env` / `.env.example`) (client-readable; the OAuth flows below are full-page browser redirects, not server-to-server calls, so the browser needs to know this URL directly). Point it at `http://localhost:8000` locally; a real value lands once Railway deploy happens (out of scope for now).
 - **Auth is cookie-based and lives on the backend's own origin, separate from the Next.js app's own session** (see [[0003-cookie-only-sessions-demo-roster]] — the two are not unified, per ADR-0004's open consequence). Flow:
-  1. Full-page redirect (not `fetch`) the browser to `${NEXT_PUBLIC_BACKEND_API_URL}/auth/login` (existing member) or `/onboarding/signup` (bootstraps a brand-new organization + first member) — both are Google OAuth entry points.
+  1. *(2026-09-18: all Google flows return to the one `GOOGLE_OAUTH_REDIRECT_URI` = `/auth/callback`, which dispatches on the state's purpose — the button uses `/onboarding/signup` for both new and existing members.)* Full-page redirect (not `fetch`) the browser to `${NEXT_PUBLIC_BACKEND_API_URL}/auth/login` (existing member) or `/onboarding/signup` (bootstraps a brand-new organization + first member) — both are Google OAuth entry points.
   2. The backend sets two httpOnly cookies scoped to *its own* domain: `knohow_access_token` (short-lived, ~1h) and `knohow_refresh_token` (long-lived, ~30d) — `secure`+`SameSite=None` outside local dev. It then redirects the browser back to `FRONTEND_ORIGIN` (a backend env var the backend must have set correctly for this hop to land back on the frontend).
   3. Every subsequent call from frontend code to the backend **must** pass `credentials: "include"` on `fetch` (or the equivalent in whatever HTTP client) — the backend's CORS is `allow_credentials=True` with `allow_origins=[FRONTEND_ORIGIN]` (one exact origin, not a wildcard), so this is how the cross-origin cookie actually rides along. Forgetting `credentials: "include"` is the most likely integration mistake here — calls will silently 401.
   4. When a call 401s (access token expired), `POST ${NEXT_PUBLIC_BACKEND_API_URL}/auth/refresh` (also `credentials: "include"`) mints a new access-token cookie from the refresh cookie, then retry.

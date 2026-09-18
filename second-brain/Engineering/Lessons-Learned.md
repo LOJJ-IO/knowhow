@@ -42,7 +42,7 @@ Handoff deck is breakpoint-split: desktop stays 16:9 rise→spread; mobile uses 
 ## 2026-09-10 — Deck cards: frosted glass, not clear and not solid canvas
 Mac-window reference (Cursor Desktop acrylic): each deck card is a real window chrome — **18px** outer radius, title bar (inherits radius via `overflow: hidden`), traffic lights **~13px** (red `#FF5F57` / yellow `#FEBC2E` / green `#28C840`), content well below with **~12px** inner radius. Semi-opaque dark fill + `backdrop-filter` so hero video reads through. Brand hex stays a thin inset rim so it doesn’t cover the dots. Honor `prefers-reduced-transparency`.
 
-## 2026-09-10 — Hero grid must sit above the video inside `isolate`
+## 2026-09-10 — Hero grid must sit above the video inside `isolate` *(grid removed 2026-09-18; the `isolate` / z-index lesson still applies to any layer over the video)*
 `GuidelinesOverlay` is a permanent design layer (lines always on; cell numbers only when editing). With the video wrapper using `isolate`, a child `-z-10` paints *under* the opaque video and the grid "disappears." Use `z-[1]` (or any positive z) inside that wrapper so lines sit on the video but still under page UI (`z-10+`).
 
 ## 2026-09-10 — Deck linear-spread: soft ease, no mid-keyframe timing swap
@@ -219,3 +219,9 @@ Measuring the Log In sheet's slide with rAF deltas: default headless Playwright 
 ## Don't run Prettier on `landing-hero.tsx` (2026-09-17)
 The repo has **no Prettier config**, and the file isn't Prettier-formatted — `npx prettier --write` rewrote ~600 unrelated lines (default config) around a 150-line change. Recovered by restoring the committed file and re-applying only the intended edits. Match the surrounding style by hand; `tsc` + `eslint` are the checks.
 
+
+## Redacting `.env` with `sed 's/=.*/=<set>/'` leaks multi-line values (2026-09-18)
+`backend/.env` holds `GOOGLE_SERVICE_ACCOUNT_JSON` as inline multi-line JSON; a line-based redaction only masks the first line, so the private key printed in full. List key names only (`grep -oE '^[A-Z_]+=' .env`), never a transformed dump. See [[Known-Issues]] `[security / credentials]`.
+
+## Backend OAuth flows share one redirect URI (2026-09-18)
+`build_authorization_url` always sends `GOOGLE_OAUTH_REDIRECT_URI`, so login, signup and personal-OAuth all return to `/auth/callback` whatever route started them. The flow is identified only by the signed `state`'s `purpose` — dispatch on that, don't assume the per-flow `/…/callback` routes are ever hit. [[0008-continue-with-google-via-backend]].

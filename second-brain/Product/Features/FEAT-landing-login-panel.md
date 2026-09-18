@@ -3,14 +3,14 @@ type: feature
 status: in-progress
 tags: [area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-17
+updated: 2026-09-18
 related: ["[[Current-Context]]", "[[Patterns-landing-mc-recess-deck]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-carousel]]"]
 ---
 
 # FEAT: Landing Log In panel
 
 ## Status
-`in-progress` — animation shipped 2026-09-16; centred modal added 2026-09-17 with the first sign-in screen (heading, subtext, Continue with Google — button inert).
+`in-progress` — animation shipped 2026-09-16; centred modal added 2026-09-17 with the first sign-in screen (heading, subtext, Continue with Google — button inert). **2026-09-18:** Continue with Google wired — full-page redirect to the backend's `/onboarding/signup` ([[0008-continue-with-google-via-backend]]).
 
 ## Problem
 Clicking "Log In" did nothing. User asked for the [[Patterns-landing-mc-recess-deck]] recess, with a full-page slide-up (a bottom sheet the full height of the page, not a small one).
@@ -39,7 +39,7 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 - **Logo (2026-09-16):** "Proudly from Edmonton" (`public/hero/edmonton.png`, alt text set) at the panel's bottom left (`bottom-6 left-6`, `z-10`, `pointer-events-none`), `h-8` / `md:h-10`. The source had faint near-zero-alpha pixels across the whole canvas, so a plain `getbbox()` crop barely trimmed it — cropped to alpha > 8 instead (1557×399) so the artwork reaches the file edges and the 24px inset is the real inset.
 
 ## Out of scope
-- What Continue with Google does, and every screen after it — not specified yet. The modal will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
+- ~~What Continue with Google does~~ — redirects to `${NEXT_PUBLIC_BACKEND_API_URL}/onboarding/signup` (2026-09-18, [[0008-continue-with-google-via-backend]]); the backend sends the browser back to `/`. Every screen after it — not specified yet. The modal will host the sign-in + onboarding screens from [[FEAT-workspace-onboarding-flow]]; contents built only as the user specifies.
 - Book a Demo — now opens the **same sheet** with a demo-request form: [[FEAT-landing-book-a-demo]] (2026-09-17). State renamed `loginOpen`/`loginAtTop` → `sheetOpen`/`sheetAtTop` + `sheetKind`.
 
 ## Technical approach
@@ -48,7 +48,6 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 ## Open questions
 - **Mobile:** there's no Log In control on mobile, so no trigger there.
 - When closed, the panel is only translated off-screen — its Close button is still keyboard-focusable (no `inert` / `aria-hidden`).
-- The scale wrapper (`transform`) makes the dev-only `fixed` "Edit grid" button position relative to the wrapper.
 
 ## Related
 [[Patterns-landing-mc-recess-deck]] · [[FEAT-landing-header-nav]] · [[FEAT-landing-deck-carousel]]

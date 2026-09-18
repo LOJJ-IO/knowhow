@@ -7,44 +7,32 @@ import {
   useRef,
   useState,
 } from "react";
-import localFont from "next/font/local";
 import { animate, motion, motionValue } from "framer-motion";
 import { Liquid } from "liquid-gooey";
-import { LogoMark, sohne } from "@/components/brand/logo-mark";
-import { GuidelinesOverlay } from "@/components/brand/guidelines-overlay";
-import { useHydrated } from "@/lib/use-hydrated";
+import { sohne } from "@/components/brand/logo-mark";
+import { satoshi } from "@/components/brand/fonts";
+import { LogoLockup } from "@/components/brand/logo-lockup";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
 
 gsap.registerPlugin(SplitText, useGSAP);
 
-const lojjFont = localFont({
-  src: "../../fonts/logo/LOGO.otf",
-  weight: "400",
-  style: "normal",
-});
+/** FastAPI backend origin (`backend/`). Sign-in is a full-page redirect to it — see Architecture-Overview's "Backend integration contract". */
+const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL;
 
-const satoshi = localFont({
-  src: [
-    {
-      path: "../../fonts/satoshi/Satoshi-Regular.woff2",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "../../fonts/satoshi/Satoshi-Medium.woff2",
-      weight: "500",
-      style: "normal",
-    },
-    {
-      path: "../../fonts/satoshi/Satoshi-Bold.woff2",
-      weight: "700",
-      style: "normal",
-    },
-  ],
-});
+/** Hands the browser to the backend's Google sign-in. `/onboarding/signup` signs in existing members and bootstraps new ones, so one button covers both. */
+function continueWithGoogle() {
+  if (!BACKEND_API_URL) {
+    console.error("NEXT_PUBLIC_BACKEND_API_URL is not set — cannot start Google sign-in.");
+    return;
+  }
+  // External origin (the backend), not a Next.js route — a router push can't leave the app.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${BACKEND_API_URL}/onboarding/signup`);
+}
 
 /** Desktop — prior committed lockup scale (em-positioned composition), −15% then −10% then −10%. */
 const DESKTOP_LOGO_FONT_SIZE = "clamp(2.168775rem,7.745625vw,7.745625rem)";
@@ -117,9 +105,6 @@ const DECK_CARDS = [
 ] as const;
 type DeckCard = (typeof DECK_CARDS)[number];
 type DeckEntrance = "left" | "center" | "right";
-
-const EDITING_MODE_ENABLED =
-  process.env.NEXT_PUBLIC_EDITING_MODE_ENABLED === "true";
 
 function Spinner({
   size = 20,
@@ -560,37 +545,6 @@ function GoogleWorkspaceMark() {
       </span>
       <span className={`${satoshi.className} font-normal`}> Workspace</span>
     </>
-  );
-}
-
-function LogoLockup({ fontSize }: { fontSize: string }) {
-  return (
-    <div
-      className="relative inline-block -translate-y-[10%] text-[#1c1917]"
-      style={{ fontSize }}
-    >
-      <h1
-        className={`${sohne.className} m-0 inline-flex items-start leading-none tracking-tight`}
-      >
-        <span className="inline-flex items-center">
-          Kn
-          <LogoMark className="mx-[0.04em] h-[0.71em] w-[0.62em] shrink-0 translate-x-[5%] translate-y-[10%]" />
-          how
-        </span>
-        <span
-          className="ml-[0.02em] mt-[0.08em] text-[0.22em] leading-none"
-          aria-hidden
-        >
-          ™
-        </span>
-      </h1>
-      <p className="absolute right-[0.28em] top-[0.60em] m-0 whitespace-nowrap leading-none">
-        <span className={`${sohne.className} text-[0.26em] tracking-tight`}>
-          by{" "}
-        </span>
-        <span className={`${lojjFont.className} text-[0.26em]`}>LOJJ.io</span>
-      </p>
-    </div>
   );
 }
 
@@ -1652,11 +1606,80 @@ function DemoForm() {
       </div>
       {/* Same pill as the header buttons (user: "match the header"). */}
       <div className="mt-3 flex justify-end">
-        <button type="submit" className={cn(CTA_CLASS, satoshi.className)}>
+        {/* Solid black: the header's black/80 reads grey on the light modal
+            (it only looks this dark over the sky, like the Close pill). */}
+        <button
+          type="submit"
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        >
           Continue
         </button>
       </div>
     </form>
+  );
+}
+
+/** Book a Demo's reservation window, from first open (`DEMO_RESERVED_MS`). */
+const DEMO_RESERVED_MS = 5 * 60 * 1000;
+
+function formatCountdown(secs: number) {
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+/** "4:38 reserved" — counts down from 5:00; when it runs out it reads "Hold
+ *  Expired". Plain text at the Close button's label size (no pill), top-left
+ *  of the sheet. */
+function ReservedCountdown({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  const left = Math.max(0, DEMO_RESERVED_MS - (now - startedAt));
+  const done = left === 0;
+
+  useEffect(() => {
+    if (done) return;
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, [done]);
+
+  const secs = Math.ceil(left / 1000);
+  const label = formatCountdown(secs);
+
+  // Only digits that changed remount (key = position + char), so only they
+  // replay the pop-in. The previous label is always one second earlier;
+  // changed digits stagger left → right (max stagger 2).
+  const prevLabel = formatCountdown(secs + 1);
+  let rank = 0;
+  const digits = [...label].map((ch, i) => {
+    const changed = prevLabel[i] !== ch;
+    return { ch, i, stagger: changed ? Math.min(rank++, 2) : 0 };
+  });
+
+  const className = "text-[1.13569rem] font-bold text-white tabular-nums";
+  if (done)
+    return (
+      <div role="timer" className={className}>
+        Hold Expired
+      </div>
+    );
+
+  return (
+    <div
+      role="timer"
+      aria-label={`Reserved for ${label}`}
+      className={className}
+    >
+      <span className="t-digit-group is-animating" aria-hidden>
+        {digits.map(({ ch, i, stagger }) => (
+          <span
+            key={`${i}-${ch}`}
+            className="t-digit"
+            data-stagger={stagger || undefined}
+          >
+            {ch}
+          </span>
+        ))}
+      </span>
+      &nbsp;reserved
+    </div>
   );
 }
 
@@ -1746,14 +1769,27 @@ function LoginSky({ active }: { active: boolean }) {
   );
 }
 
-/** Stub footer destinations — buttons until real routes exist (avoids App
- *  Router soft-nav on `<a href="#…">` during Fast Refresh). */
-function FooterStubLink({ children }: { children: React.ReactNode }) {
+const FOOTER_LINK_CLASS =
+  "cursor-pointer underline underline-offset-2 transition-transform duration-150 active:scale-95";
+
+/** Footer destinations. With `href` it's a real route (`next/link`); without,
+ *  a button stub until the route exists (avoids App Router soft-nav on
+ *  `<a href="#…">` during Fast Refresh). */
+function FooterStubLink({
+  href,
+  children,
+}: {
+  href?: string;
+  children: React.ReactNode;
+}) {
+  if (href)
+    return (
+      <Link href={href} className={`inline-block ${FOOTER_LINK_CLASS}`}>
+        {children}
+      </Link>
+    );
   return (
-    <button
-      type="button"
-      className="cursor-pointer underline underline-offset-2 transition-transform duration-150 active:scale-95"
-    >
+    <button type="button" className={FOOTER_LINK_CLASS}>
       {children}
     </button>
   );
@@ -1869,10 +1905,6 @@ function useSubheadWave(ref: React.RefObject<HTMLElement | null>) {
 }
 
 function LandingHero() {
-  const [editMode, setEditMode] = useState<boolean>(() => {
-    if (!EDITING_MODE_ENABLED || typeof window === "undefined") return false;
-    return localStorage.getItem("draggable:editMode") === "1";
-  });
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
   /** The slide-up sheet (Log In / Book a Demo) is open. */
@@ -1881,9 +1913,11 @@ function LandingHero() {
   const [sheetKind, setSheetKind] = useState<"login" | "demo">("login");
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
+  /** When Book a Demo first opened this visit — its "reserved" countdown
+   *  runs from here and keeps running across Close / reopen. */
+  const [demoReservedAt, setDemoReservedAt] = useState<number | null>(null);
   /** Cover Flow index — driven by the split CTA arrows on mobile. */
   const [deckIndex, setDeckIndex] = useState(1);
-  const mounted = useHydrated();
   const videoRef = useRef<HTMLVideoElement>(null);
   const ctaTimers = useRef<number[]>([]);
 
@@ -1927,14 +1961,6 @@ function LandingHero() {
     if (sheetOpen) video.pause();
     else void video.play().catch(() => {});
   }, [sheetOpen]);
-
-  function toggleEditMode() {
-    setEditMode((v) => {
-      const next = !v;
-      localStorage.setItem("draggable:editMode", next ? "1" : "0");
-      return next;
-    });
-  }
 
   function handleCtaClick() {
     if (ctaPhase !== "idle" || nextOpen) return;
@@ -2066,9 +2092,8 @@ function LandingHero() {
           <source src="/hero/onboarding-loop.webm" type="video/webm" />
           <source src="/hero/onboarding-loop.mp4" type="video/mp4" />
         </video>
-        {/* Oil-paint grain finish over the video (under guidelines / UI). */}
+        {/* Oil-paint grain finish over the video (under the UI). */}
         <div className="t-hero-grain" aria-hidden />
-        <GuidelinesOverlay editable={EDITING_MODE_ENABLED && editMode} />
       </div>
 
       {/* ——— Mobile ——— */}
@@ -2116,8 +2141,8 @@ function LandingHero() {
         >
           <FooterStubLink>About Us</FooterStubLink>
           <div className="flex gap-4">
-            <FooterStubLink>Terms of Use</FooterStubLink>
-            <FooterStubLink>Privacy Policy</FooterStubLink>
+            <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
+            <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
           </div>
         </div>
       </div>
@@ -2143,6 +2168,8 @@ function LandingHero() {
                 if (key === "login" || key === "demo") {
                   setSheetKind(key);
                   setSheetOpen(true);
+                  if (key === "demo")
+                    setDemoReservedAt((t) => t ?? Date.now());
                 }
               }}
               extras={DESKTOP_HEADER_EXTRAS}
@@ -2174,8 +2201,8 @@ function LandingHero() {
           >
             <FooterStubLink>About Us</FooterStubLink>
             <div className="flex gap-4 lg:gap-6">
-              <FooterStubLink>Terms of Use</FooterStubLink>
-              <FooterStubLink>Privacy Policy</FooterStubLink>
+              <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
+              <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
             </div>
           </div>
         </div>
@@ -2235,17 +2262,6 @@ function LandingHero() {
         />
       </div>
 
-      {EDITING_MODE_ENABLED && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <button
-            type="button"
-            onClick={toggleEditMode}
-            className="min-h-11 rounded-full bg-black/80 px-4 py-2 text-sm text-white shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-          >
-            {mounted && editMode ? "Done editing" : "Edit grid"}
-          </button>
-        </div>
-      )}
       </div>
 
       {/* The Veil */}
@@ -2276,14 +2292,19 @@ function LandingHero() {
         }}
       >
         <LoginSky active={sheetOpen} />
-        <div className={`${satoshi.className} relative z-10 flex justify-end p-6`}>
+        <div
+          className={`${satoshi.className} relative z-10 flex items-center justify-between gap-2 p-6`}
+        >
+          {sheetKind === "demo" && demoReservedAt != null ? (
+            <ReservedCountdown startedAt={demoReservedAt} />
+          ) : null}
           <button
             type="button"
             onClick={() => {
               setSheetAtTop(false);
               setSheetOpen(false);
             }}
-            className={CTA_CLASS}
+            className={cn(CTA_CLASS, "ml-auto")}
           >
             Close
           </button>
@@ -2313,6 +2334,7 @@ function LandingHero() {
                 </p>
                 <button
                   type="button"
+                  onClick={continueWithGoogle}
                   className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
                 >
                   <GoogleG className="absolute left-[13px] size-5" />
@@ -2323,11 +2345,11 @@ function LandingHero() {
                 >
                   By continuing, you agree to Knohow&rsquo;s{" "}
                   <span className="font-bold">
-                    <FooterStubLink>Terms of Use</FooterStubLink>
+                    <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
                   </span>
                   . Read our{" "}
                   <span className="font-bold">
-                    <FooterStubLink>Privacy Policy</FooterStubLink>
+                    <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
                   </span>
                   .
                 </p>

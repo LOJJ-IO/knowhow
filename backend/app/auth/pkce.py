@@ -42,6 +42,20 @@ def build_state_token(code_verifier: str, purpose: str, extra: dict | None = Non
     return jwt.encode(payload, settings.jwt_signing_key, algorithm=settings.jwt_algorithm)
 
 
+def peek_state_purpose(token: str) -> str | None:
+    """Reads the flow purpose out of a signed state token without asserting
+    which one it must be. Every flow shares GOOGLE_OAUTH_REDIRECT_URI, so the
+    one callback has to learn from the state which flow Google is returning
+    to. The signature is still verified; each flow's own decode_state_token
+    call re-checks its expected purpose."""
+    settings = get_settings()
+    try:
+        payload = jwt.decode(token, settings.jwt_signing_key, algorithms=[settings.jwt_algorithm])
+    except JWTError as exc:
+        raise InvalidOAuthState(str(exc)) from exc
+    return payload.get("purpose")
+
+
 def decode_state_token(token: str, expected_purpose: str) -> dict:
     settings = get_settings()
     try:
