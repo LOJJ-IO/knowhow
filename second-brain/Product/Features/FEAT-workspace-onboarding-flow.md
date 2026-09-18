@@ -40,6 +40,13 @@ The owner confirms by **signing in with Google as the invited account** — the 
 | Owner confirmed      |               ✅ |          ✅ |                ✅ |              ❌ |
 | Super Admin approved |               ✅ |          ✅ |                ✅ |              ✅ |
 
+- **Two kinds of organization (2026-09-17):**
+  - **Domain-backed** — keyed by a Google-verified Workspace domain (`hd`). Creating or claiming one requires verified control of that domain; typing a name never claims it.
+  - **Domainless** — a personal Google account (e.g. Gmail) may create one. It has no `verified_domain`, so it can never collide with or become a domain's tenant.
+  - A personal account **may belong to** a domain-backed org, but only once the owner verifies them — membership is granted, never self-asserted.
+- **Domainless org constraints (2026-09-17):** no `verified_domain`; **exactly one owner**; a person **cannot hold more than one active** domainless org.
+- **Adding a domain to a domainless org (2026-09-17):** binding a verified domain changes the org's **identity/authority metadata only — not its membership**. Existing members are **not** reclassified by the new domain: their membership already exists; the domain just gives the org a stronger identity. (Any later auth-type/Drive-path change follows from each member's own authorization, per "no authority inferred".)
+- **Domain control must be explicitly verified (2026-09-17):** an email that merely *looks* like a domain (`john@johnconsulting.com`) proves nothing. Verification must be explicit — the DNS-record model Google itself uses for domain ownership. Membership in a Workspace (the `hd` claim) proves the account belongs to that domain, **not** that the holder controls it.
 - **Individual Google data access (2026-09-16):** requires authorization from *that* Google account **and** must satisfy the Workspace's app-access controls. Organization confirmation establishes organizational authority only — it never authorizes access to any user's Google data. Before ownership is confirmed, an individual may still authorize access to their own data if Google and the Workspace's app-access policies permit it. So the table's Individual Drive column means *may be authorized by that person*, not *granted by the state*; "Potentially" = subject to their consent + their Workspace's app-access policy.
 
 ## Out of scope
@@ -51,6 +58,7 @@ Not designed. Entry is the Log In slide-up panel. Copy above is the agreed wordi
 
 ## Technical approach
 The backend already asks the two authority questions separately (`create_org_chart(is_owner, is_super_admin, owner_email)`, owner confirmation tokens) — see `backend/app/onboarding/service.py`. Gaps against this spec (as of 2026-09-16):
+- **No notion of a domainless org** — `bootstrap_organization` treats every signup the same; `_infer_auth_type`'s free-mail heuristic would mark a domainless org's own founder `personal_oauth` (correct by accident, wrong by construction).
 - **Blocked consent not handled** — no handling in `app/auth` for Google refusing authorization (e.g. the Workspace's app-access controls block Knowhow, or the user declines); the flow needs a distinct state for each.
 - **No `hd` check anywhere** — `_infer_auth_type` guesses Workspace vs personal from the email string + a free-mail list.
 - **No domain check at signup** — `complete_signup` bootstraps a new org for any unknown email; never looks up an existing org by domain.
@@ -63,7 +71,9 @@ The backend already asks the two authority questions separately (`create_org_cha
 - **Domain squatting / recovery:** first signup holds the domain. How does the real org reclaim it (e.g. anyone who proves Workspace Super Admin)?
 - **Two trust axes, not one:** capabilities before *owner confirmation* vs before *Super Admin authorization*. Candidate: before owner confirms — no assigning top roles, no offboarding/removing members. Before Super Admin — no Directory-sourced org chart, no reading others' Drive data, no ownership changes / Auto-Own / domain-wide operations. Manual org chart + invites allowed early.
 - **Owner declines** ("that's not me") path, and letting the setup person re-nominate.
-- ~~Owner outside the domain / non-Workspace users~~ — personal Gmail allowed (2026-09-16). Still open: can a personal-Gmail user *create* an org (no domain to key it by), or only join/be named owner of one?
+- ~~Owner outside the domain / non-Workspace users~~ — resolved: personal Gmail allowed (2026-09-16); may create a **domainless** org (2026-09-17, see Decisions).
+- **What counts as explicit domain verification** — DNS TXT record only, or does a Google Workspace **Super Admin** signing in with a matching `hd` also count (they demonstrably control the Workspace)? This also decides whether *signup* can create a domain-backed org directly, or whether every org starts domainless and binds a domain afterwards.
+- **Who may verify a domain** for an org, and what happens if two orgs race for the same one.
 - ~~"Individual Drive" row~~ — resolved 2026-09-16 (see Decisions).
 - **"Limited" org access before owner** — the candidate list below is not yet confirmed.
 - Notify Workspace admins when an org is created for their domain?
