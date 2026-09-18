@@ -1,3 +1,11 @@
+# Knowhow — agent entry (all tools)
+
+Before non-trivial work: read `second-brain/Current/Current-Context.md` and follow `CLAUDE.md` invariants.
+
+**Google Antigravity:** customizations for this repo are in workspace `.agents/` + root `GEMINI.md` / `AGENTS.md`. (`~/.gemini/antigravity/builtin/skills/*` is built-in product documentation, not where Knowhow rules are stored.) MCP: `.agents/mcp_config.json`. See `mcp-policy` rule.
+
+**Cursor:** also `.cursor/rules/` and `.cursor/skills/`.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

@@ -1879,7 +1879,10 @@ function LandingHero() {
             className={`${satoshi.className} mt-[2px] flex justify-between px-6 text-[0.908552rem] font-bold`}
           >
             <FooterStubLink>About Us</FooterStubLink>
-            <FooterStubLink>Privacy Policy</FooterStubLink>
+            <div className="flex gap-4">
+              <FooterStubLink>Terms of Use</FooterStubLink>
+              <FooterStubLink>Privacy Policy</FooterStubLink>
+            </div>
           </div>
         </div>
 
@@ -1940,7 +1943,10 @@ function LandingHero() {
             className={`${satoshi.className} mt-[2px] flex justify-between px-[clamp(0.75rem,2vw,1.5rem)] text-[0.908552rem] font-bold lg:px-6`}
           >
             <FooterStubLink>About Us</FooterStubLink>
-            <FooterStubLink>Privacy Policy</FooterStubLink>
+            <div className="flex gap-4 lg:gap-6">
+              <FooterStubLink>Terms of Use</FooterStubLink>
+              <FooterStubLink>Privacy Policy</FooterStubLink>
+            </div>
           </div>
         </div>
       </div>

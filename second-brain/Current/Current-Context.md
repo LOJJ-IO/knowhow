@@ -3,7 +3,7 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-16
+updated: 2026-09-18
 related: ["[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]"]
 ---
 
@@ -16,6 +16,14 @@ The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegatio
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.
+
+## Agent tooling (2026-09-18)
+Antigravity **customizations for this repo** live in the workspace (not under `~/.gemini/antigravity/builtin/…` — that tree is built-in product docs/skills only):
+- Always-on directory rules: root [`GEMINI.md`](../../GEMINI.md) + [`AGENTS.md`](../../AGENTS.md) (loaded by walking up from CWD)
+- `.agents/rules/` — Always On + glob rules (`knowhow-invariants`, `second-brain`, `mcp-policy`, frontend/backend)
+- `.agents/skills/` — `update-second-brain`, `knowhow-mcps`
+- `.agents/mcp_config.json` — **github** (OAuth, `LOJJ-IO/knowhow`) + **context7** (library docs)
+Machine-global MCP file `~/.gemini/config/mcp_config.json` exists but is empty; prefer workspace MCP for Knowhow. Forbidden: Prisma MCP, Google Drive MCP against `src/`, DB MCPs until Postgres is provisioned. Cursor still uses `.cursor/rules/` + `.cursor/skills/`. Keep Antigravity surfaces in sync when invariants change.
 
 ## What's true right now (2026-09-16) — landing only
 - **Old app purged** ([[0004-landing-only-purge-old-app]]). Live route: `/` → `<LandingHero />`.
@@ -31,7 +39,7 @@ The user is rebuilding the frontend from scratch, screen by screen — **not** a
   - **2026-09-12 (later):** desktop metaphor — main `{5.1, 8.9, 80.4×79.8%}`; Notes `{61.7, 66, 35.1×28%}` (= resize floor; width 39 −10%, 2026-09-12); folder `{86, 3}`; radii +5% (card 10.5px, folder plate 7.35px). See [[FEAT-landing-deck-notes-folder]].
 - **Deck:** seven feature cards; painted mats cycle the four PNGs; outer radius **10px**; inset mac windows (**14px**, light well `#f3f2ef`, titlebar `#d1cfcc`) — **draggable** / **resizable**. Favicon = hex mark (`src/app/icon.svg`). Desktop seats three (±side + centre); cards 4–7 park via `--deck-park-slot` until seated.
 - **Desktop:** 16:9 rise + linear-spread. Deck scales with window height below 956px (`--deck-fit`, floor 0.7) so Chrome-height windows keep room above/below — see [[Known-Issues]] (resolved 2026-09-11). **Mobile (2026-09-14, resized 2026-09-15):** landscape (`16/9`) Cover Flow, same style as desktop just smaller and inset with visible gutters (`min(72vw, 21rem)`, was `82vw/26rem` then `9/19.5` portrait before that) — proportions matched to a user-supplied reference screenshot of a different site (for sizing only, not styling); 3D coverflow peek on neighbouring cards kept (explicit user call). Content (titlebar, dots) scales via a CSS container query so it doesn't read oversized on the shorter card. Own nav bar (‹ › + dots) removed — the split Get Started arrows are the only explicit navigation, plus a swipe on the stage (capture-phase, see [[Lessons-Learned]]). Windows are move-only on mobile (`.t-deck-resize` hidden below 768px). **Notes (2026-09-15):** no dialog on mobile at all now — the Notes folder icon is desktop-only (hidden on mobile), and the active card's note shows automatically in a plain panel stacked below the stage, updating as the user swipes/taps — [[FEAT-landing-deck-notes-folder]].
-- **Desktop footer links (2026-09-12):** **About Us** (left) + **Privacy Policy** (right) via `FooterStubLink` (button stubs + `active:scale-95` press until real routes; sound effects removed 2026-09-16), Satoshi bold + underline + `cursor-pointer`, size `0.908552rem` (CTA face −20%), same row, `mt-[2px]` under “Take Control…”. Mobile mirrors. CTA pills / Notes folder press. Real destinations not wired yet.
+- **Desktop footer links (2026-09-12):** **About Us** (left) + **Terms of Use** · **Privacy Policy** (right, grouped; `gap-4`, desktop `lg:gap-6`; Terms of Use added 2026-09-17) via `FooterStubLink` (button stubs + `active:scale-95` press until real routes; sound effects removed 2026-09-16), Satoshi bold + underline + `cursor-pointer`, size `0.908552rem` (CTA face −20%), same row, `mt-[2px]` under “Take Control…”. Mobile mirrors. CTA pills / Notes folder press. Real destinations not wired yet.
 - Subhead / logo / CTA size+position tweaks live in `landing-hero.tsx` + `globals.css` (see recent Lessons-Learned). Hero video grain `.t-hero-grain`; guidelines grid always on — **aspect-square** cols/rows (`TARGET_SHORT` 5; e.g. ~9×5 at 16:9). Manual col/row only in edit mode on desktop. Grid edit via `NEXT_PUBLIC_EDITING_MODE_ENABLED`.
 - `LogoMark` hex: `#4285F4` / `#34A853` / `#FBBC05` / `#EA4335`. Lockup mark offset `translate-x-[5%]` / `translate-y-[10%]` (nudged left from 8% x, 2026-09-12).
 

@@ -164,6 +164,8 @@
   },
   "active": "9ff7d1caf02c1f44",
   "lastOpenFiles": [
+    "Templates/ADR.md",
+    "Current/Current-Context.md",
     "Architecture/Decisions/0007-shared-drive-support.md",
     "Architecture/Decisions/0006-observed-domain-tenant-identity.md",
     "Engineering/Patterns-landing-mc-recess-deck.md",
@@ -175,7 +177,6 @@
     "Features",
     "Engineering/Known-Issues.md",
     "Architecture/Architecture-Overview.md",
-    "Current/Current-Context.md",
     "Architecture/Decisions.md",
     "Product/Features/FEAT-landing-deck-notes-folder.md"
   ]

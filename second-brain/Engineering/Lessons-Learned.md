@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-16
+updated: 2026-09-18
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-18 — Antigravity ignores Cursor rule paths unless you mirror them
+Knowhow’s durable agent instructions lived in `CLAUDE.md`, `.cursor/rules/`, and `.cursor/skills/`. Google Antigravity loads `~/.gemini/GEMINI.md` + `.agents/rules/` (and skills under `.agents/skills/`), so it looked “bad at instructions” while Cursor obeyed the same repo. Fix: short Always On rules in `.agents/rules/` (`trigger: always_on`) for invariants + second-brain, plus glob rules for `src/` / `backend/`. Keep those files in sync when invariants change — do not assume Antigravity reads `.cursor/`. MCP is a separate surface: workspace `.agents/mcp_config.json` (not Cursor’s `~/.cursor/mcp.json`); seed only servers that match invariants (GitHub + Context7 now; no Prisma / no Drive-into-`src/` / no DB until provisioned).
 
 ## 2026-09-16 — Button sound effects removed
 Removed Web Audio API sine tick click sound effects (`playClickSound` and `AudioContext`) from all button and control interaction handlers in `landing-hero.tsx` per user request.
