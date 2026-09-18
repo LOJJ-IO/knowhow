@@ -1524,7 +1524,12 @@ const DEMO_FIELDS = [
 /** ms an error stays up before border + message fade back (`--revert-hold`). */
 const DEMO_ERROR_HOLD_MS = 3000;
 
-/** Book a Demo sheet's form. Checks required fields + email format itself
+/** Fields shown per step: names first, then + work email, then + website. */
+const DEMO_STEP_FIELD_COUNT = [2, 3, 4] as const;
+
+/** Book a Demo sheet's form. Starts with the name fields; each valid Continue
+ *  adds the next field (the modal's `.t-resize` tweens the growth) until the
+ *  website is in. Checks required fields + email format itself
  *  (no browser bubbles): each invalid field shakes, turns red and shows the
  *  browser's validation message, then reverts after `DEMO_ERROR_HOLD_MS`
  *  (Transitions.dev error-state CSS in globals.css). A valid submit does
@@ -1535,6 +1540,15 @@ function DemoForm() {
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const timers = useRef<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
+  const [step, setStep] = useState(0);
+  const shown = DEMO_FIELDS.slice(0, DEMO_STEP_FIELD_COUNT[step]);
+
+  // Focus the field a step just added.
+  useEffect(() => {
+    if (step === 0) return;
+    const added = DEMO_FIELDS[DEMO_STEP_FIELD_COUNT[step] - 1];
+    inputs.current[added.name]?.focus();
+  }, [step]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1553,23 +1567,36 @@ function DemoForm() {
     void input.offsetWidth; // reflow so the shake restarts
     input.classList.add("is-shaking");
     window.clearTimeout(timers.current[name]);
-    timers.current[name] = window.setTimeout(() => {
-      wrap.classList.remove("is-error");
-      input.classList.remove("is-error");
-      input.removeAttribute("aria-invalid");
-    }, DEMO_ERROR_HOLD_MS);
+    timers.current[name] = window.setTimeout(
+      () => clearError(name),
+      DEMO_ERROR_HOLD_MS,
+    );
+  }
+
+  /** Border + message fade back to neutral (hold timer, or the field is now
+   *  valid — a fixed field shouldn't stay red for the rest of the hold). */
+  function clearError(name: string) {
+    window.clearTimeout(timers.current[name]);
+    wraps.current[name]?.classList.remove("is-error");
+    inputs.current[name]?.classList.remove("is-error");
+    inputs.current[name]?.removeAttribute("aria-invalid");
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     let first: HTMLInputElement | null = null;
-    for (const { name } of DEMO_FIELDS) {
+    for (const { name } of shown) {
       const input = inputs.current[name];
-      if (!input || input.checkValidity()) continue;
+      if (!input) continue;
+      if (input.checkValidity()) {
+        clearError(name);
+        continue;
+      }
       flagError(name, input.validationMessage);
       first ??= input;
     }
-    first?.focus();
+    if (first) first.focus();
+    else if (step < DEMO_STEP_FIELD_COUNT.length - 1) setStep(step + 1);
   }
 
   return (
@@ -1580,7 +1607,7 @@ function DemoForm() {
         Book a Demo
       </h2>
       <div className="mt-6 grid grid-cols-2 gap-x-2 gap-y-1">
-        {DEMO_FIELDS.map((f, i) => (
+        {shown.map((f, i) => (
           <div
             key={f.name}
             ref={(el) => {
@@ -1607,6 +1634,9 @@ function DemoForm() {
               autoComplete={f.autoComplete}
               inputMode={f.name === "website" ? "url" : undefined}
               required
+              onInput={(e) => {
+                if (e.currentTarget.checkValidity()) clearError(f.name);
+              }}
               aria-describedby={`demo-${f.name}-error`}
               className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
             />
