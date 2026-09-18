@@ -1875,23 +1875,24 @@ function LandingHero() {
               <GoogleWorkspaceMark />
             </p>
           </div>
-          <div
-            className={`${satoshi.className} mt-[2px] flex justify-between px-6 text-[0.908552rem] font-bold`}
-          >
-            <FooterStubLink>About Us</FooterStubLink>
-            <div className="flex gap-4">
-              <FooterStubLink>Terms of Use</FooterStubLink>
-              <FooterStubLink>Privacy Policy</FooterStubLink>
-            </div>
-          </div>
         </div>
 
-        <div className="relative z-30 flex -translate-y-[2vh] justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-8">
+        <div className="relative z-30 flex -translate-y-[2vh] justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-14">
           <GetStartedCta
             phase={ctaPhase}
             onClick={handleCtaClick}
             onStep={stepMobileDeck}
           />
+        </div>
+
+        <div
+          className={`${satoshi.className} relative z-10 flex justify-between px-6 pb-[max(1rem,env(safe-area-inset-bottom))] text-[0.908552rem] font-bold text-[#1c1917]`}
+        >
+          <FooterStubLink>About Us</FooterStubLink>
+          <div className="flex gap-4">
+            <FooterStubLink>Terms of Use</FooterStubLink>
+            <FooterStubLink>Privacy Policy</FooterStubLink>
+          </div>
         </div>
       </div>
 
