@@ -3,7 +3,7 @@ type: feature
 status: draft
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-09-17
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]"]
 ---
 
@@ -104,6 +104,8 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 - **Scoped and time-limited.** A contractor gets neither the full feature set nor the full org: no Auto-Share, no offboarding, no global org chart. Candidate scope: their own team, the work they were brought in for. See **local vs global org chart** in [[FEAT-org-chart-builder]].
 - **Attribution lives in Knowhow.** Google's logs name the impersonated/automation account; only Knowhow's audit log knows which human asked. That makes the audit log load-bearing, not decorative.
 - **Delegation only covers Workspace accounts** — a contractor's personal account can never be impersonated, which is consistent: they act as the org, not as themselves.
+
+**Entry path (2026-09-17, user):** contractors are **not** chosen in the sign-in modal (no employee/contractor toggle before auth — consistent with "nothing asked before auth"). The user is leaning towards **deep links / email invite links** to bring contractors in. Not designed yet.
 
 **Deliberately deferred (user, 2026-09-17: "I don't know right now... that's something we'll need to learn in the future"):** exactly which actions a contractor may have performed as the org (create/edit only, or also share, delete, change permissions — the limit is Knowhow's, not Google's); whether the owner approves per action, per scope, or per time window; what the contractor may *read* while acting as the org.
 

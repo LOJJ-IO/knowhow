@@ -1016,7 +1016,8 @@ function DeckWindow({
   onClickCapture?: (e: React.MouseEvent) => void;
 }) {
   const entrance = "entrance" in card ? (card.entrance as DeckEntrance) : null;
-  const [notesOpen, setNotesOpen] = useState(false);
+  // Notes window starts open; the folder toggles it closed/open.
+  const [notesOpen, setNotesOpen] = useState(true);
 
   return (
     <div
@@ -2154,8 +2155,7 @@ function LandingHero() {
             <p
               className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
             >
-              Use your Google account to continue with Knowhow (it&rsquo;s
-              free)!
+              Use your Google account to continue with Knohow.
             </p>
             <button
               type="button"
@@ -2164,6 +2164,19 @@ function LandingHero() {
               <GoogleG className="absolute left-[13px] size-5" />
               Continue with Google
             </button>
+            <p
+              className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+            >
+              By continuing, you agree to Knohow&rsquo;s{" "}
+              <span className="font-bold">
+                <FooterStubLink>Terms of Use</FooterStubLink>
+              </span>
+              . Read our{" "}
+              <span className="font-bold">
+                <FooterStubLink>Privacy Policy</FooterStubLink>
+              </span>
+              .
+            </p>
           </LoginModal>
         </div>
       </div>
