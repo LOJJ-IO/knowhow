@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_member, get_db
+from app.api.deps import get_approved_member, get_db
 from app.exceptions import CrossOrgAccessDenied
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
@@ -49,7 +49,7 @@ def list_files(
     offset: int = 0,
     sort: str = Query(default="-modified_at"),
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(get_current_member),
+    member: OrgMember = Depends(get_approved_member),
 ) -> dict:
     """A generic, filterable primitive — GET /files?org_id=&team_id=&type=&
     since=&owner_id=&q= — not shaped around any current screen, so a future
@@ -101,7 +101,7 @@ def set_file_personal(
     file_id: str,
     personal: bool = True,
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(get_current_member),
+    member: OrgMember = Depends(get_approved_member),
 ) -> dict:
     file_row = mark_file_personal(member.organization_id, file_id, member.id, db, personal=personal)
     return _serialize(file_row)

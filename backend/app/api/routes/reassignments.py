@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_member, get_db
+from app.api.deps import get_approved_member, get_db
 from app.models.org_member import OrgMember
 from app.sharing.service import confirm_reassignment, decline_reassignment, request_team_reassignment
 
@@ -29,7 +29,7 @@ def _serialize(r) -> dict:
 
 @router.post("/reassignments")
 def request_reassignment(
-    body: RequestReassignmentBody, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    body: RequestReassignmentBody, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     reassignment = request_team_reassignment(member.organization_id, body.member_id, body.new_team_id, member.id, db)
     return _serialize(reassignment)
@@ -37,7 +37,7 @@ def request_reassignment(
 
 @router.post("/reassignments/{reassignment_id}/confirm")
 def confirm(
-    reassignment_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    reassignment_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     reassignment = confirm_reassignment(reassignment_id, member.organization_id, member.id, db)
     return _serialize(reassignment)
@@ -45,7 +45,7 @@ def confirm(
 
 @router.post("/reassignments/{reassignment_id}/decline")
 def decline(
-    reassignment_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    reassignment_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     reassignment = decline_reassignment(reassignment_id, member.organization_id, member.id, db)
     return _serialize(reassignment)

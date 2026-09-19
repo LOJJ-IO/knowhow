@@ -1,6 +1,6 @@
 ---
 type: feature
-status: draft
+status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
 updated: 2026-09-18
@@ -138,6 +138,12 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 - **Data access stays per account.** Linking grants no access to either account's Google data; each still authorizes separately (see Individual Google data access above). Personal-account data stays out of org scope.
 - **It supplies an observed domain**, which is the clean path out of the domainless/candidate collision below: the founder links their acme.com account rather than a second org being created.
 
+## Approving auto-joined members (decided 2026-09-18, user)
+- **Owner is self-declared; Super Admin is Google-proven.** A first joiner may answer "Yes, I'm the owner" without being a Super Admin (user confirmed this is allowed) — nothing verifies the owner claim.
+- **Approvers:** the **owner** or a **Google-proven Super Admin** of the domain approves auto-affiliated coworkers. Until then everyone is limited — the first joiner included unless they are the owner.
+- **A proven Super Admin can reassign the owner.** Google-proven authority outranks a self-declared claim; this is the answer to domain squatting (e.g. an intern who signed up first and claimed owner).
+- Super Admin approval/override needs **admin proof** (Admin SDK `users.get("me")` → `isAdmin`), which isn't built — owner approval ships first.
+
 ## Personal account at sign-in (decided 2026-09-18, user)
 When the domain check finds **no `hd`** (personal Google account):
 - **Arrived through a sponsor's invite link** → joins that org as sponsored and lands in their blank workspace ([[0009-contractor-work-created-as-the-org]]).
@@ -152,13 +158,23 @@ When the domain check finds **no `hd`** (personal Google account):
 Not designed. **The sign-in and onboarding screens live inside the Log In slide-up panel** ([[FEAT-landing-login-panel]]) — decided 2026-09-17; not a separate route. Copy above is the agreed wording direction, not final copy — user designs screens.
 
 ## Technical approach
+**Domain check built 2026-09-18** (backend only; no screens). `complete_signup` (`backend/app/onboarding/service.py`) now:
+- reads Google's **`hd`** claim (never the email string); existing email → plain login;
+- **`hd` present** → `join_or_create_domain_org`: joins the org whose `observed_domain` (or `verified_domain`) matches, else creates an **unbound** org with `observed_domain = hd` (unique column, migration `0003_domain_check`). Every such member is **`auto_affiliated`** (new `OrgMember.standing`), first joiner included; org + member saved in **one transaction**;
+- **no `hd`** → creates nothing; sets a 15-min signed `knohow_pending_signup` cookie and redirects to `FRONTEND_ORIGIN?signup=personal`. `POST /onboarding/personal-org` ("No / just me") creates the **domainless** org — creator approved, `personal_oauth`, and owner via an org chart; a repeat is a login. "Yes" → `GET /onboarding/signup?switch_account=true` (forces Google's account chooser).
+- **Standing enforced:** `get_approved_member` guards every route exposing others' data (org chart, teams, files, search, reassignments, transfer batches, suggested shares, delegation, audit, offboard). An auto-affiliated member keeps `/auth/me` (now returns `standing`) and personal-OAuth.
+- **Owner:** claiming owner in `POST /organizations/{id}/org-chart` (founding member only — others get 403) or confirming via the owner link grants `approved`. `POST /organizations/{id}/members/{member_id}/approve` — **owner only**; Super Admin approval/override waits on admin proof.
+- Tests: `backend/tests/test_domain_check.py` against a real Postgres test DB (`knohow_test`).
+- **Not built:** identity linking (next pass), invite-link path, org rename, admin proof, any frontend for `?signup=personal` / standing.
+
+Gaps as of 2026-09-16 (struck where fixed 2026-09-18):
 The backend already asks the two authority questions separately (`create_org_chart(is_owner, is_super_admin, owner_email)`, owner confirmation tokens) — see `backend/app/onboarding/service.py`. Gaps against this spec (as of 2026-09-16):
-- **No `observed_domain` column** — nothing records the candidate domain, and `Organization.verified_domain` is a plain unique column with no notion of "active", so the one-org-per-observed-domain rule is unenforceable today.
+- ~~**No `observed_domain` column**~~ (added 2026-09-18) — nothing records the candidate domain, and `Organization.verified_domain` is a plain unique column with no notion of "active", so the one-org-per-observed-domain rule is unenforceable today.
 - **`verified_domain` is set from an attestation, not a proof** — `approve_delegation()` takes the admin's word that they completed the Admin console step and copies `grant.verified_domain` onto the org (its own docstring says "records the client's attestation, not a proof"). Under the decision above, the domain must be bound only after a real Google call succeeds.
-- **No notion of a domainless org** — `bootstrap_organization` treats every signup the same; `_infer_auth_type`'s free-mail heuristic would mark a domainless org's own founder `personal_oauth` (correct by accident, wrong by construction).
+- ~~**No notion of a domainless org**~~ (added 2026-09-18) — `bootstrap_organization` treats every signup the same; `_infer_auth_type`'s free-mail heuristic would mark a domainless org's own founder `personal_oauth` (correct by accident, wrong by construction).
 - **Blocked consent not handled** — no handling in `app/auth` for Google refusing authorization (e.g. the Workspace's app-access controls block Knowhow, or the user declines); the flow needs a distinct state for each.
-- **No `hd` check anywhere** — `_infer_auth_type` guesses Workspace vs personal from the email string + a free-mail list.
-- **No domain check at signup** — `complete_signup` bootstraps a new org for any unknown email; never looks up an existing org by domain.
+- ~~**No `hd` check anywhere**~~ (signup uses `hd` 2026-09-18; `add_member` for invited people still uses the email heuristic) — `_infer_auth_type` guesses Workspace vs personal from the email string + a free-mail list.
+- ~~**No domain check at signup**~~ (built 2026-09-18) — `complete_signup` bootstraps a new org for any unknown email; never looks up an existing org by domain.
 - **`verified_domain` not set at signup** (null until delegation), and delegation derives it from the email string, not Google's `hd` (hosted-domain) ID-token claim. Only `hd` proves a Workspace account; `gmail.com` must never become a tenant.
 - **Owner confirmation is possession-only** — `confirm_owner(token)` doesn't require the confirmer to be authenticated as `owner_email`.
 - **Owner email unrestricted** — any address accepted.
@@ -166,7 +182,7 @@ The backend already asks the two authority questions separately (`create_org_cha
 - **Identity linking not implemented (noted 2026-09-18, user)** — multiple Google emails as one person is designed ("Identity linking" above) but not built: `complete_login` / `complete_signup` look up a single `OrgMember` by exact email, so a second email is treated as a different person, and a new one bootstraps a separate org. **User, 2026-09-18: build it together with the domain checks** (`hd` check + observed-domain lookup) — a linked Workspace email is what supplies the observed domain.
 
 ## Open questions
-- **Domain squatting / recovery:** first signup holds the domain. How does the real org reclaim it (e.g. anyone who proves Workspace Super Admin)?
+- ~~**Domain squatting / recovery**~~ — decided 2026-09-18: a proven Super Admin can reassign the owner (see "Approving auto-joined members").
 - **Two trust axes, not one:** capabilities before *owner confirmation* vs before *Super Admin authorization*. Candidate: before owner confirms — no assigning top roles, no offboarding/removing members. Before Super Admin — no Directory-sourced org chart, no reading others' Drive data, no ownership changes / Auto-Own / domain-wide operations. Manual org chart + invites allowed early.
 - **Owner declines** ("that's not me") path, and letting the setup person re-nominate.
 - ~~Owner outside the domain / non-Workspace users~~ — resolved: personal Gmail allowed (2026-09-16); may create a **domainless** org (2026-09-17, see Decisions).

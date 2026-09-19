@@ -8,7 +8,7 @@ from app.api.routes import auth as auth_routes
 from app.auth.login import LOGIN_STATE_PURPOSE
 from app.auth.pkce import build_state_token, peek_state_purpose
 from app.main import app
-from app.onboarding.service import SIGNUP_STATE_PURPOSE
+from app.onboarding.service import SIGNUP_STATE_PURPOSE, SignupResult
 from app.security.jwt import issue_access_token, issue_refresh_token
 
 
@@ -22,7 +22,9 @@ def _fake_result():
 
 def _client(monkeypatch, calls: list[str]) -> TestClient:
     monkeypatch.setattr(auth_routes, "complete_login", lambda code, state, db: calls.append("login") or _fake_result())
-    monkeypatch.setattr(auth_routes, "complete_signup", lambda code, state, db: calls.append("signup") or _fake_result())
+    monkeypatch.setattr(
+        auth_routes, "complete_signup", lambda code, state, db: calls.append("signup") or SignupResult(login=_fake_result())
+    )
     app.dependency_overrides[deps.get_db] = lambda: None
     return TestClient(app, follow_redirects=False)
 

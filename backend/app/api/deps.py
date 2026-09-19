@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.exceptions import CrossOrgAccessDenied
-from app.models.org_member import OrgMember
+from app.models.org_member import MemberStanding, OrgMember
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token
 
 
@@ -37,7 +37,27 @@ def get_current_member(
     return member
 
 
-def require_same_org(org_id: uuid.UUID, member: OrgMember = Depends(get_current_member)) -> OrgMember:
+def get_approved_member(member: OrgMember = Depends(get_current_member)) -> OrgMember:
+    """Any route that exposes other members' data (org chart, files,
+    search, transfers) requires standing. An auto-affiliated member — placed
+    in the org by a matching Google `hd` alone — may only use routes that
+    touch their own identity until the owner approves them."""
+    if member.standing != MemberStanding.APPROVED:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "membership not yet approved by the organization's owner")
+    return member
+
+
+def require_same_org_any_standing(
+    org_id: uuid.UUID, member: OrgMember = Depends(get_current_member)
+) -> OrgMember:
+    """require_same_org without the standing check — only for onboarding
+    steps an unapproved first joiner must still be able to take."""
+    if member.organization_id != org_id:
+        raise CrossOrgAccessDenied(f"member {member.id} does not belong to organization {org_id}")
+    return member
+
+
+def require_same_org(org_id: uuid.UUID, member: OrgMember = Depends(get_approved_member)) -> OrgMember:
     """Route-level guard mirroring the boundary enforced inside the service
     functions themselves (get_drive_client_for_user, revoke_and_offboard,
     etc.) — belt-and-suspenders, since the service-layer check is the one

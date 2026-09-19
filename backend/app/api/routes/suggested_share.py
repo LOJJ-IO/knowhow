@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_member, get_db
+from app.api.deps import get_approved_member, get_db
 from app.models.org_member import OrgMember
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.sharing.service import confirm_suggested_share, decline_suggested_share
@@ -26,14 +26,14 @@ def _find_pending(file_id: str, org_id, db: Session) -> SuggestedShare:
 
 
 @router.post("/files/{file_id}/suggested-share/confirm")
-def confirm(file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)) -> dict:
+def confirm(file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)) -> dict:
     suggestion = _find_pending(file_id, member.organization_id, db)
     result = confirm_suggested_share(suggestion.id, member.organization_id, member.id, db)
     return {"id": str(result.id), "status": result.status.value}
 
 
 @router.post("/files/{file_id}/suggested-share/decline")
-def decline(file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)) -> dict:
+def decline(file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)) -> dict:
     suggestion = _find_pending(file_id, member.organization_id, db)
     result = decline_suggested_share(suggestion.id, member.organization_id, member.id, db)
     return {"id": str(result.id), "status": result.status.value}

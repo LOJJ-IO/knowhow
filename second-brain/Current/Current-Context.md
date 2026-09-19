@@ -24,8 +24,11 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Projects** — a way to create a project and group files into it (across folders and teams). Nothing in Knohow has this concept yet; needed before a contractor scope can be a project ([[0009-contractor-work-created-as-the-org]]).
 - **Contractor model** — sponsor invite links, blank workspace, create/edit/share/delete as the org's automation account, scopes (files / folder / team / project; team needs owner approval) — [[0009-contractor-work-created-as-the-org]].
 - **Restore from Trash** — every delete goes to Trash for 30 days, so Knohow needs a way to restore ([[0010-deletes-go-to-trash-30-days]]).
-- **Domain checks + identity linking** — `hd` check, observed-domain lookup, one person with several emails; built together ([[FEAT-workspace-onboarding-flow]]).
-- **Personal-account screen** — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
+- ~~**Domain check**~~ — **built 2026-09-18** (backend): `hd` check, one org per observed domain, auto-affiliated standing enforced, personal-account pending state + domainless org, owner approval — [[FEAT-workspace-onboarding-flow]] → Technical approach.
+- **Identity linking** — one person with several emails (next pass, user 2026-09-18).
+- **Super Admin approval + owner override** — needs admin proof (Admin SDK `isAdmin`).
+- **Frontend for sign-in results** — `?signup=personal` question screen, limited-standing state, owner approval UI (user designs).
+- **Personal-account screen** (backend ready 2026-09-18) — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
 

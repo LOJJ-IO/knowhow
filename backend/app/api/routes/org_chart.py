@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_member, get_db, require_same_org
+from app.api.deps import get_approved_member, get_db, require_same_org
 from app.models.org_member import OrgMember
 from app.models.org_membership import OrgRole
 from app.org_chart.service import (
@@ -125,7 +125,7 @@ class OffboardRequest(BaseModel):
 
 @router.post("/offboard")
 def offboard_route(
-    body: OffboardRequest, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    body: OffboardRequest, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     """Org-engine's composite offboarding endpoint: wraps the auth module's
     revoke_and_offboard with org-chart cleanup (membership removal, leader

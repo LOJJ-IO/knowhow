@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_member, get_db
+from app.api.deps import get_approved_member, get_db
 from app.models.org_member import OrgMember
 from app.transfers.service import PlannedTransfer, confirm_transfer_batch, create_transfer_batch, reverse_transfer_batch
 
@@ -50,7 +50,7 @@ def _serialize(batch) -> dict:
 
 @router.post("/transfer-batches")
 def create_batch(
-    body: CreateBatchRequest, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    body: CreateBatchRequest, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     """Computes and persists the dry-run PLAN for a bulk/retroactive
     transfer — nothing executes until POST .../confirm. (Routine
@@ -65,7 +65,7 @@ def create_batch(
 
 @router.post("/transfer-batches/{batch_id}/confirm")
 def confirm(
-    batch_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    batch_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     batch = confirm_transfer_batch(batch_id, member.organization_id, member.id, db)
     return _serialize(batch)
@@ -73,7 +73,7 @@ def confirm(
 
 @router.post("/transfer-batches/{batch_id}/reverse")
 def reverse(
-    batch_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_current_member)
+    batch_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(get_approved_member)
 ) -> dict:
     batch = reverse_transfer_batch(batch_id, member.organization_id, member.id, db)
     return _serialize(batch)

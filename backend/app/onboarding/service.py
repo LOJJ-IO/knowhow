@@ -3,6 +3,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from jose import JWTError, jwt
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -11,9 +12,10 @@ from app.auth.delegation import initiate_delegation
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
 from app.auth.login import LoginResult
 from app.auth.pkce import build_state_token, decode_state_token, derive_code_challenge, generate_code_verifier
+from app.config import get_settings
 from app.google.scopes import LOGIN_SCOPES
 from app.models.org_chart import OrgChart
-from app.models.org_member import AuthType, OrgMember
+from app.models.org_member import AuthType, MemberStanding, OrgMember
 from app.models.organization import Organization
 from app.models.owner_confirmation import OwnerConfirmationToken
 from app.security.jwt import issue_access_token, issue_refresh_token
@@ -92,23 +94,6 @@ def add_member(
     return member
 
 
-def bootstrap_organization(
-    email: str, display_name: str | None, db: Session, org_name: str | None = None
-) -> tuple[Organization, OrgMember]:
-    """Creates the very first Organization + OrgMember for a brand-new
-    signup — called before create_org_chart, when no Organization matching
-    this email's domain exists yet. This is the seam app/auth/login.py's
-    MemberNotProvisioned defers to: login authenticates identities that
-    already exist, this creates the first one."""
-    org = Organization(id=uuid.uuid4(), name=org_name or _email_domain(email), verified_domain=None)
-    db.add(org)
-    db.commit()
-    db.refresh(org)
-
-    member = add_member(org.id, email, display_name, added_by_member_id=None, db=db)
-    return org, member
-
-
 @dataclass
 class OrgChartCreationResult:
     org_chart: OrgChart
@@ -148,6 +133,10 @@ def create_org_chart(
         owner_member_id=initiator_member_id if is_owner else None,
     )
     db.add(org_chart)
+    if is_owner:
+        # Owner is self-declared (onboarding spec) — claiming it gives the
+        # initiator standing; a proven Super Admin can reassign it later.
+        initiator.standing = MemberStanding.APPROVED
     db.commit()
     db.refresh(org_chart)
 
@@ -233,6 +222,7 @@ def confirm_owner(token_value: str, db: Session) -> OrgChart:
         raise ValueError(f"no OrgMember found for {token.owner_email}")
 
     org_chart.owner_member_id = owner_member.id
+    owner_member.standing = MemberStanding.APPROVED
     token.consumed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(org_chart)
@@ -249,6 +239,8 @@ def confirm_owner(token_value: str, db: Session) -> OrgChart:
 
 
 SIGNUP_STATE_PURPOSE = "signup"
+PENDING_PERSONAL_SIGNUP_PURPOSE = "pending_personal_signup"
+PENDING_PERSONAL_SIGNUP_TTL = timedelta(minutes=15)
 
 
 @dataclass
@@ -257,19 +249,52 @@ class SignupStart:
     state: str
 
 
-def start_signup() -> SignupStart:
+def start_signup(switch_account: bool = False) -> SignupStart:
     """Google OAuth, same as app/auth/login.py's login flow (same scopes,
     same PKCE primitives — imported, not reimplemented) but with its own
     state purpose, so the callback knows a brand-new Organization/OrgMember
-    should be bootstrapped rather than requiring one to already exist."""
+    may need to be created rather than requiring one to already exist.
+
+    switch_account forces Google's account chooser — used when someone who
+    signed in with a personal account says their company uses Workspace and
+    goes back to sign in with their work account instead."""
     code_verifier = generate_code_verifier()
     code_challenge = derive_code_challenge(code_verifier)
     state = build_state_token(code_verifier, purpose=SIGNUP_STATE_PURPOSE)
-    url = build_authorization_url(LOGIN_SCOPES, state=state, code_challenge=code_challenge, access_type="online")
+    url = build_authorization_url(
+        LOGIN_SCOPES,
+        state=state,
+        code_challenge=code_challenge,
+        access_type="online",
+        prompt="select_account" if switch_account else None,
+    )
     return SignupStart(authorization_url=url, state=state)
 
 
-def complete_signup(code: str, state: str, db: Session) -> LoginResult:
+@dataclass
+class SignupResult:
+    """Exactly one of the two is set. `login` — the person now has a member
+    row and a session. `pending_personal_token` — a personal Google account
+    with no org yet: nothing was created, and the frontend must ask whether
+    their company uses Workspace before create_domainless_org runs."""
+
+    login: LoginResult | None = None
+    pending_personal_token: str | None = None
+
+
+def _login_result(member: OrgMember) -> LoginResult:
+    return LoginResult(
+        member=member,
+        access_token=issue_access_token(member.id, member.organization_id),
+        refresh_token=issue_refresh_token(member.id, member.organization_id),
+    )
+
+
+def complete_signup(code: str, state: str, db: Session) -> SignupResult:
+    """The domain check (onboarding spec, "Domain check = two independent
+    checks"): (1) Google's `hd` claim on the verified ID token says whether
+    this is a Workspace account — never the email string; (2) for a Workspace
+    account, whether Knohow already has an org for that domain."""
     state_payload = decode_state_token(state, expected_purpose=SIGNUP_STATE_PURPOSE)
     tokens = exchange_code_for_tokens(code, state_payload["code_verifier"])
     id_token_claims = verify_id_token(tokens["id_token"])
@@ -282,9 +307,175 @@ def complete_signup(code: str, state: str, db: Session) -> LoginResult:
     # this email already has an OrgMember somewhere, signing up is just a
     # login, not a second bootstrap.
     member = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
-    if member is None:
-        _, member = bootstrap_organization(email, id_token_claims.get("name"), db)
+    if member is not None:
+        return SignupResult(login=_login_result(member))
 
-    access_token = issue_access_token(member.id, member.organization_id)
-    refresh_token = issue_refresh_token(member.id, member.organization_id)
-    return LoginResult(member=member, access_token=access_token, refresh_token=refresh_token)
+    hosted_domain = id_token_claims.get("hd")
+    if not hosted_domain:
+        return SignupResult(
+            pending_personal_token=issue_pending_personal_signup_token(email, id_token_claims.get("name"))
+        )
+
+    member = join_or_create_domain_org(email, id_token_claims.get("name"), hosted_domain.lower(), db)
+    return SignupResult(login=_login_result(member))
+
+
+def join_or_create_domain_org(email: str, display_name: str | None, hosted_domain: str, db: Session) -> OrgMember:
+    """One active org per observed domain (ADR-0006). A later signup with the
+    same `hd` joins the existing org as auto-affiliated — evidence only, no
+    standing — and is never given a second org. The first signup creates the
+    org unbound (verified_domain stays null until admin proof) and is itself
+    auto-affiliated: the first joiner is only the first claimant, not a role.
+    They gain standing by claiming ownership (create_org_chart) or when the
+    nominated owner approves them."""
+    org = db.execute(
+        select(Organization).where(
+            (Organization.observed_domain == hosted_domain) | (Organization.verified_domain == hosted_domain)
+        )
+    ).scalar_one_or_none()
+
+    created_org = org is None
+    if created_org:
+        org = Organization(id=uuid.uuid4(), name=hosted_domain, observed_domain=hosted_domain, verified_domain=None)
+        db.add(org)
+
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=email,
+        display_name=display_name,
+        # Google vouched for this account's membership of hosted_domain, so
+        # it is eligible for the delegated path once delegation exists.
+        auth_type=AuthType.DOMAIN_DELEGATED,
+        standing=MemberStanding.AUTO_AFFILIATED,
+    )
+    db.add(member)
+    # Org and first member in one transaction — a failure can't leave an
+    # org with no members behind.
+    db.commit()
+    db.refresh(member)
+
+    if created_org:
+        record_audit_entry(
+            org_id=org.id,
+            actor_user_id=member.id,
+            action_type="onboarding.domain_org_created",
+            target_resource_id=str(org.id),
+            details={"observed_domain": hosted_domain},
+            db=db,
+        )
+    record_audit_entry(
+        org_id=org.id,
+        actor_user_id=member.id,
+        action_type="onboarding.member_auto_affiliated",
+        target_resource_id=str(member.id),
+        details={"email": email, "observed_domain": hosted_domain},
+        db=db,
+    )
+    return member
+
+
+def issue_pending_personal_signup_token(email: str, display_name: str | None) -> str:
+    """A short-lived signed record of a verified personal Google identity
+    that has no org yet, so the question "does your company use Workspace?"
+    can be asked without creating anything first."""
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    payload = {
+        "purpose": PENDING_PERSONAL_SIGNUP_PURPOSE,
+        "email": email,
+        "name": display_name,
+        "iat": now,
+        "exp": now + PENDING_PERSONAL_SIGNUP_TTL,
+    }
+    return jwt.encode(payload, settings.jwt_signing_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_pending_personal_signup_token(token: str) -> dict:
+    settings = get_settings()
+    try:
+        payload = jwt.decode(token, settings.jwt_signing_key, algorithms=[settings.jwt_algorithm])
+    except JWTError as exc:
+        raise ValueError(f"invalid or expired personal signup: {exc}") from exc
+    if payload.get("purpose") != PENDING_PERSONAL_SIGNUP_PURPOSE:
+        raise ValueError("invalid personal signup token")
+    return payload
+
+
+def create_domainless_org(pending_token: str, db: Session) -> LoginResult:
+    """The "No / just me" answer for a personal Google account: a domainless
+    org with exactly one owner, the creator. A person can't hold two — the
+    email lookup below turns a repeat into a login."""
+    payload = decode_pending_personal_signup_token(pending_token)
+    email = payload["email"]
+
+    existing = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
+    if existing is not None:
+        return _login_result(existing)
+
+    org = Organization(id=uuid.uuid4(), name=payload.get("name") or email, observed_domain=None, verified_domain=None)
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=email,
+        display_name=payload.get("name"),
+        auth_type=AuthType.PERSONAL_OAUTH,
+        standing=MemberStanding.APPROVED,
+    )
+    org_chart = OrgChart(id=uuid.uuid4(), org_id=org.id, initiator_member_id=member.id, owner_member_id=member.id)
+    db.add(org)
+    db.flush()
+    db.add(member)
+    db.flush()
+    db.add(org_chart)
+    db.commit()
+    db.refresh(member)
+
+    record_audit_entry(
+        org_id=org.id,
+        actor_user_id=member.id,
+        action_type="onboarding.domainless_org_created",
+        target_resource_id=str(org.id),
+        details={"email": email},
+        db=db,
+    )
+    return _login_result(member)
+
+
+def is_founding_member(org_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> bool:
+    first = db.execute(
+        select(OrgMember.id)
+        .where(OrgMember.organization_id == org_id)
+        .order_by(OrgMember.created_at, OrgMember.id)
+        .limit(1)
+    ).scalar_one_or_none()
+    return first == member_id
+
+
+def approve_member(org_id: uuid.UUID, approver: OrgMember, target_member_id: uuid.UUID, db: Session) -> OrgMember:
+    """Owner approves an auto-affiliated member (onboarding spec, "Approving
+    auto-joined members"). A proven Super Admin may approve too once admin
+    proof exists — not built yet, so only the owner can today."""
+    org_chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
+    if org_chart is None or org_chart.owner_member_id != approver.id:
+        raise PermissionError("only the organization's owner can approve members")
+
+    target = db.get(OrgMember, target_member_id)
+    if target is None or target.organization_id != org_id:
+        raise ValueError(f"no member {target_member_id} in organization {org_id}")
+    if target.standing == MemberStanding.APPROVED:
+        return target
+
+    target.standing = MemberStanding.APPROVED
+    db.commit()
+    db.refresh(target)
+
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=approver.id,
+        action_type="onboarding.member_approved",
+        target_resource_id=str(target.id),
+        details={"email": target.email},
+        db=db,
+    )
+    return target

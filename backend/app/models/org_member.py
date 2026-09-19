@@ -19,6 +19,17 @@ class AuthType(str, enum.Enum):
     PERSONAL_OAUTH = "personal_oauth"
 
 
+class MemberStanding(str, enum.Enum):
+    """Whether anyone with authority has accepted this member (onboarding
+    spec, "Sponsorship and member standing"). An auto-affiliated member was
+    placed in the org by evidence alone (a matching Google `hd`); they may
+    use their own data but see nothing of other members until the owner (or,
+    later, a proven Super Admin) approves them."""
+
+    APPROVED = "approved"
+    AUTO_AFFILIATED = "auto_affiliated"
+
+
 class OrgMember(Base):
     __tablename__ = "org_members"
 
@@ -31,6 +42,9 @@ class OrgMember(Base):
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     auth_type: Mapped[AuthType] = mapped_column(value_enum(AuthType, "auth_type"), nullable=False)
+    standing: Mapped[MemberStanding] = mapped_column(
+        value_enum(MemberStanding, "member_standing"), nullable=False, default=MemberStanding.APPROVED
+    )
 
     created_at: Mapped[datetime] = created_at_col()
 

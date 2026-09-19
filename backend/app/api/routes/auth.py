@@ -11,13 +11,14 @@ from app.auth.pkce import InvalidOAuthState, peek_state_purpose
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.models.org_member import OrgMember
-from app.onboarding.service import SIGNUP_STATE_PURPOSE, complete_signup
+from app.onboarding.service import PENDING_PERSONAL_SIGNUP_TTL, SIGNUP_STATE_PURPOSE, SignupResult, complete_signup
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 ACCESS_COOKIE = "knohow_access_token"
 REFRESH_COOKIE = "knohow_refresh_token"
+PENDING_PERSONAL_SIGNUP_COOKIE = "knohow_pending_signup"
 
 
 def cookie_kwargs() -> dict:
@@ -33,6 +34,28 @@ def set_session_cookies(response: Response, access_token: str, refresh_token: st
     response.set_cookie(REFRESH_COOKIE, refresh_token, max_age=settings.jwt_refresh_token_ttl_seconds, **kwargs)
 
 
+def signup_redirect(result: SignupResult) -> RedirectResponse:
+    """Where the browser goes after a signup callback. A personal Google
+    account with no org yet gets no session — only a short-lived pending
+    cookie — and `?signup=personal`, so the frontend can ask whether their
+    company uses Google Workspace (onboarding spec, "Personal account at
+    sign-in")."""
+    settings = get_settings()
+    if result.pending_personal_token is not None:
+        response = RedirectResponse(f"{settings.frontend_origin}?signup=personal", status_code=status.HTTP_302_FOUND)
+        response.set_cookie(
+            PENDING_PERSONAL_SIGNUP_COOKIE,
+            result.pending_personal_token,
+            max_age=int(PENDING_PERSONAL_SIGNUP_TTL.total_seconds()),
+            **cookie_kwargs(),
+        )
+        return response
+
+    response = RedirectResponse(settings.frontend_origin, status_code=status.HTTP_302_FOUND)
+    set_session_cookies(response, result.login.access_token, result.login.refresh_token)
+    return response
+
+
 @router.get("/login")
 def login() -> RedirectResponse:
     result = start_login()
@@ -46,9 +69,8 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
         # Signup shares this redirect URI with login (one GOOGLE_OAUTH_REDIRECT_URI),
         # so Google returns a signup here too — route it by its state purpose.
         if peek_state_purpose(state) == SIGNUP_STATE_PURPOSE:
-            result = complete_signup(code, state, db)
-        else:
-            result = complete_login(code, state, db)
+            return signup_redirect(complete_signup(code, state, db))
+        result = complete_login(code, state, db)
     except InvalidOAuthState as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired login state: {exc}") from exc
     except ValueError as exc:
@@ -93,7 +115,7 @@ def refresh(
 
 @router.post("/logout")
 def logout(response: Response) -> dict:
-    for cookie_name in (ACCESS_COOKIE, REFRESH_COOKIE):
+    for cookie_name in (ACCESS_COOKIE, REFRESH_COOKIE, PENDING_PERSONAL_SIGNUP_COOKIE):
         response.delete_cookie(cookie_name)
     return {"status": "logged_out"}
 
@@ -106,6 +128,7 @@ def me(member: OrgMember = Depends(get_current_member)) -> dict:
         "email": member.email,
         "display_name": member.display_name,
         "auth_type": member.auth_type.value,
+        "standing": member.standing.value,
     }
 
 
