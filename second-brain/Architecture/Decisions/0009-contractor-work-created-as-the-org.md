@@ -34,7 +34,10 @@ Contractors' work is created **as the organization**: the contractor signs into 
   1. **Approval is by scope** — the owner approves a scope for the contractor, not each action and not a time window.
   2. **A blank workspace** — the contractor starts with an empty workspace and works out of it; they see what they create there (and anything deliberately shared into it), nothing else of the org by default.
   3. **Entry by email invite link from a sponsor** — a member sponsors the contractor by sending an invite. Sponsorship rules from [[FEAT-workspace-onboarding-flow]] apply: only a Google-vouched member may sponsor, and sponsorship is non-transitive (a contractor can't invite another contractor); the contractor shows in the org chart as sponsored.
-- **Still open:** who defines the scope the owner approves (the sponsor proposing it, or the owner alone), and whether the contractor can start before the owner approves.
+- **Scope and start (user, 2026-09-18):** the scope is defined by **the owner or an employee** (e.g. the sponsoring employee). The contractor **starts right away** in their blank workspace; they don't wait for approval.
+- **Owner approval (user, 2026-09-18, tentative — "probably"):** only **important** scopes need the owner's approval; an employee can set the rest. Important = **team** (settled below).
+- **What a scope can be (user, 2026-09-18):** any of **specific files**, **a folder** (including files added later), **a team** (what it works on in the org chart) or **a project** (a named grouping across folders and teams). Projects aren't a concept anywhere in Knohow yet.
+- **Owner approval needed only for a team scope (user, 2026-09-18)** — files, folders and projects can be opened up by an employee without the owner. (Recommendation was team + project; user chose team only.)
 - Takes pressure off [[0007-shared-drive-support]] for the contractor case; that ADR is otherwise unchanged.
 
 ## Related
