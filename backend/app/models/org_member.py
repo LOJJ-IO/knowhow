@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class AuthType(str, enum.Enum):
@@ -30,7 +30,7 @@ class OrgMember(Base):
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    auth_type: Mapped[AuthType] = mapped_column(Enum(AuthType, name="auth_type"), nullable=False)
+    auth_type: Mapped[AuthType] = mapped_column(value_enum(AuthType, "auth_type"), nullable=False)
 
     created_at: Mapped[datetime] = created_at_col()
 

@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class UnresolvedOwnershipReason(str, enum.Enum):
@@ -39,7 +39,7 @@ class UnresolvedOwnership(Base):
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
     )
     reason: Mapped[UnresolvedOwnershipReason] = mapped_column(
-        Enum(UnresolvedOwnershipReason, name="unresolved_ownership_reason"), nullable=False
+        value_enum(UnresolvedOwnershipReason, "unresolved_ownership_reason"), nullable=False
     )
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 

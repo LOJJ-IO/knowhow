@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class TransferBatchType(str, enum.Enum):
@@ -42,10 +42,10 @@ class TransferBatch(Base):
         UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True
     )
     batch_type: Mapped[TransferBatchType] = mapped_column(
-        Enum(TransferBatchType, name="transfer_batch_type"), nullable=False
+        value_enum(TransferBatchType, "transfer_batch_type"), nullable=False
     )
     status: Mapped[TransferBatchStatus] = mapped_column(
-        Enum(TransferBatchStatus, name="transfer_batch_status"),
+        value_enum(TransferBatchStatus, "transfer_batch_status"),
         nullable=False,
         default=TransferBatchStatus.PLANNED,
     )
@@ -97,10 +97,10 @@ class TransferBatchItem(Base):
     )
 
     eligibility: Mapped[TransferEligibility] = mapped_column(
-        Enum(TransferEligibility, name="transfer_eligibility"), nullable=False
+        value_enum(TransferEligibility, "transfer_eligibility"), nullable=False
     )
     status: Mapped[TransferItemStatus] = mapped_column(
-        Enum(TransferItemStatus, name="transfer_item_status"), nullable=False, default=TransferItemStatus.PENDING
+        value_enum(TransferItemStatus, "transfer_item_status"), nullable=False, default=TransferItemStatus.PENDING
     )
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)
 

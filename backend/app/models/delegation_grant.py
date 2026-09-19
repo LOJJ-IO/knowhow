@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class DelegationStatus(str, enum.Enum):
@@ -30,7 +30,7 @@ class DelegationGrant(Base):
     )
 
     status: Mapped[DelegationStatus] = mapped_column(
-        Enum(DelegationStatus, name="delegation_status"), nullable=False, default=DelegationStatus.PENDING
+        value_enum(DelegationStatus, "delegation_status"), nullable=False, default=DelegationStatus.PENDING
     )
 
     # The verified domain this grant authorizes impersonation for. Duplicated

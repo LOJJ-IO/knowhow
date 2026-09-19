@@ -138,6 +138,12 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 - **Data access stays per account.** Linking grants no access to either account's Google data; each still authorizes separately (see Individual Google data access above). Personal-account data stays out of org scope.
 - **It supplies an observed domain**, which is the clean path out of the domainless/candidate collision below: the founder links their acme.com account rather than a second org being created.
 
+## Personal account at sign-in (decided 2026-09-18, user)
+When the domain check finds **no `hd`** (personal Google account):
+- **Arrived through a sponsor's invite link** → joins that org as sponsored and lands in their blank workspace ([[0009-contractor-work-created-as-the-org]]).
+- **Arrived cold (no invite)** → **ask first**: "This is a personal Google account. Does your company use Google Workspace?" — **Yes** → sign in with the work account instead (back to Google); **No / just me** → create a **domainless** org (one owner, one per person). Chosen to avoid the domainless ↔ candidate collision below (a Gmail founder creating a second org for a company whose employees are already on Knohow). Copy above is wording direction, not final — user designs the screen.
+- **Backend today does none of this:** `bootstrap_organization` names the org after the email domain, so every Gmail user gets their own org called `gmail.com`.
+
 ## Out of scope
 - Multi-domain organizations (`acme.com` + `acme.ca`) — `Organization.verified_domain` is a single unique column.
 - File classification of the setup person's Drive — see [[FEAT-drive-file-classification]].

@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey
+from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class OrgRole(str, enum.Enum):
@@ -35,7 +35,7 @@ class OrgMembership(Base):
     team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True, index=True
     )
-    role: Mapped[OrgRole] = mapped_column(Enum(OrgRole, name="org_role"), nullable=False)
+    role: Mapped[OrgRole] = mapped_column(value_enum(OrgRole, "org_role"), nullable=False)
 
     created_at: Mapped[datetime] = created_at_col()
 

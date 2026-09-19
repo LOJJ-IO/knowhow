@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class SuggestedShareStatus(str, enum.Enum):
@@ -40,7 +40,7 @@ class SuggestedShare(Base):
     )
     proposed_recipients: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     status: Mapped[SuggestedShareStatus] = mapped_column(
-        Enum(SuggestedShareStatus, name="suggested_share_status"),
+        value_enum(SuggestedShareStatus, "suggested_share_status"),
         nullable=False,
         default=SuggestedShareStatus.PENDING,
     )

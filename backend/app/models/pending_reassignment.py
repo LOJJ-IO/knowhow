@@ -2,12 +2,12 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Enum, ForeignKey, String
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
-from app.models.base import created_at_col, uuid_pk
+from app.models.base import created_at_col, uuid_pk, value_enum
 
 
 class ReassignmentStatus(str, enum.Enum):
@@ -39,7 +39,7 @@ class PendingReassignment(Base):
     affected_file_ids: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=list)
 
     status: Mapped[ReassignmentStatus] = mapped_column(
-        Enum(ReassignmentStatus, name="reassignment_status"),
+        value_enum(ReassignmentStatus, "reassignment_status"),
         nullable=False,
         default=ReassignmentStatus.PENDING_CONFIRMATION,
     )

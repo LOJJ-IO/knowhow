@@ -25,6 +25,7 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Contractor model** — sponsor invite links, blank workspace, create/edit/share/delete as the org's automation account, scopes (files / folder / team / project; team needs owner approval) — [[0009-contractor-work-created-as-the-org]].
 - **Restore from Trash** — every delete goes to Trash for 30 days, so Knohow needs a way to restore ([[0010-deletes-go-to-trash-30-days]]).
 - **Domain checks + identity linking** — `hd` check, observed-domain lookup, one person with several emails; built together ([[FEAT-workspace-onboarding-flow]]).
+- **Personal-account screen** — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
 
