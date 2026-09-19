@@ -200,3 +200,78 @@ def test_personal_signup_round_trip_over_http(db, monkeypatch):
 def test_switch_account_forces_google_account_chooser():
     response = TestClient(app, follow_redirects=False).get("/onboarding/signup", params={"switch_account": "true"})
     assert "prompt=select_account" in response.headers["location"]
+
+
+def _setup_founder_and_coworker(db, monkeypatch, founder_is_owner: bool, **chart_kwargs):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+    create_org_chart(sarah.organization_id, sarah.id, is_owner=founder_is_owner, is_super_admin=False, db=db, **chart_kwargs)
+    db.refresh(sarah)
+    return sarah
+
+
+def test_nominated_owner_becomes_owner_by_signing_in(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
+    assert sarah.standing == MemberStanding.AUTO_AFFILIATED
+
+    nominee = db.execute(select(OrgMember).where(OrgMember.email == "boss@acme.com")).scalar_one()
+    assert nominee.standing == MemberStanding.AUTO_AFFILIATED  # limited until they sign in
+
+    _google(monkeypatch, "boss@acme.com", hd="acme.com")
+    boss = _signup(db).login.member
+
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == sarah.organization_id)).scalar_one()
+    assert boss.id == nominee.id
+    assert chart.owner_member_id == boss.id
+    assert boss.standing == MemberStanding.APPROVED
+
+
+def test_owner_sees_pending_join_requests(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    _google(monkeypatch, "john@acme.com", hd="acme.com")
+    john = _signup(db).login.member
+
+    pending = _client_as(sarah).get(f"/organizations/{sarah.organization_id}/members/pending")
+    assert pending.status_code == 200
+    assert [p["email"] for p in pending.json()] == ["john@acme.com"]
+
+    approved = _client_as(sarah).post(f"/organizations/{sarah.organization_id}/members/{john.id}/approve")
+    assert approved.json()["standing"] == "approved"
+    assert _client_as(sarah).get(f"/organizations/{sarah.organization_id}/members/pending").json() == []
+    assert _client_as(john).get(f"/organizations/{john.organization_id}/members/pending").status_code == 403
+
+
+def test_owner_can_opt_into_auto_accepting_workspace_accounts(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    _google(monkeypatch, "john@acme.com", hd="acme.com")
+    john = _signup(db).login.member
+    assert john.standing == MemberStanding.AUTO_AFFILIATED
+
+    assert _client_as(john).patch(
+        f"/organizations/{john.organization_id}/settings", json={"auto_accept_workspace_members": True}
+    ).status_code == 403
+    enabled = _client_as(sarah).patch(
+        f"/organizations/{sarah.organization_id}/settings", json={"auto_accept_workspace_members": True}
+    )
+    assert enabled.json() == {"auto_accept_workspace_members": True}
+
+    _google(monkeypatch, "amy@acme.com", hd="acme.com")
+    amy = _signup(db).login.member
+    db.refresh(john)
+    assert amy.standing == MemberStanding.APPROVED
+    assert john.standing == MemberStanding.AUTO_AFFILIATED  # existing requests still need the owner
+
+
+def test_super_admin_nomination_is_recorded_only(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(
+        db, monkeypatch, founder_is_owner=True, super_admin_email="it@acme.com"
+    )
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == sarah.organization_id)).scalar_one()
+    assert chart.nominated_super_admin_email == "it@acme.com"
+    assert db.execute(select(OrgMember).where(OrgMember.email == "it@acme.com")).scalar_one_or_none() is None
+
+
+def test_me_reports_owner(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    me = _client_as(sarah).get("/auth/me").json()
+    assert me["is_owner"] is True and me["standing"] == "approved"

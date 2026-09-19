@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,5 +30,9 @@ class OrgChart(Base):
     owner_member_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
     )
+    # Who the initiator named as the Workspace Super Admin, when it isn't
+    # them. A nomination only — Super Admin authority comes from admin proof
+    # (a Google admin-only call), never from this field.
+    nominated_super_admin_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
     created_at: Mapped[datetime] = created_at_col()

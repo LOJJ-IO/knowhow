@@ -47,6 +47,7 @@ def add_member(
     display_name: str | None,
     added_by_member_id: uuid.UUID | None,
     db: Session,
+    standing: MemberStanding = MemberStanding.APPROVED,
 ) -> OrgMember:
     """Adds a member by email. Idempotent: re-adding an existing email
     returns the existing row rather than erroring, since the onboarding
@@ -78,6 +79,7 @@ def add_member(
         email=email,
         display_name=display_name,
         auth_type=_infer_auth_type(email, org),
+        standing=standing,
     )
     db.add(member)
     db.commit()
@@ -107,6 +109,7 @@ def create_org_chart(
     is_super_admin: bool,
     db: Session,
     owner_email: str | None = None,
+    super_admin_email: str | None = None,
 ) -> OrgChartCreationResult:
     """The first user to log in for a new organization initiates org chart
     creation, auto-approved as having created it. Two independent
@@ -131,6 +134,7 @@ def create_org_chart(
         org_id=org_id,
         initiator_member_id=initiator_member_id,
         owner_member_id=initiator_member_id if is_owner else None,
+        nominated_super_admin_email=None if is_super_admin else super_admin_email,
     )
     db.add(org_chart)
     if is_owner:
@@ -151,7 +155,8 @@ def create_org_chart(
 
     token_value: str | None = None
     if not is_owner and owner_email:
-        add_member(org_id, owner_email, None, initiator_member_id, db)
+        # Limited until they sign in as that account and become owner.
+        add_member(org_id, owner_email, None, initiator_member_id, db, standing=MemberStanding.AUTO_AFFILIATED)
         token_value = generate_owner_confirmation_token(org_chart.id, owner_email, initiator_member_id, db)
 
     if is_super_admin:
@@ -308,6 +313,7 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     # login, not a second bootstrap.
     member = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
     if member is not None:
+        confirm_owner_on_sign_in(member, db)
         return SignupResult(login=_login_result(member))
 
     hosted_domain = id_token_claims.get("hd")
@@ -323,7 +329,8 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
 def join_or_create_domain_org(email: str, display_name: str | None, hosted_domain: str, db: Session) -> OrgMember:
     """One active org per observed domain (ADR-0006). A later signup with the
     same `hd` joins the existing org as auto-affiliated — evidence only, no
-    standing — and is never given a second org. The first signup creates the
+    standing, waiting for the owner — unless the owner opted into
+    auto-accepting Workspace accounts; it is never given a second org. The first signup creates the
     org unbound (verified_domain stays null until admin proof) and is itself
     auto-affiliated: the first joiner is only the first claimant, not a role.
     They gain standing by claiming ownership (create_org_chart) or when the
@@ -347,7 +354,11 @@ def join_or_create_domain_org(email: str, display_name: str | None, hosted_domai
         # Google vouched for this account's membership of hosted_domain, so
         # it is eligible for the delegated path once delegation exists.
         auth_type=AuthType.DOMAIN_DELEGATED,
-        standing=MemberStanding.AUTO_AFFILIATED,
+        standing=(
+            MemberStanding.APPROVED
+            if not created_org and org.auto_accept_workspace_members
+            else MemberStanding.AUTO_AFFILIATED
+        ),
     )
     db.add(member)
     # Org and first member in one transaction — a failure can't leave an
@@ -367,7 +378,11 @@ def join_or_create_domain_org(email: str, display_name: str | None, hosted_domai
     record_audit_entry(
         org_id=org.id,
         actor_user_id=member.id,
-        action_type="onboarding.member_auto_affiliated",
+        action_type=(
+            "onboarding.member_auto_accepted"
+            if member.standing == MemberStanding.APPROVED
+            else "onboarding.member_auto_affiliated"
+        ),
         target_resource_id=str(member.id),
         details={"email": email, "observed_domain": hosted_domain},
         db=db,
@@ -442,6 +457,74 @@ def create_domainless_org(pending_token: str, db: Session) -> LoginResult:
     return _login_result(member)
 
 
+def confirm_owner_on_sign_in(member: OrgMember, db: Session) -> bool:
+    """The nominated owner confirms by signing in with Google as the invited
+    account (onboarding spec) — proof of that account, which a forwarded
+    link can't give. Knohow sends no email yet, so this is also how the
+    nomination reaches them at all. Returns whether they became owner."""
+    token = db.execute(
+        select(OwnerConfirmationToken)
+        .join(OrgChart, OrgChart.id == OwnerConfirmationToken.org_chart_id)
+        .where(
+            OrgChart.org_id == member.organization_id,
+            OrgChart.owner_member_id.is_(None),
+            func.lower(OwnerConfirmationToken.owner_email) == member.email.lower(),
+            OwnerConfirmationToken.consumed_at.is_(None),
+            OwnerConfirmationToken.expires_at > datetime.now(timezone.utc),
+        )
+        .order_by(OwnerConfirmationToken.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if token is None:
+        return False
+    confirm_owner(token.token, db)
+    db.refresh(member)
+    return True
+
+
+def is_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
+    org_chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
+    return org_chart is not None and org_chart.owner_member_id == member.id
+
+
+def _require_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> None:
+    if not is_owner(org_id, member, db):
+        raise PermissionError("only the organization's owner can do this")
+
+
+def list_pending_members(org_id: uuid.UUID, requester: OrgMember, db: Session) -> list[OrgMember]:
+    """Join requests waiting for the owner: auto-affiliated members."""
+    _require_owner(org_id, requester, db)
+    return list(
+        db.execute(
+            select(OrgMember)
+            .where(OrgMember.organization_id == org_id, OrgMember.standing == MemberStanding.AUTO_AFFILIATED)
+            .order_by(OrgMember.created_at)
+        ).scalars()
+    )
+
+
+def set_auto_accept_workspace_members(org_id: uuid.UUID, requester: OrgMember, enabled: bool, db: Session) -> Organization:
+    """Owner's opt-in to approve same-domain Workspace signups on arrival.
+    Applies to future signups only; anyone already waiting stays pending
+    until approved."""
+    _require_owner(org_id, requester, db)
+    org = db.get(Organization, org_id)
+    org.auto_accept_workspace_members = enabled
+    db.commit()
+    db.refresh(org)
+
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=requester.id,
+        action_type="onboarding.auto_accept_workspace_members_set",
+        target_resource_id=str(org_id),
+        details={"enabled": enabled},
+        db=db,
+    )
+    return org
+
+
 def is_founding_member(org_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> bool:
     first = db.execute(
         select(OrgMember.id)
@@ -456,9 +539,7 @@ def approve_member(org_id: uuid.UUID, approver: OrgMember, target_member_id: uui
     """Owner approves an auto-affiliated member (onboarding spec, "Approving
     auto-joined members"). A proven Super Admin may approve too once admin
     proof exists — not built yet, so only the owner can today."""
-    org_chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
-    if org_chart is None or org_chart.owner_member_id != approver.id:
-        raise PermissionError("only the organization's owner can approve members")
+    _require_owner(org_id, approver, db)
 
     target = db.get(OrgMember, target_member_id)
     if target is None or target.organization_id != org_id:

@@ -24,7 +24,7 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Projects** — a way to create a project and group files into it (across folders and teams). Nothing in Knohow has this concept yet; needed before a contractor scope can be a project ([[0009-contractor-work-created-as-the-org]]).
 - **Contractor model** — sponsor invite links, blank workspace, create/edit/share/delete as the org's automation account, scopes (files / folder / team / project; team needs owner approval) — [[0009-contractor-work-created-as-the-org]].
 - **Restore from Trash** — every delete goes to Trash for 30 days, so Knohow needs a way to restore ([[0010-deletes-go-to-trash-30-days]]).
-- ~~**Domain check**~~ — **built 2026-09-18** (backend): `hd` check, one org per observed domain, auto-affiliated standing enforced, personal-account pending state + domainless org, owner approval — [[FEAT-workspace-onboarding-flow]] → Technical approach.
+- ~~**Domain check**~~ — **built 2026-09-18** (backend): `hd` check, one org per observed domain, auto-affiliated standing enforced, personal-account pending state + domainless org, owner approval, **owner join controls** (pending list, auto-accept Workspace accounts opt-in, nominated owner confirms by signing in) — [[FEAT-workspace-onboarding-flow]] → Technical approach.
 - **Identity linking** — one person with several emails (next pass, user 2026-09-18).
 - **Super Admin approval + owner override** — needs admin proof (Admin SDK `isAdmin`).
 - **Frontend for sign-in results** — `?signup=personal` question screen, limited-standing state, owner approval UI (user designs).

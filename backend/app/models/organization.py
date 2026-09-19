@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import String
+from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -24,6 +24,10 @@ class Organization(Base):
     # per observed domain; later signups with the same `hd` join it. Null for
     # a domainless org (created from a personal Google account).
     observed_domain: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+
+    # Owner's opt-in: a later signup whose Google `hd` matches this org's
+    # domain is approved on arrival instead of waiting for the owner.
+    auto_accept_workspace_members: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = created_at_col()
 

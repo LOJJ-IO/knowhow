@@ -15,6 +15,7 @@ from app.security.jwt import issue_access_token, issue_refresh_token
 def _fake_result():
     member_id, org_id = uuid.uuid4(), uuid.uuid4()
     return SimpleNamespace(
+        member=SimpleNamespace(id=member_id, organization_id=org_id),
         access_token=issue_access_token(member_id, org_id),
         refresh_token=issue_refresh_token(member_id, org_id),
     )
@@ -25,6 +26,7 @@ def _client(monkeypatch, calls: list[str]) -> TestClient:
     monkeypatch.setattr(
         auth_routes, "complete_signup", lambda code, state, db: calls.append("signup") or SignupResult(login=_fake_result())
     )
+    monkeypatch.setattr(auth_routes, "confirm_owner_on_sign_in", lambda member, db: False)
     app.dependency_overrides[deps.get_db] = lambda: None
     return TestClient(app, follow_redirects=False)
 

@@ -142,6 +142,9 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 - **Owner is self-declared; Super Admin is Google-proven.** A first joiner may answer "Yes, I'm the owner" without being a Super Admin (user confirmed this is allowed) — nothing verifies the owner claim.
 - **Approvers:** the **owner** or a **Google-proven Super Admin** of the domain approves auto-affiliated coworkers. Until then everyone is limited — the first joiner included unless they are the owner.
 - **A proven Super Admin can reassign the owner.** Google-proven authority outranks a self-declared claim; this is the answer to domain squatting (e.g. an intern who signed up first and claimed owner).
+- **Joining an existing domain org verifies with the owner (user, 2026-09-18):** the joiner is a pending join request the owner sees and approves. **The owner can opt into auto-accepting Workspace accounts** (same-domain signups approved on arrival; off by default; doesn't touch requests already waiting).
+- **First joiner (user, 2026-09-18):** says they're the owner → **not limited**. Says they aren't → assumed to be someone (e.g. an intern) sent to set things up: they stay limited and are prompted to **add the owner / Super Admin** — one Workspace user alone can't do much. Screen copy is the user's.
+- **The nominated owner confirms by signing in as that account** (built 2026-09-18) — no email is sent yet, so signing in is also how the nomination reaches them; they're limited until then. A nominated Super Admin email is recorded only — no powers without admin proof.
 - Super Admin approval/override needs **admin proof** (Admin SDK `users.get("me")` → `isAdmin`), which isn't built — owner approval ships first.
 
 ## Personal account at sign-in (decided 2026-09-18, user)
@@ -164,6 +167,7 @@ Not designed. **The sign-in and onboarding screens live inside the Log In slide-
 - **no `hd`** → creates nothing; sets a 15-min signed `knohow_pending_signup` cookie and redirects to `FRONTEND_ORIGIN?signup=personal`. `POST /onboarding/personal-org` ("No / just me") creates the **domainless** org — creator approved, `personal_oauth`, and owner via an org chart; a repeat is a login. "Yes" → `GET /onboarding/signup?switch_account=true` (forces Google's account chooser).
 - **Standing enforced:** `get_approved_member` guards every route exposing others' data (org chart, teams, files, search, reassignments, transfer batches, suggested shares, delegation, audit, offboard). An auto-affiliated member keeps `/auth/me` (now returns `standing`) and personal-OAuth.
 - **Owner:** claiming owner in `POST /organizations/{id}/org-chart` (founding member only — others get 403) or confirming via the owner link grants `approved`. `POST /organizations/{id}/members/{member_id}/approve` — **owner only**; Super Admin approval/override waits on admin proof.
+- **Owner join controls (2026-09-18, migration `0004_owner_join_controls`):** `GET /organizations/{id}/members/pending` (owner only), `PATCH /organizations/{id}/settings` `{auto_accept_workspace_members}` (owner only); `confirm_owner_on_sign_in` on every signup/login; `super_admin_email` on the org-chart request → `OrgChart.nominated_super_admin_email`; `/auth/me` returns `is_owner`. Fixes the "owner confirmation is possession-only" gap for the sign-in path (the old token link still works).
 - Tests: `backend/tests/test_domain_check.py` against a real Postgres test DB (`knohow_test`).
 - **Not built:** identity linking (next pass), invite-link path, org rename, admin proof, any frontend for `?signup=personal` / standing.
 
@@ -176,7 +180,7 @@ The backend already asks the two authority questions separately (`create_org_cha
 - ~~**No `hd` check anywhere**~~ (signup uses `hd` 2026-09-18; `add_member` for invited people still uses the email heuristic) — `_infer_auth_type` guesses Workspace vs personal from the email string + a free-mail list.
 - ~~**No domain check at signup**~~ (built 2026-09-18) — `complete_signup` bootstraps a new org for any unknown email; never looks up an existing org by domain.
 - **`verified_domain` not set at signup** (null until delegation), and delegation derives it from the email string, not Google's `hd` (hosted-domain) ID-token claim. Only `hd` proves a Workspace account; `gmail.com` must never become a tenant.
-- **Owner confirmation is possession-only** — `confirm_owner(token)` doesn't require the confirmer to be authenticated as `owner_email`.
+- ~~**Owner confirmation is possession-only**~~ (signing in as the nominated account now confirms, 2026-09-18; the token link route still exists) — `confirm_owner(token)` doesn't require the confirmer to be authenticated as `owner_email`.
 - **Owner email unrestricted** — any address accepted.
 - **Confirmation email never sent** — delivery marked out of scope in the service.
 - **Identity linking not implemented (noted 2026-09-18, user)** — multiple Google emails as one person is designed ("Identity linking" above) but not built: `complete_login` / `complete_signup` look up a single `OrgMember` by exact email, so a second email is treated as a different person, and a new one bootstraps a separate org. **User, 2026-09-18: build it together with the domain checks** (`hd` check + observed-domain lookup) — a linked Workspace email is what supplies the observed domain.

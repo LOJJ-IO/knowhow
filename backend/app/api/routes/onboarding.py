@@ -16,6 +16,8 @@ from app.models.org_member import OrgMember
 from app.onboarding.service import (
     add_member,
     approve_member,
+    list_pending_members,
+    set_auto_accept_workspace_members,
     complete_signup,
     confirm_owner,
     create_domainless_org,
@@ -67,6 +69,9 @@ class CreateOrgChartRequest(BaseModel):
     is_owner: bool
     is_super_admin: bool
     owner_email: EmailStr | None = None
+    # Who the Super Admin is, when it isn't the initiator — recorded as a
+    # nomination only.
+    super_admin_email: EmailStr | None = None
 
 
 @router.post("/organizations/{org_id}/org-chart")
@@ -86,7 +91,13 @@ def create_org_chart_route(
         )
 
     result = create_org_chart(
-        org_id, member.id, body.is_owner, body.is_super_admin, db, owner_email=body.owner_email
+        org_id,
+        member.id,
+        body.is_owner,
+        body.is_super_admin,
+        db,
+        owner_email=body.owner_email,
+        super_admin_email=body.super_admin_email,
     )
     return {
         "org_chart_id": str(result.org_chart.id),
@@ -134,3 +145,39 @@ def approve_member_route(
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return {"id": str(approved.id), "email": approved.email, "standing": approved.standing.value}
+
+
+@router.get("/organizations/{org_id}/members/pending")
+def pending_members_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> list[dict]:
+    """Join requests for the owner to verify: people who signed in with a
+    matching Workspace domain and are waiting for approval."""
+    try:
+        pending = list_pending_members(org_id, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    return [
+        {"id": str(m.id), "email": m.email, "display_name": m.display_name, "requested_at": m.created_at.isoformat()}
+        for m in pending
+    ]
+
+
+class OrganizationSettingsRequest(BaseModel):
+    auto_accept_workspace_members: bool
+
+
+@router.patch("/organizations/{org_id}/settings")
+def organization_settings_route(
+    org_id: uuid.UUID,
+    body: OrganizationSettingsRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    try:
+        org = set_auto_accept_workspace_members(org_id, member, body.auto_accept_workspace_members, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    return {"auto_accept_workspace_members": org.auto_accept_workspace_members}

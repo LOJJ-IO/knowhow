@@ -11,7 +11,14 @@ from app.auth.pkce import InvalidOAuthState, peek_state_purpose
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.models.org_member import OrgMember
-from app.onboarding.service import PENDING_PERSONAL_SIGNUP_TTL, SIGNUP_STATE_PURPOSE, SignupResult, complete_signup
+from app.onboarding.service import (
+    PENDING_PERSONAL_SIGNUP_TTL,
+    SIGNUP_STATE_PURPOSE,
+    SignupResult,
+    complete_signup,
+    confirm_owner_on_sign_in,
+    is_owner,
+)
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -71,6 +78,7 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
         if peek_state_purpose(state) == SIGNUP_STATE_PURPOSE:
             return signup_redirect(complete_signup(code, state, db))
         result = complete_login(code, state, db)
+        confirm_owner_on_sign_in(result.member, db)
     except InvalidOAuthState as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired login state: {exc}") from exc
     except ValueError as exc:
@@ -121,7 +129,7 @@ def logout(response: Response) -> dict:
 
 
 @router.get("/me")
-def me(member: OrgMember = Depends(get_current_member)) -> dict:
+def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)) -> dict:
     return {
         "id": str(member.id),
         "organization_id": str(member.organization_id),
@@ -129,6 +137,7 @@ def me(member: OrgMember = Depends(get_current_member)) -> dict:
         "display_name": member.display_name,
         "auth_type": member.auth_type.value,
         "standing": member.standing.value,
+        "is_owner": is_owner(member.organization_id, member, db),
     }
 
 
