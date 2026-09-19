@@ -106,9 +106,9 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 - **Attribution lives in Knowhow.** Google's logs name the impersonated/automation account; only Knowhow's audit log knows which human asked. That makes the audit log load-bearing, not decorative.
 - **Delegation only covers Workspace accounts** — a contractor's personal account can never be impersonated, which is consistent: they act as the org, not as themselves.
 
-**Entry path (2026-09-17, user):** contractors are **not** chosen in the sign-in modal (no employee/contractor toggle before auth — consistent with "nothing asked before auth"). The user is leaning towards **deep links / email invite links** to bring contractors in. Not designed yet.
+**Entry path (2026-09-17, user):** contractors are **not** chosen in the sign-in modal (no employee/contractor toggle before auth — consistent with "nothing asked before auth"). **Decided 2026-09-18: email invite link sent by a sponsor.** Screens not designed yet.
 
-**Contractor actions decided (2026-09-18):** create, edit, share, delete — deletes never permanent, recoverable for 30 days ([[0009-contractor-work-created-as-the-org]]). The rest below is still deferred.
+**Contractor actions decided (2026-09-18):** create, edit, share, delete — deletes never permanent, recoverable for 30 days then gone — true of every Knohow delete ([[0009-contractor-work-created-as-the-org]], [[0010-deletes-go-to-trash-30-days]]). **Also decided 2026-09-18:** owner approves a **scope**; contractors get a **blank workspace** to work out of; entry is an **email invite link from a sponsor** (sponsorship rules below apply). See [[0009-contractor-work-created-as-the-org]]. The paragraph below is superseded by these answers.
 
 **Deliberately deferred (user, 2026-09-17: "I don't know right now... that's something we'll need to learn in the future"):** exactly which actions a contractor may have performed as the org (create/edit only, or also share, delete, change permissions — the limit is Knowhow's, not Google's); whether the owner approves per action, per scope, or per time window; what the contractor may *read* while acting as the org.
 

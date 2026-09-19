@@ -168,6 +168,7 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0010-deletes-go-to-trash-30-days.md",
     "Architecture/Decisions/0009-contractor-work-created-as-the-org.md",
     "Architecture/Decisions/0008-continue-with-google-via-backend.md",
     "Product/Features/FEAT-legal-pages.md",
