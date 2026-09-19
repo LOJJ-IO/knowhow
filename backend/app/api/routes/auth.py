@@ -18,6 +18,7 @@ from app.onboarding.service import (
     complete_signup,
     confirm_owner_on_sign_in,
     is_owner,
+    needs_org_setup,
 )
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
@@ -138,6 +139,7 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "auth_type": member.auth_type.value,
         "standing": member.standing.value,
         "is_owner": is_owner(member.organization_id, member, db),
+        "needs_org_setup": needs_org_setup(member, db),
     }
 
 

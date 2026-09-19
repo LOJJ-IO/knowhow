@@ -275,3 +275,15 @@ def test_me_reports_owner(db, monkeypatch):
     sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
     me = _client_as(sarah).get("/auth/me").json()
     assert me["is_owner"] is True and me["standing"] == "approved"
+
+
+def test_me_reports_org_setup_needed_for_founder_only(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+    _google(monkeypatch, "john@acme.com", hd="acme.com")
+    john = _signup(db).login.member
+
+    assert _client_as(sarah).get("/auth/me").json()["needs_org_setup"] is True
+    assert _client_as(john).get("/auth/me").json()["needs_org_setup"] is False
+    create_org_chart(sarah.organization_id, sarah.id, is_owner=True, is_super_admin=False, db=db)
+    assert _client_as(sarah).get("/auth/me").json()["needs_org_setup"] is False

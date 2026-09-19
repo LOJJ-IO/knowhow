@@ -34,6 +34,30 @@ function continueWithGoogle() {
   window.location.assign(`${BACKEND_API_URL}/onboarding/signup`);
 }
 
+/** The backend's `/auth/me` — who's signed in, if anyone. */
+type Me = {
+  organization_id: string;
+  email: string;
+  standing: "approved" | "auto_affiliated";
+  is_owner: boolean;
+  needs_org_setup: boolean;
+};
+
+/** Calls the backend with its session cookies (they live on the backend's origin). */
+function backendFetch(path: string, init?: RequestInit) {
+  return fetch(`${BACKEND_API_URL}${path}`, { ...init, credentials: "include" });
+}
+
+async function fetchMe(): Promise<Me | null> {
+  if (!BACKEND_API_URL) return null;
+  try {
+    const res = await backendFetch("/auth/me");
+    return res.ok ? ((await res.json()) as Me) : null;
+  } catch {
+    return null; // backend not running — the landing works without it
+  }
+}
+
 /** Desktop — prior committed lockup scale (em-positioned composition), −15% then −10% then −10%. */
 const DESKTOP_LOGO_FONT_SIZE = "clamp(2.168775rem,7.745625vw,7.745625rem)";
 /** Desktop subhead sits bottom-center; size only (placement is CSS), −10% then −10%. */
@@ -1619,6 +1643,177 @@ function DemoForm() {
   );
 }
 
+/** Choice buttons in the setup steps — the Continue with Google button's look. */
+const SETUP_CHOICE_CLASS = `relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`;
+
+type SetupStep = "owner" | "ownerEmail" | "superAdmin" | "done";
+
+/** First sign-in for a new organization: the owner and Super Admin
+ *  questions (FEAT-workspace-onboarding-flow). Copy is the spec's wording,
+ *  a placeholder until the user designs these screens. */
+function OrgSetupForm({ me }: { me: Me }) {
+  const [step, setStep] = useState<SetupStep>("owner");
+  const [isOwner, setIsOwner] = useState(true);
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const ownerEmailRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (step === "ownerEmail") ownerEmailRef.current?.focus();
+  }, [step]);
+
+  async function submit(isSuperAdmin: boolean) {
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${me.organization_id}/org-chart`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_owner: isOwner,
+            is_super_admin: isSuperAdmin,
+            owner_email: isOwner ? null : ownerEmail,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.detail ?? `Request failed (${res.status})`);
+      }
+      setStep("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const heading = (text: string) => (
+    <h2
+      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+    >
+      {text}
+    </h2>
+  );
+  const errorLine = error ? (
+    <p
+      aria-live="polite"
+      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+    >
+      {error}
+    </p>
+  ) : null;
+
+  if (step === "owner")
+    return (
+      <div>
+        {heading("Are you the owner / top of the organization?")}
+        <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => {
+              setIsOwner(true);
+              setStep("superAdmin");
+            }}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => {
+              setIsOwner(false);
+              setStep("ownerEmail");
+            }}
+          >
+            No
+          </button>
+        </div>
+      </div>
+    );
+
+  if (step === "ownerEmail")
+    return (
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          const input = ownerEmailRef.current;
+          if (!input?.checkValidity()) {
+            setError(input?.validationMessage ?? "");
+            return;
+          }
+          setError("");
+          setStep("superAdmin");
+        }}
+      >
+        {heading("Owner’s work email")}
+        <div className={`t-input-wrap ${satoshi.className} mt-6 flex flex-col`}>
+          <input
+            ref={ownerEmailRef}
+            type="email"
+            required
+            autoComplete="off"
+            aria-label="Owner's work email"
+            value={ownerEmail}
+            onChange={(e) => setOwnerEmail(e.target.value)}
+            className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+          />
+        </div>
+        {errorLine}
+        <div className="mt-3 flex justify-end">
+          <button
+            type="submit"
+            className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+          >
+            Continue
+          </button>
+        </div>
+      </form>
+    );
+
+  if (step === "superAdmin")
+    return (
+      <div>
+        {heading("Are you a Google Workspace Super Admin?")}
+        <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+          <button
+            type="button"
+            disabled={submitting}
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => void submit(true)}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            disabled={submitting}
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => void submit(false)}
+          >
+            No
+          </button>
+          <button
+            type="button"
+            disabled={submitting}
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => void submit(false)}
+          >
+            I don&rsquo;t know
+          </button>
+        </div>
+        {errorLine}
+      </div>
+    );
+
+  // "done" — the signed-in screen isn't designed yet (user will describe it).
+  return null;
+}
+
 /** Book a Demo's reservation window, from first open (`DEMO_RESERVED_MS`). */
 const DEMO_RESERVED_MS = 5 * 60 * 1000;
 
@@ -1910,7 +2105,11 @@ function LandingHero() {
   /** The slide-up sheet (Log In / Book a Demo) is open. */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which modal the sheet shows — kept after Close so it slides down intact. */
-  const [sheetKind, setSheetKind] = useState<"login" | "demo">("login");
+  const [sheetKind, setSheetKind] = useState<"login" | "demo" | "setup">(
+    "login",
+  );
+  /** Who's signed in (backend `/auth/me`), once known. */
+  const [me, setMe] = useState<Me | null>(null);
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** When Book a Demo first opened this visit — its "reserved" countdown
@@ -1951,6 +2150,23 @@ function LandingHero() {
   useEffect(() => {
     const timers = ctaTimers.current;
     return () => timers.forEach((id) => window.clearTimeout(id));
+  }, []);
+
+  // Back from Google sign-in: if this person still has to set up their new
+  // organization, reopen the sheet on the setup questions.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMe().then((result) => {
+      if (cancelled || !result) return;
+      setMe(result);
+      if (result.needs_org_setup) {
+        setSheetKind("setup");
+        setSheetOpen(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Pause the hero video while the Log In sheet is open: decoding it under
@@ -2354,6 +2570,8 @@ function LandingHero() {
                   .
                 </p>
               </>
+            ) : sheetKind === "setup" && me ? (
+              <OrgSetupForm me={me} />
             ) : (
               <DemoForm />
             )}

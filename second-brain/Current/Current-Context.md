@@ -27,7 +27,7 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - ~~**Domain check**~~ — **built 2026-09-18** (backend): `hd` check, one org per observed domain, auto-affiliated standing enforced, personal-account pending state + domainless org, owner approval, **owner join controls** (pending list, auto-accept Workspace accounts opt-in, nominated owner confirms by signing in) — [[FEAT-workspace-onboarding-flow]] → Technical approach.
 - **Identity linking** — one person with several emails (next pass, user 2026-09-18).
 - **Admin proof** (Admin SDK `isAdmin`) — unlocks Super Admin approval, owner override, domain binding, and a **"Verify I'm the Workspace admin" button** any member can press (user 2026-09-18: "I don't know" allowed at the Super Admin question).
-- **Frontend for sign-in results** — `?signup=personal` question screen, limited-standing state, owner approval UI (user designs).
+- **Frontend for sign-in results** — ~~owner / Super Admin setup screens~~ built 2026-09-18 with spec wording as placeholder copy ([[FEAT-landing-login-panel]]); still to design: the **done screen** (user will describe), `?signup=personal` question screen, limited-standing / waiting state, owner approval UI.
 - **Personal-account screen** (backend ready 2026-09-18) — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).

@@ -487,6 +487,13 @@ def is_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
     return org_chart is not None and org_chart.owner_member_id == member.id
 
 
+def needs_org_setup(member: OrgMember, db: Session) -> bool:
+    """Whether this member still has to answer the owner / Super Admin
+    questions: they're the org's first member and no org chart exists."""
+    has_chart = db.execute(select(OrgChart.id).where(OrgChart.org_id == member.organization_id)).first() is not None
+    return not has_chart and is_founding_member(member.organization_id, member.id, db)
+
+
 def _require_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> None:
     if not is_owner(org_id, member, db):
         raise PermissionError("only the organization's owner can do this")
