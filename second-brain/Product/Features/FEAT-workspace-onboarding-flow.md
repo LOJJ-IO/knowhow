@@ -108,6 +108,8 @@ Ownership and **execution identity** are independent: who a file belongs to vs w
 
 **Entry path (2026-09-17, user):** contractors are **not** chosen in the sign-in modal (no employee/contractor toggle before auth — consistent with "nothing asked before auth"). The user is leaning towards **deep links / email invite links** to bring contractors in. Not designed yet.
 
+**Contractor actions decided (2026-09-18):** create, edit, share, delete — deletes never permanent, recoverable for 30 days ([[0009-contractor-work-created-as-the-org]]). The rest below is still deferred.
+
 **Deliberately deferred (user, 2026-09-17: "I don't know right now... that's something we'll need to learn in the future"):** exactly which actions a contractor may have performed as the org (create/edit only, or also share, delete, change permissions — the limit is Knowhow's, not Google's); whether the owner approves per action, per scope, or per time window; what the contractor may *read* while acting as the org.
 
 ## Claims, acceptance and identity (2026-09-17)

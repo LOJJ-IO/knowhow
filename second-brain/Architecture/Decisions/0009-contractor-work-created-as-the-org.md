@@ -29,7 +29,8 @@ Contractors' work is created **as the organization**: the contractor signs into 
 - **The audit log becomes load-bearing** — Google's logs will name the automation account, not the contractor.
 - **When the contract ends,** removing the contractor's edit access is enough; nothing is stranded.
 - **Nothing exists in `backend/` for this yet:** no automation-account setting per org, no create-as-org action, no contractor role, no scoped/time-limited access.
-- **Still deferred (user, 2026-09-17):** which actions a contractor may have performed as the org (create/edit only, or also share, delete, change permissions); whether the owner approves per action, per scope or per time window; what the contractor may read. Entry path leaning to deep links / email invites. These must be answered before building.
+- **Contractor actions (user, 2026-09-18):** **create, edit, share and delete** files as the org. **Deletes are never permanent** — a delete moves the file somewhere recoverable for **30 days** (user: "All deletions are never permanent"). Mechanics: an editor can't delete a file they don't own in Google, so a contractor delete must go through Knohow, which trashes it as the automation account; Drive Trash keeps it 30 days. Open: what happens after day 30, and whether the rule covers every Knohow delete or only contractors'.
+- **Still deferred (user, 2026-09-17):** whether the owner approves per action, per scope or per time window; what the contractor may read. Entry path leaning to deep links / email invites. These must be answered before building.
 - Takes pressure off [[0007-shared-drive-support]] for the contractor case; that ADR is otherwise unchanged.
 
 ## Related
