@@ -4,7 +4,7 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-18
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]"]
 ---
 
 # Current Context
@@ -16,6 +16,9 @@ The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegatio
 
 ## Continue with Google wired (2026-09-18)
 User chose **real sign-in via the backend** over a mocked one — [[0008-continue-with-google-via-backend]]. GCP project `knohow-staging` + OAuth client exist (Google accepts the client + `localhost:8000/auth/callback`); delegation authorization in a Workspace is unverified. Button → `${NEXT_PUBLIC_BACKEND_API_URL}/onboarding/signup` (`.env` / `.env.example`, `http://localhost:8000`). Backend fix: `/auth/callback` now routes signup state to `complete_signup`. **Local Postgres (2026-09-18):** Homebrew `postgresql@16` on the default **port 5432** (`brew services`, trust auth). An unused EnterpriseDB PostgreSQL 16 install was removed by the user the same day (no backup, never used; only macOS-protected empty container folders remain under `/Library/PostgreSQL/16/Library`). `backend/.env` `DATABASE_URL` → `localhost:5432/knohow`; role + DB `knohow` created; `alembic upgrade head` → `0002_org_engine_schema` (18 tables). Backend venv: `backend/.venv` (Python 3.12). Run: `cd backend && .venv/bin/uvicorn app.main:app --port 8000 --reload`. Full sign-in not yet tried by the user. After sign-in the landing looks unchanged — no signed-in UI yet. Service-account key rotated 2026-09-18 (new `95d725a7…`, loaded from a file path in `backend/.env`) — [[Known-Issues]].
+
+## Contractor ownership decided (2026-09-18)
+Contractors' work is company-owned by being **created as the org through Knohow** (automation account via delegation, contractor gets edit access) — [[0009-contractor-work-created-as-the-org]]. Decided, not built; needs delegation + an automation account per org, and the deferred contractor-scope questions answered first. Also corrected: per-file transfer from a personal account isn't possible.
 
 ## Brand spelling (2026-09-17, user)
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.

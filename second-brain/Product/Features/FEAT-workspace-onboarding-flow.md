@@ -78,9 +78,10 @@ Do not conflate these — each is established differently and none implies anoth
 3. **Authority** — *what may John do for Acme?* (member · may sponsor · may approve members · may **not** confirm company IP)
 
 **Knowhow cannot change Google ownership by asserting it (invariant).** A Knowhow role/session says nothing about Drive. The only backend mechanism is `app/google/ownership.py::transfer_ownership` → Drive `permissions.create(transferOwnership=True)`, which Google restricts to **within one Workspace domain** and refuses between a consumer account and a Workspace. So "the company owns what the contractor creates" is achievable only by:
-- **a Shared Drive** — org-owned at creation, no transfer needed, and the only option that works for an outside account (**backend has no Shared Drive support at all**: no `driveId`, no `supportsAllDrives`);
-- **giving them a Workspace account** (then normal in-domain transfer applies); or
-- **asking them to transfer each file** — voluntary, per file, refusable.
+- **creating it as the org through Knohow** — **chosen for contractors, 2026-09-18** ([[0009-contractor-work-created-as-the-org]]): Knohow creates the file as the org's automation account and shares edit access to the contractor, so it is company-owned from creation; works for an outside/personal account;
+- **a Shared Drive** — org-owned at creation, no transfer needed, also works for an outside account (**backend has no Shared Drive support at all**: no `driveId`, no `supportsAllDrives`) — [[0007-shared-drive-support]]; or
+- **giving them a Workspace account** (then normal in-domain transfer applies).
+~~Asking them to transfer each file~~ — corrected 2026-09-18: Google doesn't allow ownership transfer from a personal account to a Workspace account, so for an outside account this isn't an option at all; between accounts in the same Workspace it's just the option above. Copying (a member makes a company-owned copy) is the only fallback, and it loses history, comments and links.
 Any other framing is Knowhow claiming ownership it does not have. Constrains Auto-Own as well as onboarding.
 
 **Auto-affiliated ≠ member (definition corrected 2026-09-17):** *Knowhow has automatically associated this person with an organization based on evidence; nobody with organizational authority has approved it.* A matching `hd` (`john@acme.com`) auto-affiliates; a personal account (`john@gmail.com`) **never** does, even if the person genuinely works there — approval is the only door in. The earlier "matching company email auto-affiliates even into an unverified candidate" decision is about *affiliation*, not approved membership.
@@ -95,7 +96,7 @@ Any other framing is Knowhow claiming ownership it does not have. Constrains Aut
 
 Affiliation is Knowhow's guess; sponsorship is the org's statement. Neither touches [[FEAT-drive-file-classification]] authority — *who belongs* and *what is official* stay separate.
 
-## Acting as the organization — contractors (2026-09-17, user direction)
+## Acting as the organization — contractors (2026-09-17, user direction; **adopted 2026-09-18** — [[0009-contractor-work-created-as-the-org]])
 
 Ownership and **execution identity** are independent: who a file belongs to vs whose credentials an action runs under. The contractor problem is the second.
 

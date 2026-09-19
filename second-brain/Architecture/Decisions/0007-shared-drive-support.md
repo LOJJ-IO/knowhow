@@ -3,7 +3,7 @@ type: decision
 status: draft
 tags: [area/backend, area/product, google, open-question]
 created: 2026-09-17
-updated: 2026-09-17
+updated: 2026-09-18
 related: ["[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Known-Issues]]"]
 ---
 
@@ -20,7 +20,7 @@ related: ["[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classificatio
 **Shared Drives dissolve that problem rather than solving it.** A file created in a Shared Drive is owned by the organization from the moment of creation — nobody to transfer from, nothing to reclaim, nothing to strand at offboarding. So a Shared Drive is less a missing feature than a competing answer to the same question.
 
 **Two things force the question now:**
-1. **The contractor / outside-account case has no other answer.** Google refuses ownership transfer between a consumer account and a Workspace, so an outside Gmail account cannot be transferred *from*. A Shared Drive is the only mechanism by which the company owns that work — see the ownership invariant in [[FEAT-workspace-onboarding-flow]] and [[Known-Issues]].
+1. *(2026-09-18: the contractor case is now answered by [[0009-contractor-work-created-as-the-org]] — files created as the org through Knohow. The paragraph below is kept as written.)* **The contractor / outside-account case has no other answer.** Google refuses ownership transfer between a consumer account and a Workspace, so an outside Gmail account cannot be transferred *from*. A Shared Drive is the only mechanism by which the company owns that work — see the ownership invariant in [[FEAT-workspace-onboarding-flow]] and [[Known-Issues]].
 2. **Existing Shared Drive files are invisible.** Without `supportsAllDrives`/`includeItemsFromAllDrives`, the sweep never sees them. A company that already works in Shared Drives would get an oddly empty picture from Knowhow — and, worse, a confident one.
 
 **Loose end:** `app/google/ownership.py`'s module docstring calls its contents "Shared Drive ownership-transfer primitives", but nothing in the file touches Shared Drives. Either intent that was never built, or loose wording. The docstring does not match the code.
