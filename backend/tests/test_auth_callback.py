@@ -26,7 +26,7 @@ def _client(monkeypatch, calls: list[str]) -> TestClient:
     monkeypatch.setattr(
         auth_routes, "complete_signup", lambda code, state, db: calls.append("signup") or SignupResult(login=_fake_result())
     )
-    monkeypatch.setattr(auth_routes, "confirm_owner_on_sign_in", lambda member, db: False)
+    monkeypatch.setattr(auth_routes, "accept_invitations_on_sign_in", lambda member, db: False)
     app.dependency_overrides[deps.get_db] = lambda: None
     return TestClient(app, follow_redirects=False)
 

@@ -23,15 +23,33 @@ gsap.registerPlugin(SplitText, useGSAP);
 /** FastAPI backend origin (`backend/`). Sign-in is a full-page redirect to it — see Architecture-Overview's "Backend integration contract". */
 const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL;
 
-/** Hands the browser to the backend's Google sign-in. `/onboarding/signup` signs in existing members and bootstraps new ones, so one button covers both. */
-function continueWithGoogle() {
+/** Hands the browser to the backend's Google sign-in. `/onboarding/signup` signs in existing members and bootstraps new ones, so one button covers both.
+ *  An invite token (from a forwarded `?invite=` link) pre-selects the invited Google account. */
+function continueWithGoogle(inviteToken?: string | null) {
   if (!BACKEND_API_URL) {
     console.error("NEXT_PUBLIC_BACKEND_API_URL is not set — cannot start Google sign-in.");
     return;
   }
+  const query = inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : "";
   // External origin (the backend), not a Next.js route — a router push can't leave the app.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-  window.location.assign(`${BACKEND_API_URL}/onboarding/signup`);
+  window.location.assign(`${BACKEND_API_URL}/onboarding/signup${query}`);
+}
+
+/** `?invite=<token>` from a forwarded owner / Super Admin link. The backend
+ *  also sends `?invite=wrong_account`, which is a result, not a token. */
+function readInviteToken(): string | null {
+  const invite = new URLSearchParams(window.location.search).get("invite");
+  return invite && invite !== "wrong_account" ? invite : null;
+}
+
+/** Sends the browser to Google to confirm the signed-in person is a Super
+ *  Admin of their Workspace; the backend comes back with `?admin_proof=…`. */
+function startAdminProof() {
+  if (!BACKEND_API_URL) return;
+  // External origin (the backend), not a Next.js route.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${BACKEND_API_URL}/auth/admin-proof/start`);
 }
 
 /** The backend's `/auth/me` — who's signed in, if anyone. */
@@ -41,11 +59,24 @@ type Me = {
   standing: "approved" | "auto_affiliated";
   is_owner: boolean;
   needs_org_setup: boolean;
+  is_super_admin: boolean;
 };
 
 /** Calls the backend with its session cookies (they live on the backend's origin). */
 function backendFetch(path: string, init?: RequestInit) {
   return fetch(`${BACKEND_API_URL}${path}`, { ...init, credentials: "include" });
+}
+
+/** A readable message from a failed backend response. FastAPI sends
+ *  `detail` as a string for our own errors and as a list of field errors
+ *  for validation failures (422). */
+async function backendError(res: Response): Promise<string> {
+  const body = await res.json().catch(() => null);
+  const detail = body?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && typeof detail[0]?.msg === "string")
+    return detail[0].msg;
+  return `Request failed (${res.status})`;
 }
 
 async function fetchMe(): Promise<Me | null> {
@@ -1680,8 +1711,13 @@ function OrgSetupForm({ me }: { me: Me }) {
         },
       );
       if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.detail ?? `Request failed (${res.status})`);
+        throw new Error(await backendError(res));
+      }
+      if (isSuperAdmin) {
+        // "Yes" is only a claim — Google confirms it (admin proof) before
+        // Knohow treats them as Super Admin.
+        startAdminProof();
+        return;
       }
       setStep("done");
     } catch (e) {
@@ -1760,7 +1796,10 @@ function OrgSetupForm({ me }: { me: Me }) {
             autoComplete="off"
             aria-label="Owner's work email"
             value={ownerEmail}
-            onChange={(e) => setOwnerEmail(e.target.value)}
+            onChange={(e) => {
+              setOwnerEmail(e.target.value);
+              setError("");
+            }}
             className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
           />
         </div>
@@ -1812,6 +1851,174 @@ function OrgSetupForm({ me }: { me: Me }) {
 
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   return null;
+}
+
+/** Outcomes the backend reports back in the URL after a Google round trip. */
+type SignInResult =
+  | "admin_verified"
+  | "admin_not_verified"
+  | "admin_error"
+  | "personal"
+  | "invite_wrong_account";
+
+function readSignInResult(): SignInResult | null {
+  const params = new URLSearchParams(window.location.search);
+  const adminProof = params.get("admin_proof");
+  if (adminProof === "verified") return "admin_verified";
+  if (adminProof === "not_verified") return "admin_not_verified";
+  if (adminProof === "error") return "admin_error";
+  if (params.get("signup") === "personal") return "personal";
+  if (params.get("invite") === "wrong_account") return "invite_wrong_account";
+  return null;
+}
+
+/** Drops the result from the URL so a reload doesn't show it again. */
+function clearSignInResultFromUrl() {
+  const url = new URL(window.location.href);
+  for (const key of ["admin_proof", "signup", "invite"]) url.searchParams.delete(key);
+  window.history.replaceState(null, "", url);
+}
+
+/** Sends the browser back to Google with the account chooser forced open. */
+function signInWithAnotherAccount() {
+  if (!BACKEND_API_URL) return;
+  // External origin (the backend), not a Next.js route.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${BACKEND_API_URL}/onboarding/signup?switch_account=true`);
+}
+
+/** What came back from Google. PLACEHOLDER copy (user asked for placeholders
+ *  until they design these screens). */
+function SignInResultPanel({
+  result,
+  onDone,
+}: {
+  result: SignInResult;
+  /** Closes the sheet. */
+  onDone: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState(false);
+  async function createPersonalOrg() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await backendFetch("/onboarding/personal-org", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        throw new Error(await backendError(res));
+      }
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // "done" — the signed-in screen isn't designed yet (user will describe it).
+  if (done) return null;
+
+  const heading = (text: string) => (
+    <h2
+      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+    >
+      {text}
+    </h2>
+  );
+  const body = (text: string) => (
+    <p
+      className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+    >
+      {text}
+    </p>
+  );
+  const choices = (
+    buttons: { label: string; onClick: () => void }[],
+  ) => (
+    <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+      {buttons.map((b) => (
+        <button
+          key={b.label}
+          type="button"
+          disabled={submitting}
+          className={SETUP_CHOICE_CLASS}
+          onClick={b.onClick}
+        >
+          {b.label}
+        </button>
+      ))}
+    </div>
+  );
+  const errorLine = error ? (
+    <p
+      aria-live="polite"
+      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+    >
+      {error}
+    </p>
+  ) : null;
+
+  switch (result) {
+    case "admin_verified":
+      return (
+        <div>
+          {heading("You’re verified as a Google Workspace Super Admin")}
+          {body("Google confirmed it. Your organization’s domain is now verified.")}
+        </div>
+      );
+    case "admin_not_verified":
+      // One action per screen (user): inviting the Super Admin happens later
+      // in the app, not here.
+      return (
+        <div>
+          {heading("Google didn’t confirm you as a Super Admin")}
+          {body("You can keep using Knohow. You can invite your Super Admin later.")}
+          {choices([{ label: "Skip for now", onClick: onDone }])}
+        </div>
+      );
+    case "admin_error":
+      return (
+        <div>
+          {heading("We couldn’t check with Google")}
+          {body("Nothing changed. Try again in a moment.")}
+          {choices([{ label: "Try again", onClick: startAdminProof }])}
+        </div>
+      );
+    case "personal":
+      return (
+        <div>
+          {heading("This is a personal Google account")}
+          {body("Does your company use Google Workspace?")}
+          {choices([
+            {
+              label: "Yes — use my work account",
+              onClick: signInWithAnotherAccount,
+            },
+            {
+              label: "No — just me",
+              onClick: () => void createPersonalOrg(),
+            },
+          ])}
+          {errorLine}
+        </div>
+      );
+    case "invite_wrong_account":
+      return (
+        <div>
+          {heading("That wasn’t the invited account")}
+          {body("Sign in with the email address the invite was for.")}
+          {choices([
+            {
+              label: "Use another account",
+              onClick: signInWithAnotherAccount,
+            },
+          ])}
+        </div>
+      );
+  }
 }
 
 /** Book a Demo's reservation window, from first open (`DEMO_RESERVED_MS`). */
@@ -2105,9 +2312,11 @@ function LandingHero() {
   /** The slide-up sheet (Log In / Book a Demo) is open. */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which modal the sheet shows — kept after Close so it slides down intact. */
-  const [sheetKind, setSheetKind] = useState<"login" | "demo" | "setup">(
-    "login",
-  );
+  const [sheetKind, setSheetKind] = useState<
+    "login" | "demo" | "setup" | "result"
+  >("login");
+  /** What came back from a Google round trip, shown in the sheet. */
+  const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
   /** Who's signed in (backend `/auth/me`), once known. */
   const [me, setMe] = useState<Me | null>(null);
   /** The sheet has finished sliding up — square corners from then on. */
@@ -2157,10 +2366,21 @@ function LandingHero() {
   useEffect(() => {
     let cancelled = false;
     void fetchMe().then((result) => {
-      if (cancelled || !result) return;
-      setMe(result);
-      if (result.needs_org_setup) {
+      if (cancelled) return;
+      if (result) setMe(result);
+      const returned = readSignInResult();
+      if (returned) clearSignInResultFromUrl();
+      if (result?.needs_org_setup) {
         setSheetKind("setup");
+        setSheetOpen(true);
+      } else if (returned) {
+        setSignInResult(returned);
+        setSheetKind("result");
+        setSheetOpen(true);
+      } else if (readInviteToken()) {
+        // Arrived from an invite link: open Log In so they can sign in as
+        // the invited account.
+        setSheetKind("login");
         setSheetOpen(true);
       }
     });
@@ -2550,7 +2770,7 @@ function LandingHero() {
                 </p>
                 <button
                   type="button"
-                  onClick={continueWithGoogle}
+                  onClick={() => continueWithGoogle(readInviteToken())}
                   className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
                 >
                   <GoogleG className="absolute left-[13px] size-5" />
@@ -2572,6 +2792,14 @@ function LandingHero() {
               </>
             ) : sheetKind === "setup" && me ? (
               <OrgSetupForm me={me} />
+            ) : sheetKind === "result" && signInResult ? (
+              <SignInResultPanel
+                result={signInResult}
+                onDone={() => {
+                  setSheetAtTop(false);
+                  setSheetOpen(false);
+                }}
+              />
             ) : (
               <DemoForm />
             )}

@@ -10,15 +10,12 @@ from app.activity.detection import ActivityEvent
 from app.exceptions import DelegationNotApproved
 from app.google.drive_client import load_service_account_info
 from app.google.retry import google_api_call
-from app.google.scopes import DOMAIN_DELEGATION_SCOPES
+from app.google.scopes import DOMAIN_DELEGATION_SCOPES, REPORTS_AUDIT_SCOPE
 from app.models.delegation_grant import DelegationStatus
 from app.models.organization import Organization
 
-# Admin SDK Reports API scope — read-only, org-wide Drive activity feed for
-# domain members. Requested alongside DOMAIN_DELEGATION_SCOPES on the same
-# service account; separate from the Drive scope itself since this is a
-# different API surface (audit/reporting, not file mutation).
-REPORTS_SCOPE = "https://www.googleapis.com/auth/admin.reports.audit.readonly"
+# Defined in app/google/scopes.py so the delegation setup guide lists it too.
+REPORTS_SCOPE = REPORTS_AUDIT_SCOPE
 
 
 def _reports_client(admin_email: str):

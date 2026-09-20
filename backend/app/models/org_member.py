@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -45,6 +45,10 @@ class OrgMember(Base):
     standing: Mapped[MemberStanding] = mapped_column(
         value_enum(MemberStanding, "member_standing"), nullable=False, default=MemberStanding.APPROVED
     )
+
+    # Set when Google proved this account is a Super Admin of the org's
+    # Workspace domain (admin proof). Never set from a self-declared answer.
+    super_admin_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = created_at_col()
 

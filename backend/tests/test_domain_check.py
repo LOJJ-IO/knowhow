@@ -287,3 +287,403 @@ def test_me_reports_org_setup_needed_for_founder_only(db, monkeypatch):
     assert _client_as(john).get("/auth/me").json()["needs_org_setup"] is False
     create_org_chart(sarah.organization_id, sarah.id, is_owner=True, is_super_admin=False, db=db)
     assert _client_as(sarah).get("/auth/me").json()["needs_org_setup"] is False
+
+
+# --- Admin proof -----------------------------------------------------------
+
+from app.google import directory  # noqa: E402
+from app.models.delegation_grant import DelegationGrant  # noqa: E402
+from app.onboarding import admin_proof  # noqa: E402
+from app.onboarding.admin_proof import ADMIN_PROOF_STATE_PURPOSE, complete_admin_proof  # noqa: E402
+
+
+def _admin_google(monkeypatch, email: str, hd: str | None, directory_says_admin: bool):
+    claims = {"email": email, "email_verified": True}
+    if hd:
+        claims["hd"] = hd
+    monkeypatch.setattr(admin_proof, "exchange_code_for_tokens", lambda code, verifier: {"id_token": "stub", "access_token": "at"})
+    monkeypatch.setattr(admin_proof, "verify_id_token", lambda token: claims)
+    monkeypatch.setattr(admin_proof, "is_super_admin", lambda access_token, e: directory_says_admin)
+
+
+def _admin_state(member: OrgMember) -> str:
+    return build_state_token("verifier", purpose=ADMIN_PROOF_STATE_PURPOSE, extra={"member_id": str(member.id)})
+
+
+def test_admin_proof_verifies_binds_domain_and_starts_delegation(db, monkeypatch):
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+    it = _signup(db).login.member
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=True)
+
+    result = complete_admin_proof("code", _admin_state(it), db)
+
+    org = db.get(Organization, it.organization_id)
+    grant = db.execute(select(DelegationGrant).where(DelegationGrant.organization_id == org.id)).scalar_one()
+    assert result.proven
+    assert result.member.super_admin_verified_at is not None
+    assert result.member.standing == MemberStanding.APPROVED
+    assert org.verified_domain == "acme.com"
+    assert grant.verified_domain == "acme.com"
+
+
+def test_admin_proof_not_admin_changes_nothing(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+    _admin_google(monkeypatch, "sarah@acme.com", hd="acme.com", directory_says_admin=False)
+
+    result = complete_admin_proof("code", _admin_state(sarah), db)
+
+    assert not result.proven
+    assert result.member.super_admin_verified_at is None
+    assert result.member.standing == MemberStanding.AUTO_AFFILIATED
+    assert db.get(Organization, sarah.organization_id).verified_domain is None
+
+
+def test_admin_of_another_domain_is_not_proven_here(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+    _admin_google(monkeypatch, "sarah@acme.com", hd="other.com", directory_says_admin=True)
+
+    assert not complete_admin_proof("code", _admin_state(sarah), db).proven
+
+
+def test_admin_proof_rejects_a_different_google_account(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+    _admin_google(monkeypatch, "someone@acme.com", hd="acme.com", directory_says_admin=True)
+
+    with pytest.raises(ValueError):
+        complete_admin_proof("code", _admin_state(sarah), db)
+
+
+def test_self_declared_super_admin_does_not_start_delegation(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+
+    create_org_chart(sarah.organization_id, sarah.id, is_owner=True, is_super_admin=True, db=db)
+
+    assert db.execute(select(DelegationGrant)).first() is None
+    assert db.get(Organization, sarah.organization_id).verified_domain is None
+
+
+def test_verified_super_admin_outranks_self_declared_owner(db, monkeypatch):
+    intern = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+    it = _signup(db).login.member
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=True)
+    complete_admin_proof("code", _admin_state(it), db)
+    _google(monkeypatch, "ceo@acme.com", hd="acme.com")
+    ceo = _signup(db).login.member
+
+    approved = _client_as(it).post(f"/organizations/{it.organization_id}/members/{ceo.id}/approve")
+    reassigned = _client_as(it).post(f"/organizations/{it.organization_id}/owner", json={"member_id": str(ceo.id)})
+    intern_try = _client_as(intern).post(f"/organizations/{intern.organization_id}/owner", json={"member_id": str(intern.id)})
+
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == it.organization_id)).scalar_one()
+    db.refresh(chart)
+    assert approved.status_code == 200
+    assert reassigned.status_code == 200
+    assert chart.owner_member_id == ceo.id
+    assert intern_try.status_code == 403
+    assert _client_as(it).get("/auth/me").json()["is_super_admin"] is True
+
+
+def test_admin_proof_callback_redirects_with_outcome(db, monkeypatch):
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+    it = _signup(db).login.member
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=False)
+
+    response = TestClient(app, follow_redirects=False).get(
+        "/auth/callback", params={"code": "c", "state": _admin_state(it)}
+    )
+
+    assert response.status_code == 302
+    assert urlparse(response.headers["location"]).query == "admin_proof=not_verified"
+
+
+class _FakeResponse:
+    def __init__(self, status_code: int, body: dict | None = None):
+        self.status_code = status_code
+        self._body = body if body is not None else {}
+
+    def json(self):
+        return self._body
+
+
+@pytest.mark.parametrize(
+    ("status_code", "body", "expected"),
+    [
+        (200, {"isAdmin": True}, True),
+        (200, {"isAdmin": False}, False),
+        (200, {}, False),
+        (403, {"error": {"code": 403, "errors": [{"reason": "forbidden"}]}}, False),
+    ],
+)
+def test_directory_lookup_reads_is_admin(monkeypatch, status_code, body, expected):
+    monkeypatch.setattr(directory.httpx, "get", lambda *a, **k: _FakeResponse(status_code, body))
+    assert directory.is_super_admin("token", "it@acme.com") is expected
+
+
+@pytest.mark.parametrize(
+    ("status_code", "body"),
+    [
+        (500, None),
+        (401, None),
+        # Admin SDK API not enabled in the GCP project — not a verdict on the person.
+        (403, {"error": {"code": 403, "errors": [{"reason": "accessNotConfigured"}]}}),
+    ],
+)
+def test_directory_lookup_raises_when_check_did_not_run(monkeypatch, status_code, body):
+    monkeypatch.setattr(directory.httpx, "get", lambda *a, **k: _FakeResponse(status_code, body))
+    with pytest.raises(directory.DirectoryLookupError):
+        directory.is_super_admin("token", "it@acme.com")
+
+
+# --- Invite links -----------------------------------------------------------
+
+from urllib.parse import parse_qs  # noqa: E402
+
+from app.models.invitation import Invitation, InvitationKind  # noqa: E402
+from app.onboarding.service import start_signup  # noqa: E402
+
+
+def _invite_state(email: str) -> str:
+    return build_state_token("verifier", purpose=SIGNUP_STATE_PURPOSE, extra={"invite_email": email})
+
+
+def test_setup_nominates_owner_and_super_admin_in_parallel(db, monkeypatch):
+    _google(monkeypatch, "intern@acme.com", hd="acme.com")
+    intern = _signup(db).login.member
+
+    response = _client_as(intern).post(
+        f"/organizations/{intern.organization_id}/org-chart",
+        json={"is_owner": False, "is_super_admin": False, "owner_email": "boss@acme.com", "super_admin_email": "it@acme.com"},
+    ).json()
+
+    assert "?invite=" in response["owner_invite_url"]
+    assert "?invite=" in response["super_admin_invite_url"]
+    listed = _client_as(intern).get(f"/organizations/{intern.organization_id}/invitations")
+    assert listed.status_code == 200  # the limited setup person can still fetch the links
+    assert sorted(i["kind"] for i in listed.json()) == ["owner", "super_admin"]
+
+
+def test_coworker_cannot_see_invite_links(db, monkeypatch):
+    _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
+    _google(monkeypatch, "john@acme.com", hd="acme.com")
+    john = _signup(db).login.member
+    assert _client_as(john).get(f"/organizations/{john.organization_id}/invitations").status_code == 403
+
+
+def test_invite_link_preselects_the_invited_account(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
+    invitation = db.execute(select(Invitation).where(Invitation.organization_id == sarah.organization_id)).scalar_one()
+
+    url = start_signup(invite_token=invitation.token, db=db).authorization_url
+
+    assert parse_qs(urlparse(url).query)["login_hint"] == ["boss@acme.com"]
+
+
+def test_holding_the_link_is_not_enough(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+
+    result = complete_signup("code", _invite_state("boss@acme.com"), db)
+
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == sarah.organization_id)).scalar_one()
+    assert result.invite_wrong_account
+    assert chart.owner_member_id is None
+
+
+def test_super_admin_invitee_goes_straight_to_admin_proof(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True, super_admin_email="it@acme.com")
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+
+    callback = TestClient(app, follow_redirects=False).get(
+        "/auth/callback", params={"code": "c", "state": _invite_state("it@acme.com")}
+    )
+    assert callback.headers["location"] == "/auth/admin-proof/start"
+    assert "knohow_access_token" in callback.cookies
+
+    it = db.execute(select(OrgMember).where(OrgMember.email == "it@acme.com")).scalar_one()
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=True)
+    complete_admin_proof("code", _admin_state(it), db)
+    pending = db.execute(
+        select(Invitation).where(Invitation.kind == InvitationKind.SUPER_ADMIN, Invitation.consumed_at.is_(None))
+    ).first()
+    assert pending is None
+    assert sarah.organization_id == it.organization_id
+
+
+def test_nominate_later_and_no_second_owner(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    client = _client_as(sarah)
+
+    admin_invite = client.post(
+        f"/organizations/{sarah.organization_id}/invitations", json={"kind": "super_admin", "email": "it@acme.com"}
+    )
+    same_again = client.post(
+        f"/organizations/{sarah.organization_id}/invitations", json={"kind": "super_admin", "email": "IT@acme.com"}
+    )
+    owner_invite = client.post(
+        f"/organizations/{sarah.organization_id}/invitations", json={"kind": "owner", "email": "boss@acme.com"}
+    )
+
+    assert admin_invite.status_code == 200
+    assert same_again.json()["id"] == admin_invite.json()["id"]
+    assert owner_invite.status_code == 409
+
+
+# --- Delegation guide + detection -------------------------------------------
+
+from app.auth import delegation  # noqa: E402
+from app.models.delegation_grant import DelegationStatus  # noqa: E402
+
+
+def _verified_admin_org(db, monkeypatch):
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+    it = _signup(db).login.member
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=True)
+    complete_admin_proof("code", _admin_state(it), db)
+    db.refresh(it)
+    return it
+
+
+def test_delegation_setup_guide_lists_client_id_and_every_scope(db, monkeypatch):
+    it = _verified_admin_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "load_service_account_info", lambda: {"client_id": "1088315"})
+    monkeypatch.setattr(delegation, "_impersonation_works", lambda subject, scopes: False)
+
+    guide = _client_as(it).get(f"/organizations/{it.organization_id}/delegation/setup").json()
+
+    assert guide["client_id"] == "1088315"
+    assert guide["scopes"] == delegation.ADMIN_CONSOLE_DELEGATION_SCOPES
+    assert guide["scopes_csv"] == ",".join(delegation.ADMIN_CONSOLE_DELEGATION_SCOPES)
+    assert guide["admin_console_url"].startswith("https://admin.google.com/")
+    assert guide["status"] == "pending"
+
+
+def test_delegation_detection_reports_missing_scopes(db, monkeypatch):
+    it = _verified_admin_org(db, monkeypatch)
+    drive_only = delegation.DOMAIN_DELEGATION_SCOPES
+    monkeypatch.setattr(delegation, "_impersonation_works", lambda subject, scopes: all(s in drive_only for s in scopes))
+
+    result = delegation.check_delegation(it.organization_id, db)
+
+    assert result.status == "pending"
+    assert result.missing_scopes == [s for s in delegation.ADMIN_CONSOLE_DELEGATION_SCOPES if s not in drive_only]
+
+
+def test_delegation_detection_approves_once_impersonation_works(db, monkeypatch):
+    it = _verified_admin_org(db, monkeypatch)
+    calls = []
+    monkeypatch.setattr(delegation, "_impersonation_works", lambda subject, scopes: calls.append(subject) or True)
+    monkeypatch.setattr(delegation, "_drive_call_works", lambda subject: True)
+
+    result = delegation.check_delegation(it.organization_id, db)
+
+    grant = db.execute(select(DelegationGrant).where(DelegationGrant.organization_id == it.organization_id)).scalar_one()
+    assert result.status == "approved"
+    assert grant.status == DelegationStatus.APPROVED
+    assert grant.approving_admin_email == "it@acme.com"
+    assert calls == ["it@acme.com"]  # impersonates the verified Super Admin
+
+
+def test_delegation_is_not_checked_without_admin_proof(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    assert delegation.check_delegation(sarah.organization_id, db).status == "not_started"
+
+
+def test_approve_route_no_longer_takes_anyones_word(db, monkeypatch):
+    it = _verified_admin_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "_impersonation_works", lambda subject, scopes: False)
+
+    response = _client_as(it).post(
+        f"/organizations/{it.organization_id}/delegation/approve", json={"approving_admin_email": "it@acme.com"}
+    )
+
+    assert response.json()["status"] == "pending"
+
+
+def test_naming_yourself_as_owner_makes_you_owner(db, monkeypatch):
+    _google(monkeypatch, "sarah@acme.com", hd="acme.com")
+    sarah = _signup(db).login.member
+
+    create_org_chart(
+        sarah.organization_id, sarah.id, is_owner=False, is_super_admin=False, db=db, owner_email="Sarah@acme.com"
+    )
+
+    db.refresh(sarah)
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == sarah.organization_id)).scalar_one()
+    assert chart.owner_member_id == sarah.id
+    assert sarah.standing == MemberStanding.APPROVED
+    assert db.execute(select(Invitation)).first() is None
+
+
+# --- Open admin link --------------------------------------------------------
+
+def _open_state(token: str) -> str:
+    return build_state_token("verifier", purpose=SIGNUP_STATE_PURPOSE, extra={"open_admin_invite": token})
+
+
+def _open_link(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
+    response = _client_as(sarah).post(f"/organizations/{sarah.organization_id}/invitations", json={"kind": "super_admin"})
+    return sarah, response.json()
+
+
+def test_open_admin_link_has_no_email_and_is_reused(db, monkeypatch):
+    sarah, link = _open_link(db, monkeypatch)
+    again = _client_as(sarah).post(f"/organizations/{sarah.organization_id}/invitations", json={"kind": "super_admin"})
+    owner_without_email = _client_as(sarah).post(f"/organizations/{sarah.organization_id}/invitations", json={"kind": "owner"})
+
+    assert link["email"] is None and "?invite=" in link["url"]
+    assert again.json()["id"] == link["id"]
+    assert owner_without_email.status_code == 409
+
+
+def test_open_admin_link_does_not_preselect_an_account(db, monkeypatch):
+    _, link = _open_link(db, monkeypatch)
+    token = link["url"].split("invite=")[1]
+    assert "login_hint" not in parse_qs(urlparse(start_signup(invite_token=token, db=db).authorization_url).query)
+
+
+def test_anyone_via_open_link_is_checked_and_non_admins_stay_members(db, monkeypatch):
+    sarah, link = _open_link(db, monkeypatch)
+    token = link["url"].split("invite=")[1]
+    _google(monkeypatch, "john@acme.com", hd="acme.com")
+
+    callback = TestClient(app, follow_redirects=False).get(
+        "/auth/callback", params={"code": "c", "state": _open_state(token)}
+    )
+    assert callback.headers["location"] == "/auth/admin-proof/start"
+
+    john = db.execute(select(OrgMember).where(OrgMember.email == "john@acme.com")).scalar_one()
+    _admin_google(monkeypatch, "john@acme.com", hd="acme.com", directory_says_admin=False)
+    assert not complete_admin_proof("code", _admin_state(john), db).proven
+    db.refresh(john)
+    assert john.standing == MemberStanding.AUTO_AFFILIATED  # just a coworker waiting for approval
+    open_invite = db.execute(select(Invitation).where(Invitation.email.is_(None))).scalar_one()
+    assert open_invite.consumed_at is None  # still live for the real admin
+
+
+def test_open_link_is_used_up_once_the_real_admin_proves_it(db, monkeypatch):
+    sarah, link = _open_link(db, monkeypatch)
+    token = link["url"].split("invite=")[1]
+    _google(monkeypatch, "it@acme.com", hd="acme.com")
+    assert complete_signup("code", _open_state(token), db).needs_admin_proof
+
+    it = db.execute(select(OrgMember).where(OrgMember.email == "it@acme.com")).scalar_one()
+    _admin_google(monkeypatch, "it@acme.com", hd="acme.com", directory_says_admin=True)
+    assert complete_admin_proof("code", _admin_state(it), db).proven
+    open_invite = db.execute(select(Invitation).where(Invitation.email.is_(None))).scalar_one()
+    assert open_invite.consumed_at is not None
+
+
+def test_open_link_from_another_org_does_nothing(db, monkeypatch):
+    _, link = _open_link(db, monkeypatch)
+    token = link["url"].split("invite=")[1]
+    _google(monkeypatch, "zed@other.com", hd="other.com")
+
+    result = complete_signup("code", _open_state(token), db)
+
+    assert not result.needs_admin_proof

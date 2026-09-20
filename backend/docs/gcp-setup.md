@@ -19,8 +19,10 @@ Google's timeline, in parallel with engineering work, not after it.
    you want isolated review/test credentials).
 2. Enable these APIs for the project (APIs & Services → Library):
    - **Google Drive API** — file/ownership/permission operations.
-   - **Admin SDK API** — required later by the org-engine module (directory
-     lookups, Reports activity feed); enabling it now avoids a second trip.
+   - **Admin SDK API** — required for admin proof (the Super Admin check at
+     onboarding, `app/google/directory.py`) and by the org-engine module
+     (Reports activity feed). If it's off, the Super Admin check fails with
+     `?admin_proof=error` rather than a verdict.
    - **People API** (optional) — richer profile info than the basic OpenID
      userinfo endpoint, if the product wants it later.
 
@@ -43,6 +45,7 @@ APIs & Services → OAuth consent screen.
 | Scope | Restricted? | Used for |
 |---|---|---|
 | `openid`, `.../userinfo.email`, `.../userinfo.profile` | No | App login only (identifies who is signing in). Requested on every login, for every member regardless of auth_type. Grants no Drive capability. |
+| `https://www.googleapis.com/auth/admin.directory.user.readonly` | Check the consent screen's classification (Admin SDK scopes may need verification) | Admin proof only (`app/onboarding/admin_proof.py`): requested from a member who says they're a Super Admin, under their own authorization, for one Directory call — their own user record's `isAdmin`. Only an admin can read it. The access token is discarded after the call. Add it to the consent screen's scope list. |
 | `https://www.googleapis.com/auth/drive` | **Yes — restricted, requires verification** | Full Drive access. Requested both (a) as the domain-wide delegation scope authorized by the Workspace super-admin, and (b) on the per-user consent flow for personal-account members. |
 | `https://www.googleapis.com/auth/admin.reports.audit.readonly` | **Yes — restricted, requires verification** | Org-engine module only: the Admin SDK Reports API feed of org-wide Drive activity for domain members (`app/activity/reports_feed.py`), impersonating the delegation-approving admin. Read-only; used to detect file creation/edits, never to modify anything. Deliberately used instead of one Drive push-notification "watch channel" per domain member, which would mean maintaining and renewing N expiring subscriptions per organization instead of one polled feed — see that module's docstring. |
 
@@ -117,12 +120,17 @@ APIs & Services → Credentials → Create Credentials → OAuth client ID →
      SDK Reports API is impersonation-based the same way Drive is, so it
      needs its own scope in this same domain-wide delegation grant — it is
      not covered by the Drive scope above.
-5. Once the super-admin confirms they've added it, call
-   `POST /organizations/{org_id}/delegation/approve` with their email —
-   see `app/auth/delegation.py::approve_delegation`. Knohow cannot verify
-   the Admin console grant exists independently ahead of time; the first
-   impersonated Drive call either succeeds or fails with an
-   `unauthorized_client`/`invalid_grant` error, which is the real proof.
+5. Nobody has to tell Knohow it's done. `GET /organizations/{org_id}/delegation/setup`
+   returns exactly what to enter (service account client ID, the scope list
+   from `ADMIN_CONSOLE_DELEGATION_SCOPES`, the Admin console URL) for the
+   setup guide. Knohow then **detects** the grant (delegation proof,
+   `app/auth/delegation.py::check_delegation`): every 5 minutes (scheduler)
+   and on `POST .../delegation/check`, it mints an impersonated token as the
+   org's Google-verified Super Admin for every scope, then makes one Drive
+   call. Success → the grant is approved; `unauthorized_client` → still
+   pending, with the missing scopes reported. Only runs once admin proof
+   has bound the org's domain. `POST .../delegation/approve` no longer takes
+   anyone's word — it runs the same check.
 
 **Impersonation is hard-scoped per organization in code** (see
 `app/google/drive_client.py::_domain_delegated_client`) — a request tied to

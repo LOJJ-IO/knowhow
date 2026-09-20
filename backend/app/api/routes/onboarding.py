@@ -12,16 +12,20 @@ from app.api.routes.auth import (  # reuse: same cookie contract as login
     signup_redirect,
 )
 from app.auth.pkce import InvalidOAuthState
+from app.models.invitation import InvitationKind
 from app.models.org_member import OrgMember
 from app.onboarding.service import (
     add_member,
     approve_member,
+    list_invitations,
     list_pending_members,
+    reassign_owner,
     set_auto_accept_workspace_members,
     complete_signup,
-    confirm_owner,
     create_domainless_org,
     create_org_chart,
+    invite_to_org,
+    invite_url,
     is_founding_member,
     start_signup,
 )
@@ -30,8 +34,10 @@ router = APIRouter(tags=["onboarding"])
 
 
 @router.get("/onboarding/signup")
-def signup(switch_account: bool = False) -> RedirectResponse:
-    result = start_signup(switch_account=switch_account)
+def signup(
+    switch_account: bool = False, invite: str | None = None, db: Session = Depends(get_db)
+) -> RedirectResponse:
+    result = start_signup(switch_account=switch_account, invite_token=invite, db=db)
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
 
@@ -102,17 +108,14 @@ def create_org_chart_route(
     return {
         "org_chart_id": str(result.org_chart.id),
         "owner_member_id": str(result.org_chart.owner_member_id) if result.org_chart.owner_member_id else None,
-        "owner_confirmation_pending": result.owner_confirmation_link_token is not None,
+        "owner_confirmation_pending": result.owner_invitation is not None,
+        # Forwardable links — Knohow sends no email yet, so the setup person
+        # passes these on themselves.
+        "owner_invite_url": invite_url(result.owner_invitation) if result.owner_invitation else None,
+        "super_admin_invite_url": (
+            invite_url(result.super_admin_invitation) if result.super_admin_invitation else None
+        ),
     }
-
-
-@router.get("/onboarding/confirm-owner/{token}")
-def confirm_owner_route(token: str, db: Session = Depends(get_db)) -> dict:
-    try:
-        org_chart = confirm_owner(token, db)
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    return {"org_chart_id": str(org_chart.id), "owner_member_id": str(org_chart.owner_member_id)}
 
 
 class AddMemberRequest(BaseModel):
@@ -181,3 +184,72 @@ def organization_settings_route(
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     return {"auto_accept_workspace_members": org.auto_accept_workspace_members}
+
+
+class ReassignOwnerRequest(BaseModel):
+    member_id: uuid.UUID
+
+
+@router.post("/organizations/{org_id}/owner")
+def reassign_owner_route(
+    org_id: uuid.UUID,
+    body: ReassignOwnerRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Verified Super Admin only: make another member the owner."""
+    try:
+        org_chart = reassign_owner(org_id, member, body.member_id, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return {"org_chart_id": str(org_chart.id), "owner_member_id": str(org_chart.owner_member_id)}
+
+
+def _serialize_invitation(invitation) -> dict:
+    return {
+        "id": str(invitation.id),
+        "kind": invitation.kind.value,
+        "email": invitation.email,
+        "url": invite_url(invitation),
+        "expires_at": invitation.expires_at.isoformat(),
+    }
+
+
+@router.get("/organizations/{org_id}/invitations")
+def invitations_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> list[dict]:
+    """Live owner / Super Admin invite links — for the setup person to copy
+    and forward (they may still be limited; they're the one chasing)."""
+    try:
+        return [_serialize_invitation(i) for i in list_invitations(org_id, member, db)]
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+class InviteRequest(BaseModel):
+    kind: InvitationKind
+    # Omit (Super Admin only) for the open admin link — one to paste in a
+    # team chat when nobody knows who the Super Admin is.
+    email: EmailStr | None = None
+
+
+@router.post("/organizations/{org_id}/invitations")
+def invite_route(
+    org_id: uuid.UUID,
+    body: InviteRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """Nominate the owner or Super Admin later (e.g. "I don't know" at
+    setup), or get the open admin link (Super Admin, no email)."""
+    try:
+        return _serialize_invitation(invite_to_org(org_id, member, body.kind, body.email, db))
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

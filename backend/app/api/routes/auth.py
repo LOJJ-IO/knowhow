@@ -10,23 +10,28 @@ from app.auth.personal_oauth import complete_personal_oauth_consent, start_perso
 from app.auth.pkce import InvalidOAuthState, peek_state_purpose
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
+from app.google.directory import DirectoryLookupError
+from app.logging_config import get_logger
 from app.models.org_member import OrgMember
+from app.onboarding.admin_proof import ADMIN_PROOF_STATE_PURPOSE, complete_admin_proof, start_admin_proof
 from app.onboarding.service import (
     PENDING_PERSONAL_SIGNUP_TTL,
     SIGNUP_STATE_PURPOSE,
     SignupResult,
     complete_signup,
-    confirm_owner_on_sign_in,
+    accept_invitations_on_sign_in,
     is_owner,
     needs_org_setup,
 )
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = get_logger(__name__)
 
 ACCESS_COOKIE = "knohow_access_token"
 REFRESH_COOKIE = "knohow_refresh_token"
 PENDING_PERSONAL_SIGNUP_COOKIE = "knohow_pending_signup"
+ADMIN_PROOF_START_PATH = "/auth/admin-proof/start"
 
 
 def cookie_kwargs() -> dict:
@@ -50,7 +55,8 @@ def signup_redirect(result: SignupResult) -> RedirectResponse:
     sign-in")."""
     settings = get_settings()
     if result.pending_personal_token is not None:
-        response = RedirectResponse(f"{settings.frontend_origin}?signup=personal", status_code=status.HTTP_302_FOUND)
+        query = "signup=personal&invite=wrong_account" if result.invite_wrong_account else "signup=personal"
+        response = RedirectResponse(f"{settings.frontend_origin}?{query}", status_code=status.HTTP_302_FOUND)
         response.set_cookie(
             PENDING_PERSONAL_SIGNUP_COOKIE,
             result.pending_personal_token,
@@ -59,9 +65,30 @@ def signup_redirect(result: SignupResult) -> RedirectResponse:
         )
         return response
 
-    response = RedirectResponse(settings.frontend_origin, status_code=status.HTTP_302_FOUND)
+    if result.needs_admin_proof:
+        # Invited as Super Admin: straight on to Google's check. The session
+        # cookies set here ride along on the next hop (same backend origin).
+        location = ADMIN_PROOF_START_PATH
+    elif result.invite_wrong_account:
+        location = f"{settings.frontend_origin}?invite=wrong_account"
+    else:
+        location = settings.frontend_origin
+    response = RedirectResponse(location, status_code=status.HTTP_302_FOUND)
     set_session_cookies(response, result.login.access_token, result.login.refresh_token)
     return response
+
+
+def admin_proof_redirect(code: str, state: str, db: Session) -> RedirectResponse:
+    """Back to the frontend with `?admin_proof=verified|not_verified|error`."""
+    settings = get_settings()
+    try:
+        outcome = "verified" if complete_admin_proof(code, state, db).proven else "not_verified"
+    except DirectoryLookupError as exc:
+        # The check didn't run (e.g. Admin SDK API not enabled in the GCP
+        # project) — log Google's reason so it can be fixed.
+        logger.warning("auth.admin_proof_check_failed", error=str(exc))
+        outcome = "error"
+    return RedirectResponse(f"{settings.frontend_origin}?admin_proof={outcome}", status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/login")
@@ -76,10 +103,13 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
     try:
         # Signup shares this redirect URI with login (one GOOGLE_OAUTH_REDIRECT_URI),
         # so Google returns a signup here too — route it by its state purpose.
-        if peek_state_purpose(state) == SIGNUP_STATE_PURPOSE:
+        purpose = peek_state_purpose(state)
+        if purpose == SIGNUP_STATE_PURPOSE:
             return signup_redirect(complete_signup(code, state, db))
+        if purpose == ADMIN_PROOF_STATE_PURPOSE:
+            return admin_proof_redirect(code, state, db)
         result = complete_login(code, state, db)
-        confirm_owner_on_sign_in(result.member, db)
+        needs_admin_proof = accept_invitations_on_sign_in(result.member, db)
     except InvalidOAuthState as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired login state: {exc}") from exc
     except ValueError as exc:
@@ -91,7 +121,9 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
             "member before they can log in",
         ) from exc
 
-    response = RedirectResponse(settings.frontend_origin, status_code=status.HTTP_302_FOUND)
+    response = RedirectResponse(
+        ADMIN_PROOF_START_PATH if needs_admin_proof else settings.frontend_origin, status_code=status.HTTP_302_FOUND
+    )
     set_session_cookies(response, result.access_token, result.refresh_token)
     return response
 
@@ -140,7 +172,15 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "standing": member.standing.value,
         "is_owner": is_owner(member.organization_id, member, db),
         "needs_org_setup": needs_org_setup(member, db),
+        "is_super_admin": member.super_admin_verified_at is not None,
     }
+
+
+@router.get("/admin-proof/start")
+def admin_proof_start(member: OrgMember = Depends(get_current_member)) -> RedirectResponse:
+    """Full-page redirect: asks Google to confirm this member is a Super
+    Admin of their org's Workspace domain."""
+    return RedirectResponse(start_admin_proof(member).authorization_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/personal-oauth/start")

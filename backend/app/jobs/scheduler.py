@@ -5,8 +5,10 @@ from sqlalchemy import select
 
 from app.activity.reconciliation import reconcile_organization
 from app.activity.watch_channels import renew_expiring_channels
+from app.auth.delegation import check_delegation
 from app.db import SessionLocal
 from app.logging_config import get_logger
+from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.organization import Organization
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
@@ -82,6 +84,25 @@ def expire_stale_pending_state() -> None:
         db.close()
 
 
+def check_pending_delegations() -> None:
+    """Delegation detection: nobody has to tell Knohow the Admin console
+    step is done — pending grants are checked every few minutes and approved
+    once an impersonated call succeeds (app/auth/delegation.py)."""
+    db = SessionLocal()
+    try:
+        org_ids = db.execute(
+            select(DelegationGrant.organization_id).where(DelegationGrant.status == DelegationStatus.PENDING)
+        ).scalars().all()
+        for org_id in org_ids:
+            try:
+                result = check_delegation(org_id, db)
+                logger.info("jobs.delegation_checked", org_id=str(org_id), status=result.status)
+            except Exception:
+                logger.exception("jobs.delegation_check_failed", org_id=str(org_id))
+    finally:
+        db.close()
+
+
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     scheduler.add_job(
@@ -89,6 +110,9 @@ def create_scheduler() -> BackgroundScheduler:
     )
     scheduler.add_job(
         run_channel_renewal, "interval", hours=1, id="watch_channel_renewal", replace_existing=True
+    )
+    scheduler.add_job(
+        check_pending_delegations, "interval", minutes=5, id="delegation_detection", replace_existing=True
     )
     scheduler.add_job(
         expire_stale_pending_state, "interval", hours=12, id="expire_stale_pending_state", replace_existing=True

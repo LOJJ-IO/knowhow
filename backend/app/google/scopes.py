@@ -36,7 +36,25 @@ DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
 # what the impersonated call is *capable* of once that boundary is passed.
 DOMAIN_DELEGATION_SCOPES: list[str] = [DRIVE_SCOPE]
 
+# Admin SDK Reports API — read-only, org-wide Drive activity feed for domain
+# members (app/activity/reports_feed.py), impersonated like Drive. A separate
+# API surface, so it needs its own scope in the same Admin console grant.
+REPORTS_AUDIT_SCOPE = "https://www.googleapis.com/auth/admin.reports.audit.readonly"
+
+# Everything the Super Admin enters in admin.google.com → Security → API
+# controls → Domain-wide delegation. The setup guide shows exactly this list
+# and delegation detection checks exactly this list, so they can't drift.
+ADMIN_CONSOLE_DELEGATION_SCOPES: list[str] = [*DOMAIN_DELEGATION_SCOPES, REPORTS_AUDIT_SCOPE]
+
 # Scopes requested on the per-user consent flow for personal-account members
 # (see app/auth/personal_oauth.py). Requesting `access_type=offline` alongside
 # this at the flow level is what yields a refresh token to store.
 PERSONAL_OAUTH_SCOPES: list[str] = [DRIVE_SCOPE]
+
+# Admin proof (onboarding spec, "Workspace authority is proven by Google"):
+# read-only Directory access under the person's *own* authorization, used for
+# one call — looking up their own user record for `isAdmin`. Only a Super
+# Admin's call returns that; anyone else gets a 403. The access token is
+# discarded after the check; nothing is stored.
+ADMIN_DIRECTORY_USER_READONLY_SCOPE = "https://www.googleapis.com/auth/admin.directory.user.readonly"
+ADMIN_PROOF_SCOPES: list[str] = [*LOGIN_SCOPES, ADMIN_DIRECTORY_USER_READONLY_SCOPE]
