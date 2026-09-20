@@ -119,7 +119,8 @@ def create_org_chart(
     confirmation link must be sent to whoever is. (b) are you the Google
     Workspace super-admin for this domain? — only this kicks off domain-wide
     delegation (via the auth module's initiate_delegation, imported not
-    duplicated). Any combination of yes/no is valid.
+    duplicated).     Any combination of yes/no is valid. Owner email may be omitted when
+    the initiator isn't the owner and doesn't know who to nominate yet.
     """
     existing = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
     if existing is not None:

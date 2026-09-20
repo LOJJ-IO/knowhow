@@ -19,7 +19,7 @@ The person setting Knowhow up is often not the owner and not the Google Workspac
 1. **Continue with Google first** — nothing asked before auth. Gives verified identity + Workspace domain.
 2. **Domain → organization.** Verified Workspace domain is the tenant identity. If it already has an org: "Acme is already on Knowhow. Ask your admin for access." — never create a second org for the domain.
 3. **New domain → ask org name** (prefilled from domain, editable). Name is display metadata only; never used for membership or access.
-4. **"Are you the owner / top of the organization?"** — No → owner's work email → owner confirms.
+4. **"Are you the owner of the organization?"** — Yes → Super Admin question. No → **"Do you know the owner's email?"** (Yes / No — user dropped "I don't know" here 2026-09-20). Yes → owner's work email → owner confirms by signing in. No → continue without a nomination (can add later). (UI dropped "/ top" 2026-09-20.)
 5. **"Are you a Google Workspace Super Admin?"** — asked separately. Setup person, owner and Super Admin may be three different people (Sarah / John / David).
 6. A non-admin can start getting value immediately (their own authorized data); Workspace-wide features unlock when the Super Admin authorizes domain-wide delegation.
 
@@ -232,3 +232,17 @@ The backend already asks the two authority questions separately (`create_org_cha
 
 ## Related
 [[0004-fastapi-backend-for-auth-and-identity]] · [[FEAT-drive-file-classification]] · [[FEAT-landing-login-panel]]
+
+## Personal account at sign-in, settled (2026-09-20)
+[[0013-sign-in-is-to-an-organization]]. A personal Google account is asked "Does your company use
+Google Workspace?".
+
+- **Yes** → `/onboarding/link-org-account` sends them to sign in to the work account, carrying the
+  already-proved personal identity in the OAuth state. On return the personal address is stored in
+  `person_emails` against the same person and **no personal org is created**. The pending-signup
+  cookie is spent either way.
+- **No** → they **name their workspace**, and `create_domainless_org(..., name=...)` uses it. That
+  name is the label the Log In picker leads with, so it is not cosmetic.
+- **Not wired:** recognising a stored `person_emails` address on a *later* sign-in. That person
+  will still be treated as a new personal signup. Next gap, with the in-app "add another account"
+  UI which also does not exist.

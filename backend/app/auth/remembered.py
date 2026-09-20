@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.org_member import AuthType, OrgMember
 from app.models.organization import Organization
 from app.models.person import Person
+from app.models.person_email import PersonEmail
 from app.models.remembered_account import RememberedAccount
 
 
@@ -32,9 +33,14 @@ class RememberedOrgView:
     # name when the account isn't linked to a person yet.
     person_name: str | None
     email: str
-    # "org" — a Workspace account. "personal" — any non-Workspace account
+    # "org" - a Workspace account. "personal" - any non-Workspace account
     # (user, 2026-09-20), including a contractor's Gmail in a company org.
     kind: str
+    # Addresses proved to be this person's that have no org of their own, so
+    # they get no row (they came from "yes, I have an organization account").
+    # Shown as a Personal (n) chip on each of the person's rows, which is why
+    # the same list repeats across them (user, 2026-09-20).
+    linked_personal_emails: list[str]
 
 
 def remember_account(device_id: uuid.UUID, member: OrgMember, db: Session) -> None:
@@ -65,6 +71,17 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
         .where(RememberedAccount.device_id == device_id)
         .order_by(RememberedAccount.last_seen_at.desc())
     ).all()
+    # One lookup per person, not per row.
+    person_ids = {member.person_id for member, _o, _p in rows if member.person_id}
+    linked: dict[uuid.UUID, list[str]] = {pid: [] for pid in person_ids}
+    if person_ids:
+        for person_id, email in db.execute(
+            select(PersonEmail.person_id, PersonEmail.email)
+            .where(PersonEmail.person_id.in_(person_ids))
+            .order_by(PersonEmail.created_at)
+        ).all():
+            linked[person_id].append(email)
+
     return [
         RememberedOrgView(
             member_id=member.id,
@@ -72,6 +89,7 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
             person_name=(person.display_name if person else None) or member.display_name,
             email=member.email,
             kind="org" if member.auth_type is AuthType.DOMAIN_DELEGATED else "personal",
+            linked_personal_emails=linked.get(member.person_id, []) if member.person_id else [],
         )
         for member, organization, person in rows
     ]

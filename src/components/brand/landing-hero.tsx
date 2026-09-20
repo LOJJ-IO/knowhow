@@ -107,33 +107,31 @@ async function backendError(res: Response): Promise<string> {
 /** One account this browser has signed in with before — the Log In picker.
  *  The backend keys these to an opaque device cookie, not to a person:
  *  Knohow can't tell that two Google accounts are the same human. */
-type LinkedAccount = {
+/** One row in the picker: an organization this browser has signed in to.
+ *  Signing in is signing in to an org (user 2026-09-20), so the org's name
+ *  leads and the person's name is the subtext — two companies plus a personal
+ *  org is three rows. */
+type RememberedOrg = {
+  member_id: string;
+  organization_name: string;
+  person_name: string | null;
   email: string;
   /** "org" — a Workspace account. "personal" — any non-Workspace account,
    *  whichever org it belongs to (user 2026-09-20), so a contractor's Gmail
    *  inside a company org reads as personal. */
   kind: "org" | "personal";
-  organization_name: string;
+  /** Addresses proved to be this person's that have no org of their own, so
+   *  they get no row. They show as a Personal (n) chip on each of the
+   *  person's rows (user 2026-09-20), which is why the same list can repeat. */
+  linked_personal_emails: string[];
 };
 
-/** One person in the picker. A person holds at most one org account and any
- *  number of personal ones, and is only ever formed by deliberate identity
- *  linking — never inferred from a matching name ([[0012]]). */
-type RememberedPerson = {
-  person_id: string;
-  display_name: string | null;
-  /** Their most recently used account — what a click signs in with, since
-   *  Google still needs one email to open on. */
-  primary_email: string;
-  accounts: LinkedAccount[];
-};
-
-async function fetchRememberedPeople(): Promise<RememberedPerson[]> {
+async function fetchRememberedOrgs(): Promise<RememberedOrg[]> {
   if (!BACKEND_API_URL) return [];
   try {
     const res = await backendFetch("/auth/remembered-accounts");
     if (!res.ok) return [];
-    return ((await res.json()) as { people: RememberedPerson[] }).people;
+    return ((await res.json()) as { organizations: RememberedOrg[] }).organizations;
   } catch {
     // Backend down — the picker just doesn't appear, and Log In falls back
     // to "Continue with Google".
@@ -1893,7 +1891,13 @@ function DemoSegmentStep() {
 /** Choice buttons in the setup steps — the Continue with Google button's look. */
 const SETUP_CHOICE_CLASS = `relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`;
 
-type SetupStep = "owner" | "ownerEmail" | "superAdmin" | "verifyAdmin" | "done";
+type SetupStep =
+  | "owner"
+  | "knowOwnerEmail"
+  | "ownerEmail"
+  | "superAdmin"
+  | "verifyAdmin"
+  | "done";
 
 /** First sign-in for a new organization: the owner and Super Admin
  *  questions (FEAT-workspace-onboarding-flow). Copy is the spec's wording,
@@ -1922,7 +1926,7 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
           body: JSON.stringify({
             is_owner: isOwner,
             is_super_admin: isSuperAdmin,
-            owner_email: isOwner ? null : ownerEmail,
+            owner_email: isOwner || !ownerEmail ? null : ownerEmail,
           }),
         },
       );
@@ -1971,13 +1975,14 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
   if (step === "owner")
     return (
       <div>
-        {heading("Are you the owner / top of the organization?")}
+        {heading("Are you the owner of the organization?")}
         <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
           <button
             type="button"
             className={SETUP_CHOICE_CLASS}
             onClick={() => {
               setIsOwner(true);
+              setOwnerEmail("");
               setStep("superAdmin");
             }}
           >
@@ -1988,7 +1993,35 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
             className={SETUP_CHOICE_CLASS}
             onClick={() => {
               setIsOwner(false);
-              setStep("ownerEmail");
+              setStep("knowOwnerEmail");
+            }}
+          >
+            No
+          </button>
+        </div>
+      </div>
+    );
+
+  // Same Yes / No pattern as the owner question (user dropped "I don't know"
+  // here 2026-09-20). No → continue without nominating.
+  if (step === "knowOwnerEmail")
+    return (
+      <div>
+        {heading("Do you know the owner\u2019s email?")}
+        <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => setStep("ownerEmail")}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => {
+              setOwnerEmail("");
+              setStep("superAdmin");
             }}
           >
             No
@@ -2109,7 +2142,9 @@ type SignInResult =
   | "admin_not_verified"
   | "admin_error"
   | "personal"
-  | "invite_wrong_account";
+  | "invite_wrong_account"
+  | "link_linked"
+  | "link_already_linked";
 
 function readSignInResult(): SignInResult | null {
   const params = new URLSearchParams(window.location.search);
@@ -2119,14 +2154,27 @@ function readSignInResult(): SignInResult | null {
   if (adminProof === "error") return "admin_error";
   if (params.get("signup") === "personal") return "personal";
   if (params.get("invite") === "wrong_account") return "invite_wrong_account";
+  const link = params.get("link");
+  if (link === "linked") return "link_linked";
+  if (link === "already_linked") return "link_already_linked";
   return null;
 }
 
 /** Drops the result from the URL so a reload doesn't show it again. */
 function clearSignInResultFromUrl() {
   const url = new URL(window.location.href);
-  for (const key of ["admin_proof", "signup", "invite"]) url.searchParams.delete(key);
+  for (const key of ["admin_proof", "signup", "invite", "link"]) url.searchParams.delete(key);
   window.history.replaceState(null, "", url);
+}
+
+/** "Yes, my company uses Google Workspace" — sign in to the work account.
+ *  The personal identity already proved is carried through and recorded
+ *  against the same person; no personal org is created (user 2026-09-20). */
+function linkOrganizationAccount() {
+  if (!BACKEND_API_URL) return;
+  // External origin (the backend), not a Next.js route.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${BACKEND_API_URL}/onboarding/link-org-account`);
 }
 
 /** Sends the browser back to Google with the account chooser forced open. */
@@ -2150,12 +2198,23 @@ function SignInResultPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  /** "No — just me" was chosen: now name the workspace. */
+  const [naming, setNaming] = useState(false);
+  const [orgName, setOrgName] = useState("");
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (naming) nameRef.current?.focus();
+  }, [naming]);
+
   async function createPersonalOrg() {
     setSubmitting(true);
     setError("");
     try {
       const res = await backendFetch("/onboarding/personal-org", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: orgName.trim() }),
       });
       if (!res.ok) {
         throw new Error(await backendError(res));
@@ -2238,21 +2297,72 @@ function SignInResultPanel({
         </div>
       );
     case "personal":
+      // One action per screen: naming the workspace is its own step, reached
+      // only after "No".
+      if (naming)
+        return (
+          <div>
+            {heading("What should we call your workspace?")}
+            {body("This is the name you'll see when you sign in.")}
+            <input
+              ref={nameRef}
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && orgName.trim()) void createPersonalOrg();
+              }}
+              placeholder="Workspace name"
+              aria-label="Workspace name"
+              className={`${satoshi.className} mt-8 h-12 w-full rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-4 text-[1rem] text-[#1c1917] outline-none placeholder:text-[#1c1917]/40`}
+            />
+            <div className={`${satoshi.className} mt-3 flex flex-col gap-3`}>
+              <button
+                type="button"
+                disabled={submitting || !orgName.trim()}
+                className={SETUP_CHOICE_CLASS}
+                onClick={() => void createPersonalOrg()}
+              >
+                Continue
+              </button>
+            </div>
+            {errorLine}
+          </div>
+        );
       return (
         <div>
           {heading("This is a personal Google account")}
           {body("Does your company use Google Workspace?")}
           {choices([
             {
-              label: "Yes — use my work account",
-              onClick: signInWithAnotherAccount,
+              label: "Yes, link my work account",
+              onClick: linkOrganizationAccount,
             },
             {
-              label: "No — just me",
-              onClick: () => void createPersonalOrg(),
+              label: "No, just me",
+              onClick: () => setNaming(true),
             },
           ])}
           {errorLine}
+        </div>
+      );
+    case "link_linked":
+      return (
+        <div>
+          {heading("Your accounts are connected")}
+          {body(
+            "You can sign in with either one and land in the same place.",
+          )}
+          {choices([{ label: "Continue", onClick: onDone }])}
+        </div>
+      );
+    case "link_already_linked":
+      return (
+        <div>
+          {heading("That account belongs to someone else")}
+          {body(
+            "It is already connected to a different person, so we left it alone.",
+          )}
+          {choices([{ label: "Continue", onClick: onDone }])}
         </div>
       );
     case "invite_wrong_account":
@@ -2283,20 +2393,18 @@ function avatarTint(email: string) {
   return AVATAR_TINTS[hash % AVATAR_TINTS.length];
 }
 
-/** Black chip beside a person's name. The emails live in its tooltip, so the
- *  row stays one line per person instead of repeating the name. */
+/** Black chip beside the org name, saying which kind of account this row
+ *  signs in with. The address itself lives in the tooltip, so the row stays
+ *  two lines: the organization, then who you are in it. */
 function AccountBadge({
   label,
-  count,
   emails,
 }: {
   label: string;
-  /** Shown as "(n)" from two up — one of a kind needs no counting. */
-  count: number;
-  /** What the tooltip reveals: one address for the org badge, all of them
-   *  for the personal badge. */
+  /** One address for a row's own account; several for the Personal chip. */
   emails: string[];
 }) {
+  const count = emails.length;
   return (
     <Tooltip>
       <TooltipTrigger
@@ -2311,7 +2419,9 @@ function AccountBadge({
         {label}
         {count > 1 ? ` (${count})` : ""}
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
+      {/* Portaled to <body>, so it inherits nothing from the picker: the
+          font has to be named here or it falls back to the browser's sans. */}
+      <TooltipContent side="bottom" sideOffset={6} className={satoshi.className}>
         {emails.map((email) => (
           <span key={email} className="block">
             {email}
@@ -2322,14 +2432,14 @@ function AccountBadge({
   );
 }
 
-/** "Which account today?" — one row per person, badges for what's attached.
- *  There's no account to choose: a person signs in as themselves, and the
- *  badges say what Knohow knows about them. PLACEHOLDER copy. */
+/** "Which account today?" — one row per organization this browser has signed
+ *  in to. The org's name leads; the person's name is the subtext under it.
+ *  PLACEHOLDER copy. */
 function AccountPicker({
-  people,
+  organizations,
   onForget,
 }: {
-  people: RememberedPerson[];
+  organizations: RememberedOrg[];
   /** "Remove accounts" succeeded — the picker gives way to the Log In screen. */
   onForget: () => void;
 }) {
@@ -2351,55 +2461,58 @@ function AccountPicker({
         Pick up where you left off or continue as another user.
       </p>
       <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-1 p-0`}>
-        {people.map((person) => {
-          const org = person.accounts.filter((a) => a.kind === "org");
-          const personal = person.accounts.filter((a) => a.kind === "personal");
-          const name = person.display_name || person.primary_email;
-          return (
-            <li
-              key={person.person_id}
-              className="flex items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2"
+        {organizations.map((row) => (
+          <li
+            key={row.member_id}
+            className="flex items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2"
+          >
+            <button
+              type="button"
+              disabled={forgetting}
+              // Signing in to this organization: its account is the hint, and
+              // Google can still override it.
+              onClick={() => continueWithGoogle(null, row.email)}
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
             >
-              <button
-                type="button"
-                disabled={forgetting}
-                // Signing in as the person: their most recent account is the
-                // hint, and Google can still override it. Nothing is picked.
-                onClick={() => continueWithGoogle(null, person.primary_email)}
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
+              <span
+                aria-hidden
+                style={{ backgroundColor: avatarTint(row.email) }}
+                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
               >
-                <span
-                  aria-hidden
-                  style={{ backgroundColor: avatarTint(person.primary_email) }}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
-                >
-                  {name.charAt(0).toUpperCase()}
+                {row.organization_name.charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
+                  {row.organization_name}
                 </span>
-                <span className="truncate text-[1rem] font-bold text-[#1c1917]">
-                  {name}
-                </span>
-              </button>
-              <span className="flex shrink-0 items-center gap-1.5">
-                {org.length > 0 ? (
-                  <AccountBadge
-                    label="Org"
-                    count={org.length}
-                    emails={org.map((a) => a.email)}
-                  />
-                ) : null}
-                {personal.length > 0 ? (
-                  <AccountBadge
-                    label="Personal"
-                    count={personal.length}
-                    emails={personal.map((a) => a.email)}
-                  />
+                {row.person_name ? (
+                  <span className="block truncate text-[0.8rem] text-[#1c1917]/70">
+                    {row.person_name}
+                  </span>
                 ) : null}
               </span>
-            </li>
-          );
-        })}
+            </button>
+            <span className="flex shrink-0 items-center gap-1.5">
+              <AccountBadge
+                label={row.kind === "org" ? "Org" : "Personal"}
+                emails={[row.email]}
+              />
+              {/* Linked addresses with no org of their own. Only on rows that
+                  aren't themselves personal, or the row would read "Personal"
+                  twice. */}
+              {row.kind === "org" && row.linked_personal_emails.length > 0 ? (
+                <AccountBadge
+                  label="Personal"
+                  emails={row.linked_personal_emails}
+                />
+              ) : null}
+            </span>
+          </li>
+        ))}
       </ul>
-      <div className={`${satoshi.className} mt-6 flex items-center gap-3`}>
+      {/* Half width, centred (user 2026-09-20) — a full-width rule made the
+          modal read as two stacked panels. */}
+      <div className={`${satoshi.className} mx-auto mt-6 flex w-1/2 items-center gap-3`}>
         <span className="h-px flex-1 bg-[#d9d9de]" />
         <span className="text-[0.75rem] text-[#1c1917]/70">OR</span>
         <span className="h-px flex-1 bg-[#d9d9de]" />
@@ -2741,9 +2854,7 @@ function LandingHero() {
   /** Accounts this browser has used before. Fetched on mount, not on open,
    *  so the modal sizes once (the Cal embed taught us that — see
    *  FEAT-landing-book-a-demo). */
-  const [rememberedPeople, setRememberedPeople] = useState<RememberedPerson[]>(
-    [],
-  );
+  const [rememberedOrgs, setRememberedOrgs] = useState<RememberedOrg[]>([]);
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** When Book a Demo first opened this visit — its "reserved" countdown
@@ -2790,8 +2901,8 @@ function LandingHero() {
   // organization, reopen the sheet on the setup questions.
   useEffect(() => {
     let cancelled = false;
-    void fetchRememberedPeople().then((people) => {
-      if (!cancelled) setRememberedPeople(people);
+    void fetchRememberedOrgs().then((orgs) => {
+      if (!cancelled) setRememberedOrgs(orgs);
     });
     return () => {
       cancelled = true;
@@ -3205,10 +3316,10 @@ function LandingHero() {
         {/* Centred modal — Log In or Book a Demo content. */}
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <LoginModal open={sheetAtTop}>
-            {sheetKind === "login" && rememberedPeople.length > 0 ? (
+            {sheetKind === "login" && rememberedOrgs.length > 0 ? (
               <AccountPicker
-                people={rememberedPeople}
-                onForget={() => setRememberedPeople([])}
+                organizations={rememberedOrgs}
+                onForget={() => setRememberedOrgs([])}
               />
             ) : sheetKind === "login" ? (
               <>

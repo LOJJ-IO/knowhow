@@ -10,7 +10,7 @@ import {
 } from "@/components/legal/legal-page";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Knohow",
+  title: "Privacy Policy | Knohow",
   description: "How Knohow collects, uses and protects personal information.",
 };
 

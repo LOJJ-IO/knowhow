@@ -8,8 +8,7 @@ from app.api import deps
 from app.api.routes import auth as auth_routes
 from app.auth.login import LOGIN_STATE_PURPOSE
 from app.auth.pkce import build_state_token
-from app.auth.identity import LinkedAccount
-from app.auth.remembered import RememberedPersonView
+from app.auth.remembered import RememberedOrgView
 from app.main import app
 from app.onboarding import service as onboarding_service
 from app.security.jwt import issue_access_token, issue_refresh_token
@@ -37,37 +36,34 @@ def test_no_device_cookie_returns_no_accounts():
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert response.json() == {"people": []}
+    assert response.json() == {"organizations": []}
 
 
 def test_malformed_device_cookie_returns_no_accounts(monkeypatch):
     # A hand-edited cookie must not 500 the screen that runs before sign-in.
-    monkeypatch.setattr(auth_routes, "list_remembered_people", lambda device_id, db: 1 / 0)
+    monkeypatch.setattr(auth_routes, "list_remembered_orgs", lambda device_id, db: 1 / 0)
     try:
         client = _client()
         client.cookies.set("knohow_device", "not-a-uuid")
         response = client.get("/auth/remembered-accounts")
     finally:
         app.dependency_overrides.clear()
-    assert response.json() == {"people": []}
+    assert response.json() == {"organizations": []}
 
 
-def test_lists_one_row_per_person_with_their_accounts(monkeypatch):
-    person_id = uuid.uuid4()
+def test_lists_one_row_per_organization(monkeypatch):
+    member_id = uuid.uuid4()
     monkeypatch.setattr(
         auth_routes,
-        "list_remembered_people",
+        "list_remembered_orgs",
         lambda device_id, db: [
-            RememberedPersonView(
-                person_id=person_id,
-                display_name="Ronald Wopara",
-                primary_email="ronald@acme.org",
-                accounts=[
-                    LinkedAccount(email="ronald@acme.org", kind="org", organization_name="Acme"),
-                    LinkedAccount(
-                        email="ronald@gmail.com", kind="personal", organization_name="Ronald"
-                    ),
-                ],
+            RememberedOrgView(
+                member_id=member_id,
+                organization_name="Acme",
+                person_name="Ronald Wopara",
+                email="ronald@acme.org",
+                kind="org",
+                linked_personal_emails=["ronald@gmail.com"],
             )
         ],
     )
@@ -79,19 +75,14 @@ def test_lists_one_row_per_person_with_their_accounts(monkeypatch):
         app.dependency_overrides.clear()
 
     assert response.json() == {
-        "people": [
+        "organizations": [
             {
-                "person_id": str(person_id),
-                "display_name": "Ronald Wopara",
-                "primary_email": "ronald@acme.org",
-                "accounts": [
-                    {"email": "ronald@acme.org", "kind": "org", "organization_name": "Acme"},
-                    {
-                        "email": "ronald@gmail.com",
-                        "kind": "personal",
-                        "organization_name": "Ronald",
-                    },
-                ],
+                "member_id": str(member_id),
+                "organization_name": "Acme",
+                "person_name": "Ronald Wopara",
+                "email": "ronald@acme.org",
+                "kind": "org",
+                "linked_personal_emails": ["ronald@gmail.com"],
             }
         ]
     }

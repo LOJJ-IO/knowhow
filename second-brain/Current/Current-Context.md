@@ -4,7 +4,7 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-20
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]"]
 ---
 
 # Current Context
@@ -61,10 +61,8 @@ also records the correction that a personal Gmail is only its own org when it's 
 - **Verified in a real browser** at 1470×956 (Playwright, seeded DB + device cookie): picker renders,
   a row click reaches `accounts.google.com` with the right `login_hint`, "Remove accounts" empties
   the list and falls back to "Log in or sign up in seconds". `tsc`/`eslint`/`next build` clean.
-- **Seed data left in the local dev DB** so the screen can be reopened: three `@seed.test` members in
-  orgs "Acme Seed" and "Ronald (personal)", device `11111111-1111-1111-1111-111111111111`. Re-running
-  the scratchpad `seed-picker.py` cleans and re-creates them; delete the `@seed.test` members and
-  those two orgs to remove it entirely.
+- Seed data from this session was removed when both databases were cleared later the same day
+  (see "Sign-in is to an organization" above).
 - **Open:** Privacy Policy must describe the `knohow_device` cookie before launch ([[Known-Issues]]).
 
 ## Identity linking built (2026-09-20)
@@ -91,8 +89,41 @@ inferred from a matching name, which a test guards.
 - **Not built:** any UI to *create* a link. The endpoint exists but nothing calls it, so in practice
   every person still has one account until that screen is designed. **Next obvious gap.**
 
+## Sign-in is to an organization (2026-09-20, supersedes the person-row picker)
+User: *"when people are signing in, they're signing in as an organization"*. The picker's row is
+now an **org**, not a person: org name leads, person's name as subtext. Two companies plus a
+personal workspace is three rows. Full reasoning: [[0013-sign-in-is-to-an-organization]], which
+revises [[0012-identity-linking-one-person-many-accounts]]'s one-org rule and row shape.
+
+- **Backend:** `uq_person_one_org_account` dropped (`0010_many_orgs_per_person`) so a person may
+  hold two companies; `person_emails` added (`0011_person_emails`) for a verified address with no
+  membership; `/onboarding/link-org-account` (no session needed, reads the pending-signup cookie);
+  `/onboarding/personal-org` now takes a `name`. `/auth/remembered-accounts` returns
+  `organizations[]`. **84 tests pass**; both dev and test DBs migrated to `0011`.
+- **Frontend:** row = avatar + org name + person subtext + one `Org`/`Personal` chip whose tooltip
+  holds the address. Personal-account screen: **Yes, link my work account** / **No, just me** →
+  name-your-workspace step. **OR divider halved** (user). Tooltip font fixed to `satoshi`
+  (portaled content inherits nothing).
+- **User rule: no em dashes in user-facing copy, ever.** Applied to the sheet and to the
+  `/terms` + `/privacy` page titles (now `|`). Saved to agent memory and [[Lessons-Learned]].
+- **Still open:** copy for the personal-account screen (user said the wording has to change but
+  didn't finish saying to what); no in-app UI to add another account; a stored `person_emails`
+  address is **not** recognised at a later sign-in.
+- **Both databases were cleared on 2026-09-20** at the user's request (`truncate ... restart
+  identity cascade` over every table in `knohow` and `knohow_test`; schema kept, alembic still at
+  `0011_person_emails`). That removed the seed rows **and** the two real sign-ins
+  (`rwopara@ualberta.ca`, `rwopara2007@gmail.com`), 7 orgs and 5 audit entries. No
+  `oauth_credentials` existed, so nothing needs re-consenting with Google. **Signing in again
+  starts the new flow from scratch**, which is the point: the old personal org was auto-named
+  "Ronald Wopara" by the pre-0013 code, and the new path asks the person to name it.
+- To see the picker without signing in, re-run `seed-picker.py` from the session scratchpad
+  (device `11111111-1111-1111-1111-111111111111`). Nothing is seeded right now.
+
 ## Brand spelling (2026-09-17, user)
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.
+
+## Org setup copy (2026-09-20)
+Owner question is **"Are you the owner of the organization?"** (dropped "/ top"). If No → **"Do you know the owner's email?"** with Yes / No only; Yes → email field; No → skip nomination. Backend allows `is_owner=false` without `owner_email`. Super Admin still has Yes / No / I don't know. [[FEAT-landing-login-panel]] / [[FEAT-workspace-onboarding-flow]].
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.

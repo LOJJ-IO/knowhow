@@ -10,7 +10,7 @@ related: ["[[Current-Context]]", "[[Patterns-landing-mc-recess-deck]]", "[[FEAT-
 # FEAT: Landing Log In panel
 
 ## Status
-`in-progress` — animation shipped 2026-09-16; centred modal added 2026-09-17 with the first sign-in screen (heading, subtext, Continue with Google — button inert). **2026-09-18:** Continue with Google wired — full-page redirect to the backend's `/onboarding/signup` ([[0008-continue-with-google-via-backend]]). **Later 2026-09-18 — org setup in the panel (happy path):** on load the landing calls the backend's `/auth/me` (`credentials: "include"`); if `needs_org_setup`, the sheet opens with kind `"setup"` → `OrgSetupForm`: "Are you the owner / top of the organization?" (Yes / No → "Owner’s work email" + Continue) → "Are you a Google Workspace Super Admin?" (Yes / No / I don’t know) → `POST /organizations/{id}/org-chart`. **Copy is the spec's wording, a placeholder until the user designs these screens** (user chose "spec wording for now"). Visuals reuse the Continue with Google button (choices) and the demo form's input / error / Continue pill. After submit the modal is **empty — the done screen is waiting for the user's description.** **Result screens (2026-09-18, placeholder copy by user's choice):** after a Google round trip the backend's URL result (`?admin_proof=verified|not_verified|error`, `?signup=personal`, `?invite=wrong_account`) reopens the sheet as kind `"result"` → `SignInResultPanel`, then the param is cleared from the URL. Personal: "Does your company use Google Workspace?" → "Yes — use my work account" (account chooser) / "No — just me" (creates the personal org). Not verified: message + **Skip for now** only (one-action rule). Error: Try again. Wrong account: Use another account. Arriving with `?invite=<token>` opens Log In and Continue with Google carries the token. Backend errors shown via `backendError()` (FastAPI 422 `detail` is a list — it rendered as `[object Object]` before). Verified headless for every result. Verified headless (throwaway user, cleaned up): 200 on submit, `/auth/me` → approved + owner, sheet doesn't reopen on reload, no console errors.
+`in-progress` — animation shipped 2026-09-16; centred modal added 2026-09-17 with the first sign-in screen (heading, subtext, Continue with Google — button inert). **2026-09-18:** Continue with Google wired — full-page redirect to the backend's `/onboarding/signup` ([[0008-continue-with-google-via-backend]]). **Later 2026-09-18 — org setup in the panel (happy path):** on load the landing calls the backend's `/auth/me` (`credentials: "include"`); if `needs_org_setup`, the sheet opens with kind `"setup"` → `OrgSetupForm`: "Are you the owner of the organization?" (Yes → Super Admin; No → "Do you know the owner's email?" Yes / No — Yes → "Owner’s work email" + Continue; No skip nomination) → "Are you a Google Workspace Super Admin?" (Yes / No / I don’t know) → `POST /organizations/{id}/org-chart` (owner_email optional when not owner). **Copy is the spec's wording, a placeholder until the user designs these screens** (user chose "spec wording for now"). Visuals reuse the Continue with Google button (choices) and the demo form's input / error / Continue pill. After submit the modal is **empty — the done screen is waiting for the user's description.** **Result screens (2026-09-18, placeholder copy by user's choice):** after a Google round trip the backend's URL result (`?admin_proof=verified|not_verified|error`, `?signup=personal`, `?invite=wrong_account`) reopens the sheet as kind `"result"` → `SignInResultPanel`, then the param is cleared from the URL. Personal: "Does your company use Google Workspace?" → "Yes — use my work account" (account chooser) / "No — just me" (creates the personal org). Not verified: message + **Skip for now** only (one-action rule). Error: Try again. Wrong account: Use another account. Arriving with `?invite=<token>` opens Log In and Continue with Google carries the token. Backend errors shown via `backendError()` (FastAPI 422 `detail` is a list — it rendered as `[object Object]` before). Verified headless for every result. Verified headless (throwaway user, cleaned up): 200 on submit, `/auth/me` → approved + owner, sheet doesn't reopen on reload, no console errors.
 
 ## Problem
 Clicking "Log In" did nothing. User asked for the [[Patterns-landing-mc-recess-deck]] recess, with a full-page slide-up (a bottom sheet the full height of the page, not a small one).
@@ -86,3 +86,38 @@ user's choice). Provider is scoped to the picker, not the root layout, which is 
 **Positioner must be `z-[500]`** to clear the sheet's `z-[400]` — see [[Lessons-Learned]], the
 portal alone doesn't do it. Written fresh for this repo, not ported from Sage_v1 (invariant 5;
 the user was asked). New dependency: `@base-ui/react`, at the user's request.
+
+### Revised same day: the row is an organization (2026-09-20)
+[[0013-sign-in-is-to-an-organization]] replaced the person-shaped row above. Current state:
+
+- **One row per organization this browser has signed in to.** Org name leads (bold), the person's
+  name is small subtext under it, avatar initial comes from the org name. Two companies plus a
+  personal workspace is **three rows**, and the same person legitimately appears on several.
+- **One black chip per row**, `Org` or `Personal`, with that row's address in the **tooltip**
+  (the user confirmed tooltip, not dropdown). The tooltip must be given
+  `className={satoshi.className}` — portaled content inherits no font ([[Lessons-Learned]]).
+- **OR divider is half width, centred** (`mx-auto w-1/2`, user 2026-09-20). Full width made the
+  modal read as two stacked panels.
+- **Personal-account screen:** "Does your company use Google Workspace?" → **Yes, link my work
+  account** starts `/onboarding/link-org-account` (no personal org is created); **No, just me**
+  goes to a second screen that asks them to **name their workspace**, and that name becomes the
+  picker's label for that row. One action per screen.
+- **No em dashes anywhere in the copy** (user rule).
+- Verified in a real browser at 1470x956: four seeded rows render correctly, tooltip resolves to
+  `satoshi`, divider half width.
+
+### Linked personal addresses, and the `?link=` gap (2026-09-20)
+Found by the user signing in for real: after "yes, I have an organization account" the picker showed
+only the `Org` chip, and the URL sat at `?link=linked` with nothing happening.
+
+- **Two bugs, both mine.** (1) `?link=` was never read or cleared and no result screen existed, though
+  the backend had been returning `linked` / `already_linked` since it was built. Now wired, with
+  placeholder copy, and `link` is stripped in `clearSignInResultFromUrl`. (2) A linked address has no
+  org, so under [[0013-sign-in-is-to-an-organization]] it had nowhere to appear.
+- **Fix (user's choice):** `/auth/remembered-accounts` returns `linked_personal_emails` per row, and
+  an org row shows a **`Personal (n)` chip beside its `Org` chip**, addresses in the tooltip. The same
+  list repeats across a person's rows by design. A row that is *itself* personal doesn't get the extra
+  chip, or it would read "Personal" twice.
+- `AccountBadge` now takes `emails: string[]` and appends `(n)` from two up.
+- Verified against the user's real data: one row, `ualberta.ca` / Ronald Wopara, chips `Org` +
+  `Personal`, tooltip `ronaldwop@gmail.com`.

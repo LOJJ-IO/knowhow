@@ -10,7 +10,7 @@ import {
 } from "@/components/legal/legal-page";
 
 export const metadata: Metadata = {
-  title: "Terms of Use — Knohow",
+  title: "Terms of Use | Knohow",
   description: "The terms that apply to your use of Knohow.",
 };
 

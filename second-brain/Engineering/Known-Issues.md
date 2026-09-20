@@ -56,3 +56,11 @@ account picker. `/privacy` says nothing about it. Must be covered before launch,
 existing `[legal / privacy]` blocker. Note the read endpoint is unauthenticated by necessity and
 is gated only by possession of the cookie; it returns only accounts that signed in on that
 browser, never an organization's membership.
+
+## `[onboarding / linking]` A linked personal address isn't recognised at a later sign-in (2026-09-20)
+`person_emails` records an address proved to belong to a person who answered "yes, I have an
+organization account" ([[0013-sign-in-is-to-an-organization]]). `complete_signup` does **not** consult
+it: signing in with that address again still finds no `OrgMember`, so it falls into the pending
+personal-signup path and asks the same question over again. The picker shows the link (a `Personal`
+chip), but nothing acts on it. Also still missing: any in-app UI to start `/auth/link-account/start`
+for someone already signed in.

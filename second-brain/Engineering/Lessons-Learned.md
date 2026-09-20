@@ -289,3 +289,18 @@ present. The tooltip was **written fresh in this repo** — Knohow stays indepen
 (CLAUDE.md invariant 5); the user was asked and chose the fresh implementation over porting.
 Lives at `src/components/brand/tooltip.tsx`, deliberately **not** `src/components/ui/`, which is
 the path invariant 5 calls out.
+
+## Portaled content inherits nothing, fonts included (2026-09-20)
+The badge tooltip read in the browser's default sans while everything around it was Satoshi. The
+picker sets the font with a `className` on an ancestor (`satoshi.className` on the `<ul>`), and the
+tooltip is portaled to `document.body`, so it is not a descendant and inherits none of it. The
+primitive stays font-agnostic; the **caller** passes `className={satoshi.className}` to
+`TooltipContent`. Same root cause as the z-index catch above, one level up: a portal buys you
+escape from clipping and from the stacking context, and costs you every inherited style. Check
+font, colour and line-height on anything portaled. See [[FEAT-landing-login-panel]].
+
+## No em dashes in user-facing copy (2026-09-20, user rule)
+"No emdashes ever" — button labels, headings, body, page titles, metadata. Use a comma, a colon or
+a second sentence; page titles use a pipe (`Terms of Use | Knohow`). Applies to placeholder copy
+too. Code comments and `console.error` strings were left alone as not user-facing. Recorded in
+[[0013-sign-in-is-to-an-organization]].

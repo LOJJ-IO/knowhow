@@ -6,20 +6,21 @@ from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import OperationalError
 
 from app.auth.identity import (
     AccountAlreadyLinked,
-    PersonAlreadyHasOrgAccount,
+    attach_pending_personal_email,
     accounts_of,
     link_account_to_person,
     person_for,
 )
-from app.auth.remembered import list_remembered_people, remember_account
+from app.auth.remembered import list_remembered_orgs, remember_account
 from app.db import SessionLocal
 from app.models.org_member import AuthType, MemberStanding, OrgMember
 from app.models.organization import Organization
 from app.models.person import Person
+from app.models.person_email import PersonEmail
 
 
 @pytest.fixture
@@ -82,14 +83,16 @@ def test_linking_puts_two_accounts_under_one_person(db):
     assert kinds == {"r@acme.org": "org", "r@gmail.com": "personal"}
 
 
-def test_a_person_may_hold_only_one_workspace_account(db):
-    # User, 2026-09-20: "one org, many personal".
+def test_a_person_may_belong_to_two_companies(db):
+    # User, 2026-09-20: signing in is signing in to an org, and two companies
+    # is legitimate — this reverses 0009's one-org rule.
     person = person_for(_member(db, _org(db), "r@acme.org", "R", AuthType.DOMAIN_DELEGATED), db)
     second_org = _member(db, _org(db, "Other", "other.org"), "r@other.org", "R", AuthType.DOMAIN_DELEGATED)
     person_for(second_org, db)
 
-    with pytest.raises(PersonAlreadyHasOrgAccount):
-        link_account_to_person(person.id, second_org, db)
+    link_account_to_person(person.id, second_org, db)
+
+    assert sum(1 for a in accounts_of(person.id, db) if a.kind == "org") == 2
 
 
 def test_many_personal_accounts_are_fine(db):
@@ -117,20 +120,30 @@ def test_an_account_already_linked_elsewhere_is_refused(db):
         link_account_to_person(keeper.id, shared, db)
 
 
-def test_the_database_itself_rejects_a_second_workspace_account(db):
-    # The service check is not the only guard — a partial unique index backs it.
-    person = Person(display_name="R")
-    db.add(person)
-    db.flush()
-    for email, org_name in (("a@acme.org", "A"), ("b@beta.org", "B")):
-        member = _member(db, _org(db, org_name), email, "R", AuthType.DOMAIN_DELEGATED)
-        member.person_id = person.id
-    with pytest.raises(IntegrityError):
-        db.commit()
-    db.rollback()
+def test_a_verified_personal_address_is_kept_without_creating_an_org(db):
+    # "Yes, I have an organization account": they get the company, and the
+    # personal address is remembered against them — no personal org.
+    work = _member(db, _org(db, "Acme", "acme.org"), "r@acme.org", "R", AuthType.DOMAIN_DELEGATED)
+    person = person_for(work, db)
+    orgs_before = db.query(Organization).count()
+
+    attach_pending_personal_email(person.id, "R@Gmail.com", db)
+
+    assert db.query(Organization).count() == orgs_before, "no personal org may be created"
+    stored = db.query(PersonEmail).filter(PersonEmail.person_id == person.id).one()
+    assert stored.email == "r@gmail.com", "addresses are normalised"
 
 
-def test_the_picker_shows_one_row_per_person_not_per_account(db):
+def test_a_personal_address_claimed_by_someone_else_is_refused(db):
+    first = person_for(_member(db, _org(db), "a@acme.org", "A"), db)
+    second = person_for(_member(db, _org(db, "Beta"), "b@acme.org", "B"), db)
+    attach_pending_personal_email(first.id, "shared@gmail.com", db)
+
+    with pytest.raises(AccountAlreadyLinked):
+        attach_pending_personal_email(second.id, "shared@gmail.com", db)
+
+
+def test_the_picker_shows_one_row_per_organization(db):
     device = uuid.uuid4()
     org = _org(db)
     work = _member(db, org, "r@acme.org", "Ronald Wopara", AuthType.DOMAIN_DELEGATED)
@@ -145,12 +158,15 @@ def test_the_picker_shows_one_row_per_person_not_per_account(db):
     for member in (work, personal, stranger):
         remember_account(device, member, db)
 
-    rows = list_remembered_people(device, db)
-    assert len(rows) == 2, "the two linked accounts must collapse into one row"
-    linked = next(r for r in rows if r.person_id == person.id)
-    assert {a.email for a in linked.accounts} == {"r@acme.org", "r@gmail.com"}
-    # Most recently used account is what a click signs in with.
-    assert linked.primary_email == "r@gmail.com"
+    # Signing in is signing in to an org (user, 2026-09-20): three memberships,
+    # three rows, even though two of them are the same person.
+    rows = list_remembered_orgs(device, db)
+    assert len(rows) == 3
+    assert {r.organization_name for r in rows} == {"Acme", "Ronald (personal)"}
+    # The org leads; the person's name is the subtext.
+    ronald_rows = [r for r in rows if r.person_name == "Ronald Wopara"]
+    assert len(ronald_rows) == 2, "linked accounts share the person's name"
+    assert {r.kind for r in ronald_rows} == {"org", "personal"}
 
 
 def test_accounts_are_never_grouped_by_name(db):
@@ -164,4 +180,31 @@ def test_accounts_are_never_grouped_by_name(db):
     remember_account(device, a, db)
     remember_account(device, b, db)
 
-    assert len(list_remembered_people(device, db)) == 2
+    rows = list_remembered_orgs(device, db)
+    assert len(rows) == 2
+    assert all(r.person_name == "Ronald" for r in rows)
+
+
+def test_a_linked_address_with_no_org_rides_on_the_person_s_rows(db):
+    # "Yes, I have an organization account" leaves the personal address with
+    # no org, so it has no row — it shows as a Personal chip on the org rows
+    # instead (user, 2026-09-20).
+    device = uuid.uuid4()
+    work = _member(db, _org(db, "Acme", "acme.org"), "r@acme.org", "R", AuthType.DOMAIN_DELEGATED)
+    person = person_for(work, db)
+    attach_pending_personal_email(person.id, "r@gmail.com", db)
+    remember_account(device, work, db)
+
+    rows = list_remembered_orgs(device, db)
+    assert len(rows) == 1, "a linked address must not create a second row"
+    assert rows[0].kind == "org"
+    assert rows[0].linked_personal_emails == ["r@gmail.com"]
+
+
+def test_an_unlinked_account_carries_no_personal_chip(db):
+    device = uuid.uuid4()
+    solo = _member(db, _org(db, "Acme", "acme.org"), "s@acme.org", "S", AuthType.DOMAIN_DELEGATED)
+    person_for(solo, db)
+    remember_account(device, solo, db)
+
+    assert list_remembered_orgs(device, db)[0].linked_personal_emails == []

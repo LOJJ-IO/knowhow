@@ -121,10 +121,9 @@ def create_org_chart_route(
     # who auto-joined the domain may pre-empt them and claim ownership.
     if not is_founding_member(org_id, member.id, db):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "only the organization's first member can set up its org chart")
-    if not body.is_owner and not body.owner_email:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "owner_email is required when the initiator is not the owner"
-        )
+    # Owner email is optional when the initiator isn't the owner — they may
+    # answer "No" on "Do you know the owner's email?" and nominate later
+    # (same idea as unknown Super Admin).
 
     result = create_org_chart(
         org_id,

@@ -10,7 +10,10 @@ related: ["[[0006-observed-domain-tenant-identity]]", "[[0011-device-remembered-
 # ADR-0012: Identity linking — one person, one org account, many personal accounts
 
 ## Status
-`active` (2026-09-20). Builds on [[0011-device-remembered-accounts]], which deliberately
+`active` (2026-09-20), but **partly revised the same day by
+[[0013-sign-in-is-to-an-organization]]**: the "one Workspace account per person" rule (decision 2)
+and the person-shaped picker row are both replaced there. Everything else below still holds:
+links are made and never inferred, data stays per account, there is no account picking. Builds on [[0011-device-remembered-accounts]], which deliberately
 avoided identity linking; the user then asked for it directly.
 
 ## Context

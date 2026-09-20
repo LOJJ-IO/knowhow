@@ -290,6 +290,7 @@ def remembered_accounts(
                 "person_name": row.person_name,
                 "email": row.email,
                 "kind": row.kind,
+                "linked_personal_emails": row.linked_personal_emails,
             }
             for row in list_remembered_orgs(device_id, db)
         ]
