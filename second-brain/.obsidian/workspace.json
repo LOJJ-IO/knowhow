@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Engineering/Known-Issues.md",
+                "file": "Architecture/Decisions/0005-layered-file-classification-no-llm-first.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Known-Issues"
+              "title": "0005-layered-file-classification-no-llm-first"
             }
           }
         ]
@@ -53,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "",
+                "query": "invariant 5",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -74,7 +74,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "horizontal",
@@ -168,10 +169,13 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0008-continue-with-google-via-backend.md",
+    "Architecture/Architecture-Overview.md",
+    "Engineering/Known-Issues.md",
+    "Architecture/Decisions/0011-device-remembered-accounts.md",
     "Current/Current-Context.md",
     "Architecture/Decisions/0010-deletes-go-to-trash-30-days.md",
     "Architecture/Decisions/0009-contractor-work-created-as-the-org.md",
-    "Architecture/Decisions/0008-continue-with-google-via-backend.md",
     "Product/Features/FEAT-legal-pages.md",
     "Product/Features/FEAT-landing-book-a-demo.md",
     "Daily.md",
@@ -185,8 +189,6 @@
     "Product/Features/FEAT-landing-login-panel.md",
     "Features/FEAT-landing-login-panel.md",
     "Features",
-    "Engineering/Known-Issues.md",
-    "Architecture/Architecture-Overview.md",
     "Architecture/Decisions.md",
     "Product/Features/FEAT-landing-deck-notes-folder.md"
   ]

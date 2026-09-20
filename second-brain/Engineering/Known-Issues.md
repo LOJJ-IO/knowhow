@@ -3,7 +3,7 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-18
+updated: 2026-09-20
 related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
@@ -48,3 +48,11 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-pur
 - **[frontend]** `TeamDocumentsBoard`'s owner list (used for both the filter dropdown and React list keys) had duplicate entries when a team's leader was also present in `team.members` (their `teamId` gets set when promoted, so they show up in both `team.leader` and `team.members`) — caused a "two children with the same key" React warning on the owner dashboard. Fixed by filtering `activeTeam.members` to exclude `activeTeam.leaderId` before building the owners list in `src/app/(app)/dashboard/page.tsx`. Caught via a Playwright-driven click-through, not by inspection. (resolved 2026-08-31)
 - **[backend]** `onboardPerson` let a duplicate email hit Prisma's unique constraint and throw an unhandled `PrismaClientKnownRequestError`, surfacing as a raw 500 with no user-facing feedback. Fixed: check for an existing user by email first and throw a plain `Error` with a friendly message; `addPerson` (the Server Action) now catches and returns `{ error: string }` instead of letting Next's default production error-message redaction hide it. `PeopleManager` renders that error distinctly from a success summary. (resolved 2026-08-31)
 - **[frontend]** `PeopleManager` used one shared `useTransition`/`isPending` for both Add and Remove actions — removing someone made the unrelated "Add Person" button show "Adding…". Fixed with two separate transitions (`isAdding`, `isRemoving` + `removingId` to scope the "Removing…" label to the specific row). (resolved 2026-08-31)
+
+## `[legal / privacy]` The Privacy Policy doesn't mention the `knohow_device` cookie (2026-09-20)
+[[0011-device-remembered-accounts]] added a **long-lived browser identifier** (`knohow_device`,
+1 year) holding a per-browser list of names and emails, readable **before sign-in** — the Log In
+account picker. `/privacy` says nothing about it. Must be covered before launch, alongside the
+existing `[legal / privacy]` blocker. Note the read endpoint is unauthenticated by necessity and
+is gated only by possession of the cookie; it returns only accounts that signed in on that
+browser, never an organization's membership.

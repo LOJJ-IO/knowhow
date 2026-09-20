@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-18
+updated: 2026-09-20
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -235,3 +235,31 @@ Vercel's free **Hobby** plan does support **private** repos; what it does not su
 Ways out, if private matters: transfer the repo back to the personal account `ronaldwopara` (Hobby then takes it private), pay for Vercel Pro, or move hosting. **Cloudflare Workers** is the free option that allows private + org repos: Next.js 16 App Router needs `@opennextjs/cloudflare` (not the retired `next-on-pages`), `wrangler.jsonc` with `nodejs_compat` + an assets binding, and build/deploy via `opennextjs-cloudflare build && opennextjs-cloudflare deploy`. Low risk here because the deployed surface is landing + `/terms` + `/privacy` only, with no auth, data layer or ORM in `src/` ([[0004-landing-only-purge-old-app]], [[0002-remove-prisma-for-vercel]]).
 
 Whatever host is chosen, the **origin changes**, which the backend cares about: CORS allowlist and `GOOGLE_OAUTH_REDIRECT_URI` / OAuth authorized origins in `knohow-staging` are per-origin ([[0008-continue-with-google-via-backend]]). Record the cutover as an ADR when it happens. Not decided yet — see [[Current-Context]].
+
+## A personal Gmail is only its own org when it's new to Knohow (2026-09-20)
+Worth not re-deriving: `complete_signup` looks the email up **org-agnostically first**
+(`app/onboarding/service.py`), so if it already has an `OrgMember` anywhere, signing in is just a
+login — no second bootstrap. The domainless personal org is reached only when the email is
+unknown **and** Google sends no `hd` **and** the person answers "No — just me". A personal account
+that belongs to a company org reaches Drive through personal-OAuth, because domain-wide delegation
+cannot touch a Gmail account (`_infer_auth_type`, `app/auth/personal_oauth.py`) — that's the
+contractor and Gmail-company case. So "work vs personal" is almost never the useful distinction;
+**which org the account belongs to** is. I got this wrong first and the user caught it.
+See [[0011-device-remembered-accounts]].
+
+## Cross-origin cookies work between localhost ports in dev (2026-09-20)
+The backend sets `SameSite=Lax` in development, and the frontend calls it cross-origin
+(`localhost:3000` → `localhost:8000`) with `credentials: "include"`. That works, because
+same-site is decided by registrable domain and **ignores the port** — both are `localhost`. In
+production the two are different domains, which is why `cookie_kwargs()` flips to
+`SameSite=None; Secure`. Don't "fix" the dev path after testing locally: the local success proves
+nothing about production, and vice versa.
+
+## Verifying a pre-sign-in screen without a real Google round trip (2026-09-20)
+The account picker renders from backend state that normally only a real Google sign-in can
+create. Rather than mock the frontend, seed it: insert an org + members + `remembered_accounts`
+rows against a fixed device UUID, then `addCookies` that UUID in Playwright. That exercised the
+real endpoint, the real CORS/cookie path and the real redirect — the row click was followed all
+the way to `accounts.google.com` and its `login_hint` asserted. Gotcha: the desktop **Log In
+button doesn't exist until the CTA split**, so the script must click Get Started and wait ~4s
+first. Playwright isn't a repo dependency — install it in the scratchpad, not in `package.json`.

@@ -7,7 +7,7 @@ updated: 2026-09-16
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]"]
 ---
 
-# ADR-0005: Classify company vs personal files with rules and a lightweight model first; LLM only as last mile
+	# ADR-000 5: Classify company vs personal files with rules and a lightweight model first; LLM only as last mile
 
 ## Status
 `active` — adopted as direction by the user 2026-09-16. Nothing implemented yet.

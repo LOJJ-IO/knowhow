@@ -13,17 +13,24 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models.org_member import OrgMember
-from app.models.organization import Organization
+from app.auth.identity import LinkedAccount, accounts_of
+from app.models.org_member import AuthType, OrgMember
+from app.models.person import Person
 from app.models.remembered_account import RememberedAccount
 
 
 @dataclass
-class RememberedAccountView:
-    email: str
+class RememberedPersonView:
+    """One human in the picker, with the accounts this browser has used.
+    A person holds at most one `org` account and any number of `personal`
+    ones (user, 2026-09-20)."""
+
+    person_id: uuid.UUID
     display_name: str | None
-    organization_id: uuid.UUID
-    organization_name: str
+    # Most recently used of this person's accounts — what a click signs in
+    # with, since Google still needs one email to open on.
+    primary_email: str
+    accounts: list[LinkedAccount]
 
 
 def remember_account(device_id: uuid.UUID, member: OrgMember, db: Session) -> None:
@@ -43,25 +50,46 @@ def remember_account(device_id: uuid.UUID, member: OrgMember, db: Session) -> No
     db.commit()
 
 
-def list_remembered_accounts(device_id: uuid.UUID, db: Session) -> list[RememberedAccountView]:
-    """Most recently used first. Joins the org so the frontend can name it on
-    rows that lead somewhere different from the rest."""
+def list_remembered_people(device_id: uuid.UUID, db: Session) -> list[RememberedPersonView]:
+    """The picker's rows: one per person, most recently used first.
+
+    Grouping is by `person_id` only — a deliberate link — never by name. An
+    account with no person yet (pre-linking row) stands alone, which is the
+    honest answer rather than guessing it belongs with another.
+    """
     rows = db.execute(
-        select(OrgMember, Organization)
+        select(OrgMember, RememberedAccount.last_seen_at)
         .join(RememberedAccount, RememberedAccount.member_id == OrgMember.id)
-        .join(Organization, Organization.id == OrgMember.organization_id)
         .where(RememberedAccount.device_id == device_id)
         .order_by(RememberedAccount.last_seen_at.desc())
     ).all()
-    return [
-        RememberedAccountView(
-            email=member.email,
-            display_name=member.display_name,
-            organization_id=organization.id,
-            organization_name=organization.name,
+
+    people: dict[str, RememberedPersonView] = {}
+    for member, _last_seen in rows:
+        # Unlinked accounts key on their own id so they never merge.
+        key = str(member.person_id) if member.person_id else f"member:{member.id}"
+        if key in people:
+            continue
+        person = db.get(Person, member.person_id) if member.person_id else None
+        people[key] = RememberedPersonView(
+            person_id=member.person_id or member.id,
+            display_name=(person.display_name if person else None) or member.display_name,
+            # Rows arrive newest-first, so the first account seen for a
+            # person is their most recent.
+            primary_email=member.email,
+            accounts=(
+                accounts_of(member.person_id, db)
+                if member.person_id
+                else [
+                    LinkedAccount(
+                        email=member.email,
+                        kind="org" if member.auth_type is AuthType.DOMAIN_DELEGATED else "personal",
+                        organization_name=member.organization.name,
+                    )
+                ]
+            ),
         )
-        for member, organization in rows
-    ]
+    return list(people.values())
 
 
 def forget_device(device_id: uuid.UUID, db: Session) -> int:

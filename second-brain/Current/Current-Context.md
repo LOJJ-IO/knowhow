@@ -4,16 +4,16 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-20
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]"]
 ---
 
 # Current Context
 
 ## Repo root cleanup (2026-09-20)
-Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Root [`README.md`](../../README.md) replaced the create-next-app boilerplate with a short Knohow + frontend/backend run guide. Cleanup committed; README update may still be local.
+Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Root [`README.md`](../../README.md) replaced the create-next-app boilerplate with a short Knohow + frontend/backend run guide (backend section split into safer copy-paste blocks 2026-09-20 after a `cd`→`d` paste failure at repo root).
 
 ## Book a Demo — abandoned recovery (decided 2026-09-20, not built)
-After a **valid work email**, if idle (**no typing/clicks inside the demo sheet**) for **20 minutes** (sheet open or closed), send **one** Resend transactional email from **`noreply@knohow.app`**. Triggers only on **earlier** steps (fields/segment), **not** Cal. Cancel if they book on Cal, reopen Book a Demo, or click the email CTA. Deep link resumes at the stopped step with fields prefilled. Backend owns leads + send. Nudge is after the 5:00 Hold Expired by design. **Email structure** mirrors a Lance abandon email (greeting → soft pull-away → Continue CTA → ~2 min + calendar at end → personal sign-off); Knohow signer/copy/subject/CTA label still TBD — [[FEAT-landing-book-a-demo]]. Resend DNS for `knohow.app` still to provision.
+After a **valid work email**, if idle (**no typing/clicks inside the demo sheet**) for **20 minutes** (sheet open or closed), send **one** Resend transactional email from **`noreply@knohow.app`**. Triggers only on **earlier** steps (fields/segment), **not** Cal. Cancel if they book on Cal, reopen Book a Demo, or click the email CTA. Deep link resumes at the stopped step with fields prefilled. Backend owns leads + send. Nudge is after the 5:00 Hold Expired by design. **Email copy locked** in [[FEAT-landing-book-a-demo]]. **Resend domain verified**; `RESEND_API_KEY` in `backend/.env`; `RESEND_FROM_EMAIL` + key documented in `backend/.env.example`; Settings fields added. Feature still not built.
 
 ## ✅ Backend merged into `main` (2026-09-15)
 The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
@@ -39,6 +39,32 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Personal-account screen** (backend ready 2026-09-18) — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
+
+## Log In account picker built (2026-09-20)
+"Which account today?" — the accounts this browser has signed in with, shown instead of the plain
+Log In screen when there are any ([[FEAT-landing-login-panel]]). User's reference was Canva's picker.
+Keyed to a **device**, never a person — full reasoning in [[0011-device-remembered-accounts]], which
+also records the correction that a personal Gmail is only its own org when it's new to Knohow.
+
+- **Backend:** `remembered_accounts` table (migration `0008_remembered_accounts`, applied locally),
+  `app/models/remembered_account.py`, `app/auth/remembered.py`, long-lived `knohow_device` cookie
+  set on every successful sign-in (both the login and signup callbacks), `GET`/`DELETE
+  /auth/remembered-accounts`, and `/onboarding/signup?email=` → Google `login_hint`. Logout keeps
+  the device cookie on purpose. 75 backend tests pass (9 new, `tests/test_remembered_accounts.py`).
+- **Frontend:** `AccountPicker` in `landing-hero.tsx` — initial-circle avatars (Google gives us no
+  picture; tint is a deterministic hash of the email, **placeholder palette**), name + email, the
+  org named **only when the remembered accounts span more than one org** (user's choice), OR divider,
+  "Continue with another account", Terms/Privacy line, "Remove accounts". Light modal, matching the
+  existing sheet. Accounts are fetched **on mount, not on open**, so the modal sizes once
+  ([[FEAT-landing-book-a-demo]]'s lesson). Copy is **placeholder**.
+- **Verified in a real browser** at 1470×956 (Playwright, seeded DB + device cookie): picker renders,
+  a row click reaches `accounts.google.com` with the right `login_hint`, "Remove accounts" empties
+  the list and falls back to "Log in or sign up in seconds". `tsc`/`eslint`/`next build` clean.
+- **Seed data left in the local dev DB** so the screen can be reopened: three `@seed.test` members in
+  orgs "Acme Seed" and "Ronald (personal)", device `11111111-1111-1111-1111-111111111111`. Re-running
+  the scratchpad `seed-picker.py` cleans and re-creates them; delete the `@seed.test` members and
+  those two orgs to remove it entirely.
+- **Open:** Privacy Policy must describe the `knohow_device` cookie before launch ([[Known-Issues]]).
 
 ## Brand spelling (2026-09-17, user)
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.

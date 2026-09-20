@@ -38,6 +38,12 @@ class OrgMember(Base):
         UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True
     )
 
+    # The human this account belongs to (identity linking). Nullable only
+    # for rows created before linking existed; every sign-in backfills it.
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("people.id"), nullable=True, index=True
+    )
+
     email: Mapped[str] = mapped_column(String(320), nullable=False, index=True)
     display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -53,6 +59,7 @@ class OrgMember(Base):
     created_at: Mapped[datetime] = created_at_col()
 
     organization: Mapped["Organization"] = relationship(back_populates="members")
+    person: Mapped["Person | None"] = relationship(back_populates="accounts")
     oauth_credential: Mapped["OAuthCredential | None"] = relationship(
         back_populates="member", uselist=False
     )

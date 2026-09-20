@@ -72,7 +72,7 @@ Verified in-browser 2026-09-17: empty Continue → both name fields shake/red, f
 - Marketing / promotional email — abandoned recovery is **transactional only**.
 
 ## Abandoned demo recovery — Resend (decided 2026-09-20, not built)
-If someone starts Book a Demo and goes idle, send **one** Resend email after **20 minutes** of inactivity asking them to continue. Email copy/templates TBD (user will supply).
+If someone starts Book a Demo and goes idle, send **one** Resend email after **20 minutes** of inactivity asking them to continue. **Copy locked** (see Final body copy below). **Resend domain verified** 2026-09-20.
 
 **Rules (user):**
 - **Clock arm:** first time a **valid work email** is present. Before that, nothing can be emailed.
@@ -82,7 +82,7 @@ If someone starts Book a Demo and goes idle, send **one** Resend email after **2
 - **Cancel / suppress send if** any of: they **book on Cal**, they **reopen Book a Demo**, or they **click the email CTA** (resume link).
 - **Resume:** deep link reopens Book a Demo at the **step they stopped on**, with fields **prefilled**, so Continue advances to the next step.
 - **Tone:** personalized transactional; **structure copied from a Lance reference email** (user pasted 2026-09-20) — see Email template below. Final Knohow wording TBD where noted.
-- **From:** `noreply@knohow.app` (user 2026-09-20). Needs Resend domain verification for `knohow.app` before sends work. Body may still be signed by a person (Lance-style) even when the envelope From is noreply.
+- **From:** `noreply@knohow.app` (user 2026-09-20). **Resend domain verified** (user 2026-09-20) — ready to send once API key is in `backend/.env` and the feature is built.
 - **Storage / send:** `backend/` owns the lead record + idle scheduler + Resend send. Frontend must persist partial progress once email is valid (and heartbeat / last-activity updates **from sheet interaction only**).
 
 ### Email template (reference → Knohow mapping)
@@ -100,23 +100,48 @@ Lance reference the user wants to mirror (hotel onboarding abandon):
 
 **Locked structure for Knohow:**
 1. Greeting with **first name**
-2. Short intro of who is writing + that they're with Knohow
-3. Soft line: you started [demo / telling us about your org] but got pulled away — no guilt
-4. Single CTA: continue where they left off (deep link) — label TBD (Lance: "Continue getting started")
+2. Short intro: **Isaac**, co-founder (Marketing & Sales), Knohow
+3. Soft line: you started telling us about **your organisation** but got pulled away — no guilt
+4. Single CTA deep link — label: **Pick up where you left off**
 5. ~two minutes + mention they can book time on the calendar at the end
-6. Personal sign-off (name, title, Knohow, email, LinkedIn)
+6. Personal sign-off: Isaac · Co-founder, Marketing & Sales · Knohow · iekwaru@gmail.com · LinkedIn
 
-**Still need from user (don't invent):**
-- Signer name / title / personal email / LinkedIn URL (envelope is `noreply@…`; body sign-off is human)
-- Exact body copy (or approve a draft)
-- CTA button label
-- Subject line
-- How to phrase the "pulled away" line when we know segment (Agencies / Startups / …) vs when we only have name + email
+**Copy decisions (user 2026-09-20):**
+- **Subject:** `Pick up where you left off?`
+- **CTA label:** `Pick up where you left off`
+- **Signer:** Isaac — Co-founder, Marketing & Sales
+- **Sign-off email:** `iekwaru@gmail.com`
+- **Sign-off LinkedIn:** https://www.linkedin.com/in/isaac-ekwaru-284249217/
+- **About phrase (fixed):** `your organisation` — not varied by company/segment in the body (user 2026-09-20; earlier “mention when we have it” superseded for this line)
+- **Draft approved shape** — final body below
+
+### Final body copy (locked 2026-09-20)
+
+**Subject:** Pick up where you left off?
+
+Hey {firstName},
+
+Great to meet you — I'm Isaac, co-founder of Knohow (Marketing & Sales). It looks like you started telling us about your organisation but got pulled away. No worries; it happens all the time.
+
+You can pick up right where you left off here:
+
+**Pick up where you left off** ← deep link
+
+It takes about two minutes, and you'll have the option to book time on my calendar at the end if that would be helpful. I would love to chat!
+
+Cheers,  
+Isaac  
+Co-founder, Marketing & Sales  
+Knohow  
+Email · iekwaru@gmail.com  
+LinkedIn · https://www.linkedin.com/in/isaac-ekwaru-284249217/
+
+Only merge field in the body: `{firstName}`. Envelope From remains `noreply@knohow.app`.
 
 **Still open for this slice:**
 - Resume token format / expiry (should not put PII in the URL).
 - Cal booking webhook (or equivalent) so "booked" can cancel a pending send — still needed even though idle-on-Cal does not *trigger* a send (they might book after the email was already queued from an earlier step).
-- Resend account + DNS for `knohow.app` (SPF/DKIM) so `noreply@knohow.app` can actually send — From address decided; domain verification is a user provisioning step.
+- `RESEND_API_KEY` in `backend/.env` (user added 2026-09-20); also `RESEND_FROM_EMAIL=noreply@knohow.app` in `.env` / `.env.example`. Domain verified; feature not built yet.
 
 ## Open questions
 - **Long browser messages wrap:** Chrome's invalid-email text ("Please include an '@' in the email address. 'x' is missing an '@'.") takes two lines at 420px, so the modal grows ~20px (animated by `.t-resize`). Options: custom copy, single-line truncation, or accept it.

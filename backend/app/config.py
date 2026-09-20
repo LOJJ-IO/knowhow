@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     # Origin the Next.js app is served from, for CORS + post-login redirects.
     frontend_origin: str
 
+    # --- Resend (abandoned Book a Demo recovery; optional until that feature ships) ---
+    resend_api_key: str = ""
+    resend_from_email: str = "noreply@knohow.app"
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -30,17 +30,32 @@ Stack: Next.js 16 · React 19 · Tailwind v4 · TypeScript. The landing works wi
 
 ## Backend (optional for landing)
 
-Python 3.12 · FastAPI · SQLAlchemy · Alembic · Postgres.
+Python 3.12 · FastAPI · SQLAlchemy · Alembic · Postgres. Run these from a terminal **one block at a time**, starting at the **repo root**.
 
 ```bash
 cd backend
+```
+
+```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # fill Google + DB keys — see docs/gcp-setup.md
+```
+
+Copy env only if you do not already have `backend/.env` (do not overwrite a working one):
+
+```bash
+cp -n .env.example .env
+```
+
+Fill Google + DB keys as needed — see [`backend/docs/gcp-setup.md`](backend/docs/gcp-setup.md). Then:
+
+```bash
 alembic upgrade head
 uvicorn app.main:app --port 8000 --reload
 ```
+
+If `uvicorn` / `alembic` are “command not found”, you are not inside `backend/` with `.venv` activated — `cd backend && source .venv/bin/activate` and retry.
 
 GCP / Railway production deploy is not provisioned yet. Details: [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md).
 

@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-18
+updated: 2026-09-20
 related: ["[[Current-Context]]", "[[Patterns-landing-mc-recess-deck]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-carousel]]"]
 ---
 
@@ -51,3 +51,23 @@ Clicking **Log In** in the desktop header (`DESKTOP_HEADER_EXTRAS`, via `GetStar
 
 ## Related
 [[Patterns-landing-mc-recess-deck]] · [[FEAT-landing-header-nav]] · [[FEAT-landing-deck-carousel]]
+
+## Account picker — "Which account today?" (2026-09-20)
+Clicking **Log In** shows the accounts this browser has signed in with, instead of the plain
+"Log in or sign up in seconds" screen; that screen stays as the fallback for a browser with none
+(fresh, incognito, cookies cleared). User's reference was Canva's picker; the device-not-person
+scoping and the `login_hint` behaviour are [[0011-device-remembered-accounts]].
+
+- **Row:** initial circle (no Google profile picture is available — `/auth/me` returns a name and
+  an email only; tint is a deterministic hash of the email, **placeholder palette**), display name
+  over email. The **organization is named only when the remembered accounts span more than one
+  org** (user's choice, 2026-09-20) — on a single org it's noise.
+- **Click a row** → `/onboarding/signup?email=…` → Google `login_hint`. It pre-selects, it does not
+  authenticate: Google still decides who signs in.
+- Below: OR divider, **Continue with another account** (ordinary sign-in, keeps any `?invite=`
+  token), the Terms/Privacy line, and **Remove accounts** → `DELETE /auth/remembered-accounts`,
+  after which the picker gives way to the plain Log In screen.
+- **Sizing:** accounts are fetched on mount, not when the sheet opens, so `LoginModal` measures
+  once — the same trap the Cal embed hit ([[FEAT-landing-book-a-demo]]).
+- **All copy is placeholder** pending the user's design.
+- Verified in a real browser (Playwright, seeded DB + device cookie) at 1470×956.
