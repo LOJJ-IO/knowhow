@@ -813,6 +813,50 @@ body.t-deck-dragging * {
   padding: 2.5rem var(--login-modal-pad-x);
 }
 
+/* Book a Demo's booking step — Cal's embed brings its own white surface, so
+ * the modal drops its own and widens for `month_view` (user 2026-09-20:
+ * "the embed doesn't need a white overlay behind it… okay to make the width
+ * wider"). The border stays, transparent, so `LoginModal`'s measured height
+ * (content + border) is unaffected; width and height both tween via
+ * `.t-resize`. */
+.t-login-modal:has(.t-demo-booking) {
+  width: min(920px, 100% - 32px);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.t-login-modal:has(.t-demo-booking) .t-login-modal-body {
+  padding: 0;
+}
+
+/* Nested-radius rule (see Lessons-Learned): outer = inner + padding. The
+ * booking step has no padding, so the modal drops to the plain button
+ * radius and the slot inside matches it — the 28.6px outer corner only
+ * made sense around 1.1rem of padding. */
+.t-login-modal:has(.t-demo-booking) {
+  border-radius: var(--login-button-radius);
+  /* Cal's iframe is its white card (458px) plus an 80px attribution band
+   * below it — measured in the browser. Centring the iframe therefore left
+   * the *card* ~40px above the viewport's middle, where every earlier step's
+   * modal sat dead centre. Half the band puts the card back (user
+   * 2026-09-20: "center the modal like it was before"). */
+  translate: 0 40px;
+}
+
+/* Fixed slot so the modal grows **once**: with an auto-height child it
+ * tweened twice (placeholder height, then Cal's own height on load). The
+ * height is what Cal reports for `month_view` at this width (measured in
+ * the browser: it sizes its own iframe to 538px and centres it in whatever
+ * box it is given) — at 640px the embed left ~100px of dead space and the
+ * card read as sitting above centre. Cal fills the slot at 100%; the
+ * placeholder mark is centred inside it. */
+.t-demo-booking {
+  position: relative;
+  height: 538px;
+  border-radius: var(--login-button-radius);
+  overflow: hidden;
+}
+
 /* Transitions.dev — Card resize (user-supplied, 2026-09-17). Put `.t-resize`
  * on any element and change its width/height; the transition tweens them. */
 :root {
@@ -823,7 +867,8 @@ body.t-deck-dragging * {
 .t-resize {
   transition:
     width var(--resize-dur) var(--resize-ease),
-    height var(--resize-dur) var(--resize-ease);
+    height var(--resize-dur) var(--resize-ease),
+    translate var(--resize-dur) var(--resize-ease);
   will-change: width, height;
 }
 
@@ -892,6 +937,12 @@ body.t-deck-dragging * {
   border-color: #d9d9de;
 }
 .t-demo-input:focus-visible {
+  border-color: #1c1917;
+}
+/* The "Other" segment box carries the picked highlight instead of its card
+ * (user 2026-09-19: "when other is selected just the text box should be
+ * highlighted") — so it stays dark after focus moves away. */
+.t-demo-input.is-picked {
   border-color: #1c1917;
 }
 .t-demo-input.is-error {

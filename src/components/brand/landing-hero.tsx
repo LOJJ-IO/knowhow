@@ -17,6 +17,20 @@ import Link from "next/link";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
+import dynamic from "next/dynamic";
+import { DemoBookingSlot } from "@/components/brand/demo-booking-slot";
+
+/** Cal.com's embed is ~100KB of the landing bundle and is only ever needed
+ *  on the last Book a Demo step, so it loads on demand (user 2026-09-20:
+ *  "the site feels noticeably slower"). No SSR — the embed is browser-only.
+ *  `loading` keeps the fixed slot, so the modal still grows exactly once. */
+const DemoBookingStep = dynamic(
+  () =>
+    import("@/components/brand/demo-booking-step").then(
+      (m) => m.DemoBookingStep,
+    ),
+  { ssr: false, loading: () => <DemoBookingSlot /> },
+);
 
 gsap.registerPlugin(SplitText, useGSAP);
 
@@ -1550,6 +1564,9 @@ function DemoForm() {
   const timers = useRef<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
   const [step, setStep] = useState(0);
+  /** The website field is in and valid — the fields give way to the segment
+   *  cards in the same modal (`.t-resize` tweens the height change). */
+  const [onSegment, setOnSegment] = useState(false);
   const shown = DEMO_FIELDS.slice(0, DEMO_STEP_FIELD_COUNT[step]);
 
   // Focus the field a step just added.
@@ -1606,7 +1623,10 @@ function DemoForm() {
     }
     if (first) first.focus();
     else if (step < DEMO_STEP_FIELD_COUNT.length - 1) setStep(step + 1);
+    else setOnSegment(true);
   }
+
+  if (onSegment) return <DemoSegmentStep />;
 
   return (
     <form noValidate onSubmit={handleSubmit}>
@@ -1671,6 +1691,145 @@ function DemoForm() {
         </button>
       </div>
     </form>
+  );
+}
+
+/** The three segments offered on the last Book a Demo step. Labels, blurbs
+ *  and icons are placeholder copy until the user writes them. */
+const DEMO_SEGMENTS = [
+  {
+    id: "agencies",
+    label: "Agencies",
+    blurb: "Keep client IP under your control.",
+    icon: (
+      <>
+        <rect x="2" y="7" width="20" height="14" rx="2" />
+        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+      </>
+    ),
+  },
+  {
+    id: "startups",
+    label: "Startups",
+    blurb: "Own your files from day one.",
+    icon: (
+      <>
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z" />
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z" />
+        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
+        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
+      </>
+    ),
+  },
+  {
+    id: "nonprofits",
+    label: "Nonprofits",
+    blurb: "Never lose work when people leave.",
+    icon: (
+      <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    ),
+  },
+  {
+    id: "other",
+    label: "Other",
+    blurb: "Tell us below.",
+    icon: (
+      <>
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </>
+    ),
+  },
+] as const;
+
+/** Segment card — the setup steps' choice button, grown to hold an outline
+ *  icon, a title and a blurb. Picked = the hairline darkens to the text
+ *  colour; nothing else changes. */
+const DEMO_SEGMENT_CLASS = `relative flex w-full cursor-pointer items-start gap-3 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white p-4 text-left text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
+
+/** Last Book a Demo step: which kind of organization this is. One choice,
+ *  and skippable — Continue moves on with nothing picked. Continue has
+ *  nowhere to go yet (the screen after this one isn't designed). */
+function DemoSegmentStep() {
+  const [picked, setPicked] = useState<string | null>(null);
+  const [other, setOther] = useState("");
+  const [booking, setBooking] = useState(false);
+  const otherRef = useRef<HTMLInputElement>(null);
+
+  // Focus the box the moment "Other" opens it.
+  useEffect(() => {
+    if (picked === "other") otherRef.current?.focus();
+  }, [picked]);
+
+  if (booking) return <DemoBookingStep />;
+
+  return (
+    <div>
+      <h2
+        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      >
+        Who&rsquo;s this for?
+      </h2>
+      <div className={`${satoshi.className} mt-6 flex flex-col gap-3`}>
+        {DEMO_SEGMENTS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            aria-pressed={picked === s.id}
+            onClick={() => setPicked(s.id)}
+            className={cn(
+              DEMO_SEGMENT_CLASS,
+              // "Other" hands its highlight to the box it opens.
+              picked === s.id && s.id !== "other" && "border-[#1c1917]",
+            )}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.75}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="mt-[2px] size-5 shrink-0"
+              aria-hidden
+            >
+              {s.icon}
+            </svg>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[1rem] font-bold leading-[1.2]">
+                {s.label}
+              </span>
+              <span className="mt-1 text-[0.8rem] leading-[1.35] text-[rgb(28_25_23/0.6)]">
+                {s.blurb}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {/* "Other" grows its box in under the cards — the modal's `.t-resize`
+          tweens the height, same as a field step. */}
+      {picked === "other" ? (
+        <div className={`t-input-wrap ${satoshi.className} mt-3 flex flex-col`}>
+          <input
+            ref={otherRef}
+            type="text"
+            aria-label="Who this is for"
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            className="t-input t-demo-input is-picked h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+          />
+        </div>
+      ) : null}
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setBooking(true)}
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        >
+          {picked ? "Continue" : "Skip"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -2398,6 +2557,20 @@ function LandingHero() {
     else void video.play().catch(() => {});
   }, [sheetOpen]);
 
+  // Lock the page while the sheet is up (user 2026-09-20: "disable scrolling
+  // on the city backdrop") — a wheel over the backdrop, or a scroll chained
+  // out of the Cal embed, moved the landing underneath. Restores whatever
+  // `overflow` was there before.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const { body } = document;
+    const previous = body.style.overflow;
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.overflow = previous;
+    };
+  }, [sheetOpen]);
+
   function handleCtaClick() {
     if (ctaPhase !== "idle" || nextOpen) return;
     setCtaPhase("spinner");
@@ -2712,7 +2885,7 @@ function LandingHero() {
       {/* The Slide-Up Sheet (Log In / Book a Demo) */}
       <div
         className={cn(
-          "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
+          "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden overscroll-none bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
           sheetOpen ? "translate-y-0" : "translate-y-full",
           sheetAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
         )}

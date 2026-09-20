@@ -3,14 +3,14 @@ type: feature
 status: in-progress
 tags: [area/frontend]
 created: 2026-09-17
-updated: 2026-09-17
+updated: 2026-09-19
 related: ["[[FEAT-landing-login-panel]]", "[[FEAT-landing-header-nav]]", "[[Current-Context]]"]
 ---
 
 # FEAT: Landing Book a Demo sheet
 
 ## Status
-`in-progress` — sheet + form built 2026-09-17; nothing is submitted anywhere yet.
+`in-progress` — sheet + form built 2026-09-17; **segment step added 2026-09-19**; nothing is submitted anywhere yet.
 
 ## Problem
 The desktop header's **Book a Demo** button (renamed from Talk to Sales 2026-09-17, [[FEAT-landing-header-nav]]) did nothing. User: "a replica of log in but the modal's content should be" a demo-request form (reference screenshot: "Get Started", First/Last name, Work email, Company website, Continue pill with an arrow circle).
@@ -30,6 +30,36 @@ Modal content (`DemoForm` in `landing-hero.tsx`), decided with the user via the 
 - **Stepwise reveal (2026-09-17, user: "start with first name and last name then bounce grow to include work email, then … website"; trigger = Continue click, user's pick):** `step` 0 → 1 → 2 shows 2 → 3 → 4 fields (`DEMO_STEP_FIELD_COUNT`). Continue validates **only the fields shown**; all valid → next step, and the added field gets focus. At step 2 a valid Continue does nothing. The growth is `LoginModal`'s measured height + `.t-resize` (no extra animation) — the growing edge reveals the new field. Heights at 1470×956: **284 → 376 → 469px**. Typed values survive Close/reopen while Book a Demo stays the sheet's kind; opening Log In and coming back remounts the form at step 0.
 - **Errors clear as soon as a field is valid** (typing that makes it valid, or a Continue that finds it valid), not only after the 3s hold — otherwise a just-fixed name stayed red when the email step appeared (found in testing 2026-09-17).
 
+### Segment step (2026-09-19)
+After the website field validates, the fields are **replaced** by a segment screen in the same modal (`.t-resize` tweens the height change) — one job per screen, per the user's one-action-per-screen rule. Decided with the user via the question tool:
+- **Heading "Who's this for?"** (user's pick over "Your organization" / "What kind of team are you?" / keeping "Book a Demo"). Same Söhne H2 as the other steps. No muted section label above the cards.
+- **Four cards, stacked** (`DEMO_SEGMENTS`, 2026-09-19): Agencies · Startups · Nonprofits · **Other**, each an outline icon + bold title + muted blurb. **The reference's card chrome was not copied** — the cards are the setup steps' choice button (`SETUP_CHOICE_CLASS`) grown to hold the extra content: white, 1px `#d9d9de`, `var(--login-button-radius)`, `active:scale-[0.98]` (user: "using the way we've been designing these cards").
+- **Icons** (user's pick, outline, `strokeWidth={1.75}`, `currentColor`, inline SVG — no icon package added): **briefcase / rocket / heart**, plus a **pencil** on Other (it writes, matching the box it opens).
+- **Copy is placeholder** — titles and blurbs ("Keep client IP under your control." / "Own your files from day one." / "Never lose work when people leave.") stand in until the user writes them, like the onboarding result screens.
+- **Selection: one choice, skippable** (user). Picking a card **darkens its hairline** to `#1c1917` — no fill, no checkmark. `aria-pressed` on each card. Continue is always enabled and never shakes here; no "Other" option.
+- **"Other" opens a text box** (2026-09-19, user): picking it grows a single `t-demo-input` in **below the cards** (user's pick over replacing them or expanding inside the card), which takes focus. Cards stay visible; the modal's `.t-resize` tweens the growth, same as a field step. `aria-label` only, no visible label or placeholder — no invented copy. **The Other card itself does not darken** (2026-09-19, user: "when other is selected just the text box should be highlighted") — the highlight is on the box, via `.t-demo-input.is-picked` → `#1c1917` in `globals.css` (a class, not `:focus-visible`, so it stays dark after focus moves away; Tailwind utilities can't beat the existing `.t-demo-input` border rule). The text is local state, sent nowhere.
+- **The button reads "Skip" until a card is picked, then "Continue"** (2026-09-19, user: "the button should skip instead of continue"; Skip→Continue swap chosen over one fixed label or two pills). Same black `CTA_CLASS` pill, right-aligned, in both states.
+- **Skip / Continue opens the booking screen** (2026-09-20) — see below. The segment pick and the Other text are still local state, sent nowhere.
+
+### Booking screen — Cal.com embed (2026-09-20)
+Skip / Continue replaces the segment cards with the user's **Cal.com booking embed** (`DemoBookingStep`). User: "embed this after continue in that same bounce… it might need to be an area bounce", then supplied the Cal snippet.
+- **`@calcom/embed-react` ^1.5.3 added** (npm). `getCalApi({ namespace: "15min" })` → `cal("ui", { hideEventTypeDetails: false, layout: "month_view" })`, then `<Cal namespace="15min" calLink="knohow-demo/15min" config={{ layout: "month_view", useSlotsViewOnSmallScreen: "true" }} />` — namespace, link and config exactly as the user's snippet.
+- **Inline, not the snippet's popup button** (assumption — the snippet Cal hands out is the `data-cal-link` button variant, but this screen *is* the embed; a button would be a third click). Swap to the popup if the user wants it.
+- **The "area bounce" is free:** `LoginModal` measures its body with a `ResizeObserver` and writes an explicit px height, so `.t-resize` tweens the modal to whatever height Cal settles at — the area grows, the embed itself isn't animated.
+- **The Knohow mark holds the slot** (`public/knohow-mark.png`, added 2026-09-20 — 1024×1169, transparent, mark zoomed out 60% and centred, rasterized from `icon.svg` with `sharp`) until `getCalApi` resolves, so the area is never empty.
+- **No modal surface on this screen, and it widens** (2026-09-20, user: "the embed doesn't need a white overlay behind it and i think its okay to make the width wider"): `.t-login-modal:has(.t-demo-booking)` in `globals.css` → `background: transparent`, `border-color: transparent`, `box-shadow: none`, body `padding: 0`, `width: min(920px, 100% - 32px)` (from 420px). Cal's embed brings its own white card, so the modal's `#fbfaf8` plate was doubling up. The border is kept **transparent rather than removed** so `LoginModal`'s measured height (content + border delta) still adds up; `.t-resize` already tweens `width` as well as `height`, so the widening rides the same bounce. Keyed off a `t-demo-booking` class via `:has()` — no prop drilling through `DemoForm` → `DemoSegmentStep`.
+- **Two fixes 2026-09-20** (user: "the corner radiuses don't align with our previous iterations and it bounces twice"):
+  - **Radius** — the modal's outer corner is `button radius + padding + 1px` (≈28.6px), which only makes sense *around* 1.1rem of padding. With padding dropped to 0 the embed sat in an oversized corner, so the booking step takes the plain `var(--login-button-radius)` (10px) and the slot inside matches it. Nested-radius rule, see [[Lessons-Learned]].
+  - **Double bounce** — the slot's child was auto-height, so the modal tweened twice: once to the placeholder's height, again to Cal's height on load. `.t-demo-booking` is now a **fixed 640px slot** (`position: relative`, `overflow: hidden`); Cal fills it at `height: 100%` and the mark is centred *inside* it (w-40) instead of sizing it. One growth, on entry.
+- **Three fixes 2026-09-20, all verified in-browser** (user: "center the modal like it was before… the site feels noticeably slower", "disable scrolling on the city backdrop"):
+  - **Centring** — the modal box was already dead centre (0,0 offset, measured); what looked off was Cal's iframe, which is its white card (458px) plus an ~80px attribution band. `translate: 0 40px` on the booking modal (half the band) puts the *card* on the viewport's centre line, where every earlier step's modal sat. `translate` joined `.t-resize`'s transition list so the shift rides the same tween.
+  - **Slot height 640 → 538px** — what Cal actually reports for `month_view` at this width, so the embed fills the slot with no dead space.
+  - **Speed** — `@calcom/embed-react` was statically imported into `landing-hero.tsx`, so Cal sat in the landing page's eager chunk and `cal.com/embed/embed.js` was fetched on **every** visit. `DemoBookingStep` now lives in `src/components/brand/demo-booking-step.tsx` and loads via `next/dynamic` (`ssr: false`), with the shared `DemoBookingSlot` (`demo-booking-slot.tsx`) as its `loading` state so the fixed slot — and the single growth — survive the lazy load. **Verified: 0 Cal requests on landing load** (was the full embed script), Cal code now in its own chunk.
+  - **Page scroll locked while the sheet is open** — `body.style.overflow = "hidden"` (restored on close) + `overscroll-none` on the sheet, so a wheel over the city backdrop, or a scroll chained out of Cal's iframe, no longer moves the landing underneath. Verified: wheel over the backdrop leaves `scrollY` at 0.
+  - **Still off-system:** Cal's card uses an **8px** radius inside its iframe vs the project's 10px; it can't be restyled from outside the iframe.
+- No heading or copy on this screen — none has been written.
+- The "M:SS reserved" countdown keeps running across this step (it lives in the sheet, not the form).
+
 **Validation (user: "check required fields"; error state = user-supplied Transitions.dev "Error state shake" CSS, in `globals.css`):** `noValidate` form; on submit each field runs `checkValidity()` (all `required`, email `type="email"`, website text + `inputMode="url"`). Each invalid field gets `.is-error` on `.t-input-wrap` + `.t-input`, the shake restarts (`is-shaking` removed → reflow → re-added), border goes red, the message fades in; after 3000ms (`--revert-hold`) both fade back. Classes are toggled on the DOM, not via React state, so the shake can restart without a re-render. First invalid field gets focus; `aria-invalid` + `aria-describedby` wired. **A valid submit does nothing** — nothing is sent.
 - **Message copy = the browser's own `validationMessage`** (e.g. "Please fill out this field.") — no invented copy. Error red `#EA4335` (the Google red already used in the G mark). Message space is reserved under each field (the snippet's `visibility` approach), so errors don't shift the layout — except a message long enough to wrap (see Open questions).
 
@@ -38,13 +68,17 @@ Verified in-browser 2026-09-17: empty Continue → both name fields shake/red, f
 ## Out of scope
 - Sending the request anywhere (no backend endpoint, no email, no CRM) — not asked.
 - Mobile trigger — there's no Book a Demo control on mobile (same as Log In).
-- Success/confirmation state after a valid submit.
+- Success/confirmation state after a valid submit (Cal owns the confirmation once a slot is booked).
 
 ## Open questions
 - **Long browser messages wrap:** Chrome's invalid-email text ("Please include an '@' in the email address. 'x' is missing an '@'.") takes two lines at 420px, so the modal grows ~20px (animated by `.t-resize`). Options: custom copy, single-line truncation, or accept it.
 - Browser validation text differs per browser/locale.
 - Where a valid request goes, and what the user sees afterwards.
 - Company website: any format check (currently required only).
+- Segment card copy (titles + blurbs, including Other's "Tell us below.") — placeholder until the user writes it.
+- Whether the picked segment **and the Other text** are sent anywhere once there's a destination (both local state today) — Cal takes name/email again on its own form, so the demo fields are currently collected twice.
+- **Embed size:** 920 × 538 on the booking step (`useSlotsViewOnSmallScreen` still set); 538 is Cal's own `month_view` height at that width, measured at 1470×956. If Cal's height differs at other widths/layouts the slot won't follow — it's fixed on purpose (see the double-bounce fix).
+- ~~Booking screen not yet opened in a browser~~ — verified 2026-09-20 at 1470×956 (Playwright): single growth 530 → 540px, modal 920×540 centred, card centred, no page errors. Other viewports still unverified; **mobile is untested** and there's no mobile Book a Demo trigger anyway.
 
 ## Related
 [[FEAT-landing-login-panel]] · [[FEAT-landing-header-nav]] · [[FEAT-workspace-onboarding-flow]]
