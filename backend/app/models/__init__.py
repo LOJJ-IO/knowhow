@@ -1,6 +1,7 @@
 from app.models.activity import ProcessedActivityEvent, WatchChannel
 from app.models.audit_log import AuditLogEntry
 from app.models.delegation_grant import DelegationGrant, DelegationStatus
+from app.models.demo_lead import DemoLead
 from app.models.file_index import FileIndex
 from app.models.invitation import Invitation, InvitationKind
 from app.models.oauth_credential import OAuthCredential
@@ -29,6 +30,7 @@ __all__ = [
     "AuthType",
     "DelegationGrant",
     "DelegationStatus",
+    "DemoLead",
     "FileIndex",
     "Invitation",
     "InvitationKind",

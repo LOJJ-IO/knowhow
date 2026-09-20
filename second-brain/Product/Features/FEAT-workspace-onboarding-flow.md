@@ -4,7 +4,7 @@ status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
 updated: 2026-09-20
-related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]"]
+related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
 # FEAT: Workspace onboarding flow (sign-in → org → authority)
@@ -246,3 +246,39 @@ Google Workspace?".
 - **Not wired:** recognising a stored `person_emails` address on a *later* sign-in. That person
   will still be treated as a new personal signup. Next gap, with the in-app "add another account"
   UI which also does not exist.
+
+## Setup step and the join link (decided 2026-09-20, not built)
+Setup is the next step for **both** flows (Workspace account and personal account). It is where the org
+chart gets built and where everyone else is invited in. Full reasoning and rejected alternatives in
+[[0014-org-setup-and-join-link]]; the short form:
+
+0. **Who runs it** — the **first person to sign in from the domain**, who **owns the org outright**. No proof
+   in front of setup, because that would block the founder whenever the Admin SDK isn't enabled yet. If the
+   wrong person got there first, a proven Workspace admin **takes the org over via admin proof**.
+1. **Build the chart** — teams/groups only. **No named seats**, so there is no roster to type up front and
+   nobody has to claim a name they may not be. Teams are **typed in one at a time**, and **pulled from the
+   org's Google Workspace groups when delegation makes that available** — typing always works, the import is
+   only an accelerator and must not read the directory before delegation is agreed.
+1b. **Founder's own team** — asked on its own screen **after** the teams exist, with "none" allowed.
+1c. **Team leads** — named by the owner **when approving someone into that team**, never at setup, so the
+   chart stays roster-free. Afterwards the **owner, admins, and a team's own lead** can add or change teams.
+2. **Send one deep link** — domain-locked to the org's Google domain, expiring with a lifetime the owner
+   chooses when sending, revocable at any time. Off-domain people (contractors) use the sponsored path in
+   [[0009-contractor-work-created-as-the-org]], not this link.
+3. **Join** — the link lands on sign-in. Wrong account signed in → name the expected account and offer one
+   button to switch. Account already in another Knohow org → refuse and explain
+   ([[0013-sign-in-is-to-an-organization]]).
+4. **Pick a team** — this is a **request, not a grant**. Choosing a team is choosing what files you can see,
+   so access turns on only when the **owner or an admin** approves it from a single pending list.
+5. **Enter the app** — approved-but-unassigned people are **in the app but empty**, with a line saying it is
+   with the owner.
+
+**Owner's view afterwards:** who joined, when, and who is pending. **Removal from the chart revokes the
+sharing Knohow granted** and reports what it revoked; access Google granted outside Knohow is stated plainly
+as out of Knohow's reach rather than implied gone.
+
+**Not built.** Needs: a pending-**request** state (distinct from the existing pending-join state), the
+approver UI showing requested team beside requester email (and the lead-naming control on it), the empty
+in-app state, stored link records (issuer, chosen lifetime, revoked flag, joins) rather than a stateless
+signed URL, a **team lead** role, and an **admin-proof ownership takeover** path. **All copy is the user's
+to write.**

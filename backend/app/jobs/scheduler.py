@@ -7,6 +7,7 @@ from app.activity.reconciliation import reconcile_organization
 from app.activity.watch_channels import renew_expiring_channels
 from app.auth.delegation import check_delegation
 from app.db import SessionLocal
+from app.demo.service import send_due_recovery_emails
 from app.logging_config import get_logger
 from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.organization import Organization
@@ -103,6 +104,19 @@ def check_pending_delegations() -> None:
         db.close()
 
 
+def run_demo_recovery_emails() -> None:
+    """Abandoned Book a Demo — one Resend after the configured idle window."""
+    db = SessionLocal()
+    try:
+        sent = send_due_recovery_emails(db)
+        if sent:
+            logger.info("jobs.demo_recovery_sent", count=sent)
+    except Exception:
+        logger.exception("jobs.demo_recovery_failed")
+    finally:
+        db.close()
+
+
 def create_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler()
     scheduler.add_job(
@@ -116,5 +130,8 @@ def create_scheduler() -> BackgroundScheduler:
     )
     scheduler.add_job(
         expire_stale_pending_state, "interval", hours=12, id="expire_stale_pending_state", replace_existing=True
+    )
+    scheduler.add_job(
+        run_demo_recovery_emails, "interval", minutes=1, id="demo_recovery_emails", replace_existing=True
     )
     return scheduler

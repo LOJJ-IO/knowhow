@@ -4,7 +4,7 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-20
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
 # Current Context
@@ -15,8 +15,8 @@ Removed ~15MB of tracked root duplicates of assets already under `public/deck/` 
 ## Book a Demo — team size step (2026-09-20)
 After "Who's this for?", Skip/Continue → **"How many people on your team?"** with chips `1` · `2–5` · `6–20` · `21–50` · `51–100` · `100+` (3×2 grid, skippable); then Cal. [[FEAT-landing-book-a-demo]].
 
-## Book a Demo — abandoned recovery (decided 2026-09-20, not built)
-**Counting starts** the moment a **valid work email** is present. After **20 minutes** idle in the demo sheet (open or closed; activity only inside the sheet resets), send **one** Resend from **`noreply@knohow.app`**. Applies on **every** step after email — including **Cal if they haven’t booked yet**. Cancel if they book on Cal, reopen Book a Demo, or click the email CTA. Deep link resumes at the stopped step with fields prefilled. Backend owns leads + send. Nudge is after the 5:00 Hold Expired by design. **Email copy locked** in [[FEAT-landing-book-a-demo]]. **Resend domain verified**; `RESEND_API_KEY` in `backend/.env`; `RESEND_FROM_EMAIL` + key documented in `backend/.env.example`; Settings fields added. Feature still not built.
+## Book a Demo — abandoned recovery (built 2026-09-20)
+**Counting starts** when Continue validates the work email (website field appears) → `demo_leads`. After **`DEMO_RECOVERY_IDLE_SECONDS`** (default 20 min) idle in the demo sheet, one Resend from **`noreply@knohow.app`**. Includes Cal until booked. Cancel on reopen / email CTA / Cal book. Resume: `/?demo_resume=<token>`. Migration `0012_demo_leads`; scheduler every 1 min. Local test: set `DEMO_RECOVERY_IDLE_SECONDS=60` and restart uvicorn. Full rules [[FEAT-landing-book-a-demo]].
 
 ## ✅ Backend merged into `main` (2026-09-15)
 The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
@@ -30,7 +30,7 @@ User chose **real sign-in via the backend** over a mocked one — [[0008-continu
 Contractors' work is company-owned by being **created as the org through Knohow** (automation account via delegation, contractor gets edit access) — [[0009-contractor-work-created-as-the-org]]. Decided, not built; needs delegation + an automation account per org, and the deferred contractor-scope questions answered first. Also corrected: per-file transfer from a personal account isn't possible. Contractor actions: create, edit, share, delete. **Every Knohow delete → Drive Trash, recoverable 30 days, then gone** ([[0010-deletes-go-to-trash-30-days]]). Owner approves a **scope**; contractor gets a **blank workspace**; entry = **sponsor's email invite link**. Scope set by the owner or an employee; contractor starts right away. Scope = files, folder, team or project; only a **team** scope needs owner approval. Contractor model now fully specified in [[0009-contractor-work-created-as-the-org]] — not built.
 
 ## To build (decided, not built) — started 2026-09-18
-- **Book a Demo abandoned recovery** — persist lead after valid work email; 20‑min idle → one Resend transactional nudge; deep-link resume; cancel on Cal book / reopen / CTA — [[FEAT-landing-book-a-demo]] (copy TBD).
+- ~~**Book a Demo abandoned recovery**~~ — **built 2026-09-20** — [[FEAT-landing-book-a-demo]].
 - **Projects** — a way to create a project and group files into it (across folders and teams). Nothing in Knohow has this concept yet; needed before a contractor scope can be a project ([[0009-contractor-work-created-as-the-org]]).
 - **Contractor model** — sponsor invite links, blank workspace, create/edit/share/delete as the org's automation account, scopes (files / folder / team / project; team needs owner approval) — [[0009-contractor-work-created-as-the-org]].
 - **Restore from Trash** — every delete goes to Trash for 30 days, so Knohow needs a way to restore ([[0010-deletes-go-to-trash-30-days]]).
@@ -147,6 +147,28 @@ The product is spelled **Knohow** in all user-facing text — the logo is *Kn* +
 
 ## Org setup copy (2026-09-20)
 Owner question is **"Are you the owner of the organization?"** (dropped "/ top"). If No → **"Do you know the owner's email?"** with Yes / No only; Yes → email field; No → skip nomination. Backend allows `is_owner=false` without `owner_email`. Super Admin still has Yes / No / I don't know. [[FEAT-landing-login-panel]] / [[FEAT-workspace-onboarding-flow]].
+
+## Org setup + join link decided (2026-09-20, not built)
+**Setup is the next onboarding step for both flows** (Workspace and personal) and is where the org chart
+is created. User's shape: create the groups, send **one deep link**, people sign in through it, join the
+org, pick a team, enter the app. Security edge cases worked through and locked in [[0014-org-setup-and-join-link]]:
+- **First person to sign in from the domain runs setup and owns the org outright** (no proof gate); if that
+  was the wrong person, **admin proof takes the org over**.
+- Chart at setup = **teams only, no named seats**; people fill in as they join. Teams are **typed in**, and
+  **pulled from Google Workspace groups when delegation makes that available** (typing always works).
+- Founder's own team is asked **after** the teams exist, "none" allowed. **Team leads are named by the owner
+  when approving someone into the team.** Owner, admins, and a team's lead can edit teams afterwards.
+- Link is **domain-locked** (org's Google domain only; contractors keep the sponsored path in
+  [[0009-contractor-work-created-as-the-org]]), **expires with the owner choosing the lifetime when sending**,
+  and is **revocable** (people already in stay in).
+- **Picking a team is a request, not a grant** — owner or an admin approves from one pending list.
+- While waiting: **in the app but empty**, with a line saying it's with the owner.
+- Wrong account at the link → name the expected account, one button to switch. Account already in another
+  org → **refuse and explain** ([[0013-sign-in-is-to-an-organization]]).
+- Owner sees **who joined, when, and who's pending**. Removal from the chart **revokes the sharing Knohow
+  granted** and reports it; Google access granted outside Knohow is stated as out of our reach.
+Still needed before building: **all copy** (user's to write), and the pending-request state + approver UI +
+empty in-app state + link records + team-lead role + admin-proof ownership takeover don't exist yet.
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.

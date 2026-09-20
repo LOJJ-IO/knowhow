@@ -3,22 +3,15 @@
 import { useEffect, useState } from "react";
 import Cal, { getCalApi } from "@calcom/embed-react";
 import { DemoBookingSlot } from "@/components/brand/demo-booking-slot";
+import { cancelDemoLead, readDemoResumeToken } from "@/lib/demo-lead";
 
 /** The user's Cal.com booking link (their snippet, 2026-09-20). */
 const CAL_NAMESPACE = "15min";
 const CAL_LINK = "knohow-demo/15min";
 
-/** The screen after the segment step: the user's Cal.com booking embed
- *  (`knohow-demo/15min`, namespace + config from the snippet they supplied).
- *  Inline, not the snippet's popup button — this screen *is* the embed.
- *  Its own chunk, loaded on demand from `landing-hero.tsx` (Cal is heavy and
- *  only this screen needs it). `LoginModal`'s ResizeObserver + `.t-resize`
- *  tween the modal to the slot's height in one move (the area bounces, not
- *  the embed). The modal drops its own surface, widens and takes the plain
- *  button radius for this screen — see `.t-demo-booking` and
- *  `.t-login-modal:has(.t-demo-booking)` in `globals.css`. No heading or
- *  copy — none has been written. */
-export function DemoBookingStep() {
+/** The screen after the segment/size steps: Cal.com booking embed.
+ *  `onBooked` cancels the abandoned-recovery email when a slot is booked. */
+export function DemoBookingStep({ onBooked }: { onBooked?: () => void }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -27,12 +20,20 @@ export function DemoBookingStep() {
       const cal = await getCalApi({ namespace: CAL_NAMESPACE });
       if (cancelled) return;
       cal("ui", { hideEventTypeDetails: false, layout: "month_view" });
+      cal("on", {
+        action: "bookingSuccessful",
+        callback: () => {
+          const token = readDemoResumeToken();
+          if (token) void cancelDemoLead(token, "booked");
+          onBooked?.();
+        },
+      });
       setReady(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [onBooked]);
 
   return (
     <DemoBookingSlot>

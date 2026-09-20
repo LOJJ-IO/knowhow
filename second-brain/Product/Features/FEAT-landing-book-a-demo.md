@@ -10,7 +10,7 @@ related: ["[[FEAT-landing-login-panel]]", "[[FEAT-landing-header-nav]]", "[[Curr
 # FEAT: Landing Book a Demo sheet
 
 ## Status
-`in-progress` — sheet + form + segment + **team-size step** + Cal embed built; **abandoned-demo Resend recovery decided 2026-09-20 (not built)** — leads must persist to `backend/` once a valid work email exists.
+`in-progress` — sheet + form + segment + **team-size step** + Cal embed built; **abandoned-demo Resend recovery built 2026-09-20** (`demo_leads`, idle job, resume deep link).
 
 ## Problem
 The desktop header's **Book a Demo** button (renamed from Talk to Sales 2026-09-17, [[FEAT-landing-header-nav]]) did nothing. User: "a replica of log in but the modal's content should be" a demo-request form (reference screenshot: "Get Started", First/Last name, Work email, Company website, Continue pill with an arrow circle).
@@ -79,19 +79,18 @@ Verified in-browser 2026-09-17: empty Continue → both name fields shake/red, f
 - Multi-email drip sequences (one shot only — see abandoned recovery below).
 - Marketing / promotional email — abandoned recovery is **transactional only**.
 
-## Abandoned demo recovery — Resend (decided 2026-09-20, not built)
+## Abandoned demo recovery — Resend (built 2026-09-20)
 If someone starts Book a Demo and goes idle, send **one** Resend email after **20 minutes** of inactivity asking them to continue. **Copy locked** (see Final body copy below). **Resend domain verified** 2026-09-20.
 
 **Rules (user):**
-- **Clock arm:** first time a **valid work email** is present — counting starts then, regardless of step. Before that, nothing can be emailed.
-- **Inactivity:** no typing and no clicks **inside the demo sheet** for 20 minutes — whether the sheet stays open or they Close / leave. Clicks elsewhere on the landing (deck, Get Started, etc.) do **not** reset the idle timer. Any activity **inside** the sheet resets the 20‑minute idle timer. (The 5:00 "reserved" hold always expires first; the nudge is intentionally after Hold Expired.)
-- **Which steps can trigger a send:** **any** step after the email is known — fields, segment, team size, **and Cal** — as long as they **have not finished booking** on Cal. (Revised 2026-09-20: previously excluded Cal; user wants abandon on Cal to count too.)
-- **One shot** — only one recovery email per lead; no follow-up sequence.
-- **Cancel / suppress send if** any of: they **book on Cal** (finished the Cal step), they **reopen Book a Demo**, or they **click the email CTA** (resume link).
-- **Resume:** deep link reopens Book a Demo at the **step they stopped on**, with fields **prefilled**, so Continue advances to the next step.
-- **Tone:** personalized transactional; **structure copied from a Lance reference email** (user pasted 2026-09-20) — see Email template below. Final Knohow wording TBD where noted.
-- **From:** `noreply@knohow.app` (user 2026-09-20). **Resend domain verified** (user 2026-09-20) — ready to send once API key is in `backend/.env` and the feature is built.
-- **Storage / send:** `backend/` owns the lead record + idle scheduler + Resend send. Frontend must persist partial progress once email is valid (and heartbeat / last-activity updates **from sheet interaction only**).
+- **Clock arm:** first valid work email on Continue past the email field (website step appears) — `POST /demo-leads`. Before that, nothing can be emailed.
+- **Inactivity:** no typing/clicks **inside the demo sheet** for `DEMO_RECOVERY_IDLE_SECONDS` (default 1200). Pointer/key activity on the sheet calls `POST …/touch` (throttled 15s). Landing clicks outside the sheet do not reset.
+- **Which steps:** any step after email — including **Cal** until booked.
+- **One shot** — `recovery_sent_at` set after send; no follow-up.
+- **Cancel** via `POST …/cancel`: **reopen** Book a Demo, **cta** (`GET /demo-leads/resume/{token}`), or **booked** (Cal `bookingSuccessful`).
+- **Resume:** `/?demo_resume=<token>` opens Book a Demo prefilled at the saved step.
+- **From:** `noreply@knohow.app`. Job: scheduler every 1 min → `send_due_recovery_emails`.
+- **Code:** `backend/app/models/demo_lead.py`, `app/demo/service.py`, `app/demo/resend.py`, `app/api/routes/demo.py`, migration `0012_demo_leads`; frontend `src/lib/demo-lead.ts` + `DemoForm` sync.
 
 ### Email template (reference → Knohow mapping)
 
@@ -147,10 +146,8 @@ LinkedIn · https://www.linkedin.com/in/isaac-ekwaru-284249217/
 Only merge field in the body: `{firstName}`. Envelope From remains `noreply@knohow.app`.
 
 **Still open for this slice:**
-- Resume token format / expiry (should not put PII in the URL).
-- Cal booking webhook (or equivalent) so "booked" cancels a pending send — required because idle-on-Cal **does** arm the recovery email until they finish booking.
-- Whether clicks **inside the Cal iframe** reset the sheet idle timer (cross-origin; may need a blur/focus or Cal callback strategy).
-- `RESEND_API_KEY` in `backend/.env` (user added 2026-09-20); also `RESEND_FROM_EMAIL=noreply@knohow.app` in `.env` / `.env.example`. Domain verified; feature not built yet.
+- Whether clicks **inside the Cal iframe** reset the sheet idle timer (cross-origin; parent only hears sheet chrome events today).
+- Cal webhook as a belt-and-suspenders booked signal (embed `bookingSuccessful` is wired).
 
 ## Open questions
 - **Long browser messages wrap:** Chrome's invalid-email text ("Please include an '@' in the email address. 'x' is missing an '@'.") takes two lines at 420px, so the modal grows ~20px (animated by `.t-resize`). Options: custom copy, single-line truncation, or accept it.

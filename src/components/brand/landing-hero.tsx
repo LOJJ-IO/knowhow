@@ -13,6 +13,17 @@ import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
 import { cn } from "@/lib/utils";
+import {
+  cancelDemoLead,
+  fetchDemoResume,
+  leadToFormState,
+  patchDemoLead,
+  readDemoResumeToken,
+  touchDemoLead,
+  upsertDemoLead,
+  writeDemoResumeToken,
+  type DemoLeadStep,
+} from "@/lib/demo-lead";
 import Link from "next/link";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
@@ -1613,29 +1624,38 @@ const DEMO_STEP_FIELD_COUNT = [2, 3, 4] as const;
 
 /** Book a Demo sheet's form. Starts with the name fields; each valid Continue
  *  adds the next field (the modal's `.t-resize` tweens the growth) until the
- *  website is in. Checks required fields + email format itself
- *  (no browser bubbles): each invalid field shakes, turns red and shows the
- *  browser's validation message, then reverts after `DEMO_ERROR_HOLD_MS`
- *  (Transitions.dev error-state CSS in globals.css). A valid submit does
- *  nothing yet — nothing is sent anywhere. Classes are toggled on the DOM so
- *  the shake can restart without a re-render. */
-function DemoForm() {
+ *  website is in. After a valid work email, progress is upserted to the backend
+ *  for abandoned-recovery Resend ([[FEAT-landing-book-a-demo]]). */
+type DemoFormInitial = ReturnType<typeof leadToFormState>;
+
+function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
   const wraps = useRef<Record<string, HTMLDivElement | null>>({});
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const timers = useRef<Record<string, number>>({});
   const [messages, setMessages] = useState<Record<string, string>>({});
-  const [step, setStep] = useState(0);
-  /** The website field is in and valid — the fields give way to the segment
-   *  cards in the same modal (`.t-resize` tweens the height change). */
-  const [onSegment, setOnSegment] = useState(false);
+  const [step, setStep] = useState(initial?.fieldStep ?? 0);
+  const [values, setValues] = useState({
+    firstName: initial?.firstName ?? "",
+    lastName: initial?.lastName ?? "",
+    email: initial?.email ?? "",
+    website: initial?.website ?? "",
+  });
+  const [resumeToken, setResumeToken] = useState<string | null>(
+    initial?.resumeToken ?? readDemoResumeToken(),
+  );
+  const [phase, setPhase] = useState<"fields" | "segment" | "size" | "booking">(
+    initial?.phase ?? "fields",
+  );
+  const [segment, setSegment] = useState<string | null>(initial?.segment ?? null);
+  const [other, setOther] = useState(initial?.other ?? "");
+  const [teamSize, setTeamSize] = useState<string | null>(initial?.size ?? null);
   const shown = DEMO_FIELDS.slice(0, DEMO_STEP_FIELD_COUNT[step]);
 
-  // Focus the field a step just added.
   useEffect(() => {
-    if (step === 0) return;
+    if (step === 0 || phase !== "fields") return;
     const added = DEMO_FIELDS[DEMO_STEP_FIELD_COUNT[step] - 1];
     inputs.current[added.name]?.focus();
-  }, [step]);
+  }, [step, phase]);
 
   useEffect(() => {
     const pending = timers.current;
@@ -1651,7 +1671,7 @@ function DemoForm() {
     input.classList.add("is-error");
     input.setAttribute("aria-invalid", "true");
     input.classList.remove("is-shaking");
-    void input.offsetWidth; // reflow so the shake restarts
+    void input.offsetWidth;
     input.classList.add("is-shaking");
     window.clearTimeout(timers.current[name]);
     timers.current[name] = window.setTimeout(
@@ -1660,13 +1680,50 @@ function DemoForm() {
     );
   }
 
-  /** Border + message fade back to neutral (hold timer, or the field is now
-   *  valid — a fixed field shouldn't stay red for the rest of the hold). */
   function clearError(name: string) {
     window.clearTimeout(timers.current[name]);
     wraps.current[name]?.classList.remove("is-error");
     inputs.current[name]?.classList.remove("is-error");
     inputs.current[name]?.removeAttribute("aria-invalid");
+  }
+
+  async function syncLead(nextStep: DemoLeadStep, extra?: {
+    segment?: string | null;
+    other_text?: string | null;
+    team_size?: string | null;
+  }) {
+    const email = values.email.trim();
+    if (!email || !email.includes("@")) return;
+    try {
+      if (!resumeToken) {
+        const lead = await upsertDemoLead({
+          email,
+          first_name: values.firstName,
+          last_name: values.lastName,
+          website: values.website || null,
+          segment: extra?.segment ?? segment,
+          other_text: extra?.other_text ?? (other || null),
+          team_size: extra?.team_size ?? teamSize,
+          step: nextStep,
+        });
+        if (lead) {
+          setResumeToken(lead.resume_token);
+          writeDemoResumeToken(lead.resume_token);
+        }
+      } else {
+        await patchDemoLead(resumeToken, {
+          first_name: values.firstName,
+          last_name: values.lastName,
+          website: values.website || null,
+          segment: extra?.segment ?? segment,
+          other_text: extra?.other_text ?? (other || null),
+          team_size: extra?.team_size ?? teamSize,
+          step: nextStep,
+        });
+      }
+    } catch (e) {
+      console.error("demo lead sync failed", e);
+    }
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -1682,12 +1739,92 @@ function DemoForm() {
       flagError(name, input.validationMessage);
       first ??= input;
     }
-    if (first) first.focus();
-    else if (step < DEMO_STEP_FIELD_COUNT.length - 1) setStep(step + 1);
-    else setOnSegment(true);
+    if (first) {
+      first.focus();
+      return;
+    }
+    const nextValues = {
+      firstName: inputs.current.firstName?.value ?? values.firstName,
+      lastName: inputs.current.lastName?.value ?? values.lastName,
+      email: inputs.current.email?.value ?? values.email,
+      website: inputs.current.website?.value ?? values.website,
+    };
+    setValues(nextValues);
+
+    if (step < DEMO_STEP_FIELD_COUNT.length - 1) {
+      const nextStepIndex = step + 1;
+      setStep(nextStepIndex);
+      // Arm recovery once work email is on the form and valid (leaving the
+      // email step → website step).
+      if (nextStepIndex === 2 && nextValues.email.includes("@")) {
+        void (async () => {
+          try {
+            const lead = await upsertDemoLead({
+              email: nextValues.email,
+              first_name: nextValues.firstName,
+              last_name: nextValues.lastName,
+              website: nextValues.website || null,
+              step: "website",
+            });
+            if (lead) {
+              setResumeToken(lead.resume_token);
+              writeDemoResumeToken(lead.resume_token);
+            }
+          } catch (err) {
+            console.error("demo lead sync failed", err);
+          }
+        })();
+      } else if (resumeToken && nextStepIndex === 1) {
+        void patchDemoLead(resumeToken, {
+          first_name: nextValues.firstName,
+          last_name: nextValues.lastName,
+          step: "email",
+        }).catch((err) => console.error("demo lead sync failed", err));
+      }
+    } else {
+      void syncLead("website").then(() => setPhase("segment"));
+    }
   }
 
-  if (onSegment) return <DemoSegmentStep />;
+  if (phase === "booking") return <DemoBookingStep />;
+  if (phase === "size")
+    return (
+      <DemoSizeStep
+        initial={teamSize}
+        onPick={(size) => {
+          setTeamSize(size);
+          void syncLead("size", { team_size: size });
+        }}
+        onContinue={() => {
+          void syncLead("booking", { team_size: teamSize }).then(() =>
+            setPhase("booking"),
+          );
+        }}
+      />
+    );
+  if (phase === "segment")
+    return (
+      <DemoSegmentStep
+        initialPicked={segment}
+        initialOther={other}
+        onPick={(id, otherText) => {
+          setSegment(id);
+          setOther(otherText);
+          void syncLead("segment", {
+            segment: id,
+            other_text: otherText || null,
+          });
+        }}
+        onContinue={(id, otherText) => {
+          setSegment(id);
+          setOther(otherText);
+          void syncLead("size", {
+            segment: id,
+            other_text: otherText || null,
+          }).then(() => setPhase("size"));
+        }}
+      />
+    );
 
   return (
     <form noValidate onSubmit={handleSubmit}>
@@ -1724,7 +1861,27 @@ function DemoForm() {
               autoComplete={f.autoComplete}
               inputMode={f.name === "website" ? "url" : undefined}
               required
+              defaultValue={
+                f.name === "firstName"
+                  ? values.firstName
+                  : f.name === "lastName"
+                    ? values.lastName
+                    : f.name === "email"
+                      ? values.email
+                      : values.website
+              }
               onInput={(e) => {
+                const v = e.currentTarget.value;
+                setValues((prev) => ({
+                  ...prev,
+                  ...(f.name === "firstName"
+                    ? { firstName: v }
+                    : f.name === "lastName"
+                      ? { lastName: v }
+                      : f.name === "email"
+                        ? { email: v }
+                        : { website: v }),
+                }));
                 if (e.currentTarget.checkValidity()) clearError(f.name);
               }}
               aria-describedby={`demo-${f.name}-error`}
@@ -1740,10 +1897,7 @@ function DemoForm() {
           </div>
         ))}
       </div>
-      {/* Same pill as the header buttons (user: "match the header"). */}
       <div className="mt-3 flex justify-end">
-        {/* Solid black: the header's black/80 reads grey on the light modal
-            (it only looks this dark over the sky, like the Close pill). */}
         <button
           type="submit"
           className={cn(CTA_CLASS, satoshi.className, "bg-black")}
@@ -1755,7 +1909,7 @@ function DemoForm() {
   );
 }
 
-/** The three segments offered on the last Book a Demo step. Labels, blurbs
+/** The segments offered on the Book a Demo industry step. Labels, blurbs
  *  and icons are placeholder copy until the user writes them. */
 const DEMO_SEGMENTS = [
   {
@@ -1810,22 +1964,24 @@ const DEMO_SEGMENT_CLASS = `relative flex w-full cursor-pointer items-start gap-
 
 /** Last Book a Demo field step: which kind of organization this is. One
  *  choice, skippable. Continue / Skip → team-size step → Cal. */
-function DemoSegmentStep() {
-  const [picked, setPicked] = useState<string | null>(null);
-  const [other, setOther] = useState("");
-  const [phase, setPhase] = useState<"segment" | "size" | "booking">(
-    "segment",
-  );
+function DemoSegmentStep({
+  initialPicked,
+  initialOther,
+  onPick,
+  onContinue,
+}: {
+  initialPicked: string | null;
+  initialOther: string;
+  onPick: (id: string | null, other: string) => void;
+  onContinue: (id: string | null, other: string) => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(initialPicked);
+  const [other, setOther] = useState(initialOther);
   const otherRef = useRef<HTMLInputElement>(null);
 
-  // Focus the box the moment "Other" opens it.
   useEffect(() => {
     if (picked === "other") otherRef.current?.focus();
   }, [picked]);
-
-  if (phase === "booking") return <DemoBookingStep />;
-  if (phase === "size")
-    return <DemoSizeStep onContinue={() => setPhase("booking")} />;
 
   return (
     <div>
@@ -1840,10 +1996,12 @@ function DemoSegmentStep() {
             key={s.id}
             type="button"
             aria-pressed={picked === s.id}
-            onClick={() => setPicked(s.id)}
+            onClick={() => {
+              setPicked(s.id);
+              onPick(s.id, other);
+            }}
             className={cn(
               DEMO_SEGMENT_CLASS,
-              // "Other" hands its highlight to the box it opens.
               picked === s.id && s.id !== "other" && "border-[#1c1917]",
             )}
           >
@@ -1870,8 +2028,6 @@ function DemoSegmentStep() {
           </button>
         ))}
       </div>
-      {/* "Other" grows its box in under the cards — the modal's `.t-resize`
-          tweens the height, same as a field step. */}
       {picked === "other" ? (
         <div className={`t-input-wrap ${satoshi.className} mt-3 flex flex-col`}>
           <input
@@ -1879,7 +2035,10 @@ function DemoSegmentStep() {
             type="text"
             aria-label="Who this is for"
             value={other}
-            onChange={(e) => setOther(e.target.value)}
+            onChange={(e) => {
+              setOther(e.target.value);
+              onPick("other", e.target.value);
+            }}
             className="t-input t-demo-input is-picked h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
           />
         </div>
@@ -1887,7 +2046,7 @@ function DemoSegmentStep() {
       <div className="mt-3 flex justify-end">
         <button
           type="button"
-          onClick={() => setPhase("size")}
+          onClick={() => onContinue(picked, other)}
           className={cn(CTA_CLASS, satoshi.className, "bg-black")}
         >
           {picked ? "Continue" : "Skip"}
@@ -1904,8 +2063,16 @@ const DEMO_SIZES = ["1", "2–5", "6–20", "21–50", "51–100", "100+"] as co
 const DEMO_SIZE_CLASS = `flex h-11 min-w-0 cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-1 text-[0.9rem] font-bold text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
 
 /** After industry: how many people. Skippable like the segment step; then Cal. */
-function DemoSizeStep({ onContinue }: { onContinue: () => void }) {
-  const [picked, setPicked] = useState<string | null>(null);
+function DemoSizeStep({
+  initial,
+  onPick,
+  onContinue,
+}: {
+  initial: string | null;
+  onPick: (size: string) => void;
+  onContinue: () => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(initial);
 
   return (
     <div>
@@ -1924,7 +2091,10 @@ function DemoSizeStep({ onContinue }: { onContinue: () => void }) {
             key={size}
             type="button"
             aria-pressed={picked === size}
-            onClick={() => setPicked(size)}
+            onClick={() => {
+              setPicked(size);
+              onPick(size);
+            }}
             className={cn(
               DEMO_SIZE_CLASS,
               picked === size && "border-[#1c1917]",
@@ -3043,9 +3213,13 @@ function LandingHero() {
   /** When Book a Demo first opened this visit — its "reserved" countdown
    *  runs from here and keeps running across Close / reopen. */
   const [demoReservedAt, setDemoReservedAt] = useState<number | null>(null);
+  /** Prefill from `?demo_resume=` (abandoned-recovery email CTA). */
+  const [demoInitial, setDemoInitial] = useState<DemoFormInitial | null>(null);
+  const [demoFormKey, setDemoFormKey] = useState(0);
   /** Cover Flow index — driven by the split CTA arrows on mobile. */
   const [deckIndex, setDeckIndex] = useState(1);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const demoSheetRef = useRef<HTMLDivElement>(null);
   const ctaTimers = useRef<number[]>([]);
 
   const deckRef = useRef<DeckHandle>(null);
@@ -3113,10 +3287,53 @@ function LandingHero() {
         setSheetOpen(true);
       }
     });
+
+    // Abandoned-demo email CTA: `?demo_resume=<token>`.
+    const resumeToken = new URLSearchParams(window.location.search).get(
+      "demo_resume",
+    );
+    if (resumeToken) {
+      void fetchDemoResume(resumeToken)
+        .then((lead) => {
+          if (cancelled || !lead) return;
+          setDemoInitial(leadToFormState(lead));
+          setDemoFormKey((k) => k + 1);
+          setSheetKind("demo");
+          setSheetOpen(true);
+          setDemoReservedAt((t) => t ?? Date.now());
+          const url = new URL(window.location.href);
+          url.searchParams.delete("demo_resume");
+          window.history.replaceState(null, "", url);
+        })
+        .catch((err) => console.error("demo resume failed", err));
+    }
+
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Sheet activity → reset the 20‑min idle timer (demo sheet only).
+  useEffect(() => {
+    if (!sheetOpen || sheetKind !== "demo") return;
+    const root = demoSheetRef.current;
+    if (!root) return;
+    let lastSent = 0;
+    const bump = () => {
+      const token = readDemoResumeToken();
+      if (!token) return;
+      const now = Date.now();
+      if (now - lastSent < 15_000) return;
+      lastSent = now;
+      void touchDemoLead(token);
+    };
+    root.addEventListener("pointerdown", bump);
+    root.addEventListener("keydown", bump);
+    return () => {
+      root.removeEventListener("pointerdown", bump);
+      root.removeEventListener("keydown", bump);
+    };
+  }, [sheetOpen, sheetKind]);
 
   // Pause the hero video while the Log In sheet is open: decoding it under
   // the recess scale halved the sheet's frame rate. Resumes on Close.
@@ -3347,8 +3564,12 @@ function LandingHero() {
                 if (key === "login" || key === "demo") {
                   setSheetKind(key);
                   setSheetOpen(true);
-                  if (key === "demo")
+                  if (key === "demo") {
                     setDemoReservedAt((t) => t ?? Date.now());
+                    // Reopening Book a Demo cancels a pending recovery send.
+                    const token = readDemoResumeToken();
+                    if (token) void cancelDemoLead(token, "reopen");
+                  }
                 }
               }}
               extras={DESKTOP_HEADER_EXTRAS}
@@ -3454,6 +3675,7 @@ function LandingHero() {
 
       {/* The Slide-Up Sheet (Log In / Book a Demo) */}
       <div
+        ref={demoSheetRef}
         className={cn(
           "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden overscroll-none bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
           sheetOpen ? "translate-y-0" : "translate-y-full",
@@ -3559,7 +3781,7 @@ function LandingHero() {
                 }}
               />
             ) : (
-              <DemoForm />
+              <DemoForm key={demoFormKey} initial={demoInitial} />
             )}
           </LoginModal>
         </div>

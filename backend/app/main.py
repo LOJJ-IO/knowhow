@@ -8,6 +8,7 @@ from app.api.routes import (
     audit,
     auth,
     delegation,
+    demo,
     files,
     health,
     offboard,
@@ -91,6 +92,7 @@ app.include_router(audit.router)
 # Org-engine module (backend/org-engine) — imports from the above, does not
 # duplicate it.
 app.include_router(onboarding.router)
+app.include_router(demo.router)
 app.include_router(org_chart.router)
 app.include_router(files.router)
 app.include_router(search.router)

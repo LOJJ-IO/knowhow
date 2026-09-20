@@ -41,9 +41,12 @@ class Settings(BaseSettings):
     # Origin the Next.js app is served from, for CORS + post-login redirects.
     frontend_origin: str
 
-    # --- Resend (abandoned Book a Demo recovery; optional until that feature ships) ---
+    # --- Resend (abandoned Book a Demo recovery) ---
     resend_api_key: str = ""
     resend_from_email: str = "noreply@knohow.app"
+    # Idle window before the one-shot recovery email (default 20 minutes).
+    # Lower locally for testing, e.g. DEMO_RECOVERY_IDLE_SECONDS=60.
+    demo_recovery_idle_seconds: int = 20 * 60
 
 
 @lru_cache
