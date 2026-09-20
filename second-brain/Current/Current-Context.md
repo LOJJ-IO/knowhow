@@ -12,8 +12,11 @@ related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landin
 ## Repo root cleanup (2026-09-20)
 Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Root [`README.md`](../../README.md) replaced the create-next-app boilerplate with a short Knohow + frontend/backend run guide (backend section split into safer copy-paste blocks 2026-09-20 after a `cd`→`d` paste failure at repo root).
 
+## Book a Demo — team size step (2026-09-20)
+After "Who's this for?", Skip/Continue → **"How many people on your team?"** with chips `1` · `2–5` · `6–20` · `21–50` · `51–100` · `100+` (3×2 grid, skippable); then Cal. [[FEAT-landing-book-a-demo]].
+
 ## Book a Demo — abandoned recovery (decided 2026-09-20, not built)
-After a **valid work email**, if idle (**no typing/clicks inside the demo sheet**) for **20 minutes** (sheet open or closed), send **one** Resend transactional email from **`noreply@knohow.app`**. Triggers only on **earlier** steps (fields/segment), **not** Cal. Cancel if they book on Cal, reopen Book a Demo, or click the email CTA. Deep link resumes at the stopped step with fields prefilled. Backend owns leads + send. Nudge is after the 5:00 Hold Expired by design. **Email copy locked** in [[FEAT-landing-book-a-demo]]. **Resend domain verified**; `RESEND_API_KEY` in `backend/.env`; `RESEND_FROM_EMAIL` + key documented in `backend/.env.example`; Settings fields added. Feature still not built.
+After a **valid work email**, if idle (**no typing/clicks inside the demo sheet**) for **20 minutes** (sheet open or closed), send **one** Resend transactional email from **`noreply@knohow.app`**. Triggers only on **earlier** steps (fields/segment/team size), **not** Cal. Cancel if they book on Cal, reopen Book a Demo, or click the email CTA. Deep link resumes at the stopped step with fields prefilled. Backend owns leads + send. Nudge is after the 5:00 Hold Expired by design. **Email copy locked** in [[FEAT-landing-book-a-demo]]. **Resend domain verified**; `RESEND_API_KEY` in `backend/.env`; `RESEND_FROM_EMAIL` + key documented in `backend/.env.example`; Settings fields added. Feature still not built.
 
 ## ✅ Backend merged into `main` (2026-09-15)
 The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
@@ -118,6 +121,26 @@ revises [[0012-identity-linking-one-person-many-accounts]]'s one-org rule and ro
   "Ronald Wopara" by the pre-0013 code, and the new path asks the person to name it.
 - To see the picker without signing in, re-run `seed-picker.py` from the session scratchpad
   (device `11111111-1111-1111-1111-111111111111`). Nothing is seeded right now.
+
+## Remove-accounts screen + linked-address chip (2026-09-20)
+- **`?link=` was never wired** (bug, mine): the backend returned `linked` / `already_linked` from the
+  day it was built, but nothing read or cleared the param, so a real link left the URL sitting at
+  `?link=linked` with no confirmation. Fixed; `link` is now stripped with the other results.
+- **A linked personal address had nowhere to show.** Because "yes, I have an organization account"
+  creates no personal org ([[0013-sign-in-is-to-an-organization]]), the address lives in
+  `person_emails` with no row. It now rides as a **`Personal (n)` chip on the person's org rows**
+  (user's choice), addresses in the tooltip. A row that is itself personal gets no extra chip.
+- **"Remove accounts" is now a second screen in the modal**, not an immediate wipe: checkboxes,
+  org name over email, back chevron, and singular/plural driven by the **list** count. Selective
+  removal via `DELETE /auth/remembered-accounts {member_ids}`; the device cookie survives a partial
+  removal. See [[FEAT-landing-login-panel]].
+- **89 backend tests pass**; tsc/eslint/next build clean.
+- **DB state:** the session's seed data was removed again afterwards. `knohow` holds only the user's
+  real sign-in - one member (`rwopara@ualberta.ca`), one person, one linked address
+  (`ronaldwop@gmail.com`), **zero remembered accounts** (the user had clicked Remove accounts), so
+  the picker won't appear until a fresh sign-in.
+- **Still open:** the personal-account screen wording the user began describing but didn't finish;
+  `complete_signup` ignores `person_emails` ([[Known-Issues]]); no in-app UI to add another account.
 
 ## Brand spelling (2026-09-17, user)
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.

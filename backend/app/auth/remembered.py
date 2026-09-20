@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from app.models.org_member import AuthType, OrgMember
@@ -95,10 +95,18 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
     ]
 
 
-def forget_device(device_id: uuid.UUID, db: Session) -> int:
-    """"Remove accounts" — drops every account remembered on this browser.
-    Deletes only the picker's rows; the members and their orgs are
-    untouched, and signing in again re-adds them."""
-    result = db.execute(delete(RememberedAccount).where(RememberedAccount.device_id == device_id))
+def forget_device(device_id: uuid.UUID, db: Session, member_ids: list[uuid.UUID] | None = None) -> int:
+    """Forgets accounts on this browser. `member_ids` removes just those;
+    omitting it removes every one.
+
+    Deletes only the picker's rows: the members, their organizations and any
+    linked identities are untouched, and signing in again re-adds them.
+    """
+    condition = RememberedAccount.device_id == device_id
+    if member_ids is not None:
+        if not member_ids:
+            return 0
+        condition = and_(condition, RememberedAccount.member_id.in_(member_ids))
+    result = db.execute(delete(RememberedAccount).where(condition))
     db.commit()
     return result.rowcount or 0

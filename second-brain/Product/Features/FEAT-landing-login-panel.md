@@ -121,3 +121,22 @@ only the `Org` chip, and the URL sat at `?link=linked` with nothing happening.
 - `AccountBadge` now takes `emails: string[]` and appends `(n)` from two up.
 - Verified against the user's real data: one row, `ualberta.ca` / Ronald Wopara, chips `Org` +
   `Personal`, tooltip `ronaldwop@gmail.com`.
+
+### Remove accounts is its own screen (2026-09-20)
+The picker's "Remove accounts" link no longer forgets everything on the spot. It opens a **second
+screen inside the same modal** (user's reference: Canva's remove-accounts panel, rebuilt on our
+light surface rather than its dark one).
+
+- **Back chevron** returns to the picker. Heading, subtext, link label and button all switch
+  between singular and plural on **how many rows are in the list**, not how many are ticked
+  (user's choice): "Remove account" / "Remove accounts", "Remove selected account" / "...accounts".
+- **Rows show org name over the account's email** (user's choice) with a checkbox and the same
+  avatar tint as the picker. The button is disabled until something is ticked.
+- **A linked personal address never appears here.** It isn't remembered on a device, so removing it
+  would be unlinking an identity, which is a different action.
+- **Backend:** `DELETE /auth/remembered-accounts` now accepts `{member_ids: [...]}`; omitting it
+  still means all. The device cookie is dropped **only when no rows remain** - a partial removal
+  must keep it or the surviving rows become unreachable. `forget_device` takes an optional
+  `member_ids`; members, orgs and linked identities are never touched.
+- Verified in a browser: four rows to two by ticking two, then the singular wording with one left,
+  and the back chevron returning to "Which account today?".

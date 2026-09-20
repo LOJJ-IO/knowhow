@@ -88,10 +88,12 @@ def test_lists_one_row_per_organization(monkeypatch):
     }
 
 
-def test_remove_accounts_forgets_device_and_clears_cookie(monkeypatch):
-    seen: list[uuid.UUID] = []
+def test_remove_all_forgets_the_device_and_clears_the_cookie(monkeypatch):
+    seen: list[tuple] = []
     monkeypatch.setattr(
-        auth_routes, "forget_device", lambda device_id, db: seen.append(device_id) or 2
+        auth_routes,
+        "forget_device",
+        lambda device_id, db, member_ids=None: seen.append((device_id, member_ids)) or 2,
     )
     try:
         client = _client()
@@ -100,8 +102,55 @@ def test_remove_accounts_forgets_device_and_clears_cookie(monkeypatch):
     finally:
         app.dependency_overrides.clear()
 
-    assert seen == [uuid.UUID(DEVICE)]
+    assert seen == [(uuid.UUID(DEVICE), None)]
     assert response.json() == {"removed": 2}
+    assert 'knohow_device=""' in response.headers["set-cookie"]
+
+
+def test_removing_some_rows_keeps_the_device_cookie(monkeypatch):
+    # A partial removal must not drop the cookie, or the rows left behind
+    # become unreachable.
+    kept = uuid.uuid4()
+    monkeypatch.setattr(auth_routes, "forget_device", lambda device_id, db, member_ids=None: 1)
+    monkeypatch.setattr(
+        auth_routes,
+        "list_remembered_orgs",
+        lambda device_id, db: [
+            RememberedOrgView(
+                member_id=kept,
+                organization_name="Acme",
+                person_name="R",
+                email="r@acme.org",
+                kind="org",
+                linked_personal_emails=[],
+            )
+        ],
+    )
+    try:
+        client = _client()
+        client.cookies.set("knohow_device", DEVICE)
+        response = client.request(
+            "DELETE", "/auth/remembered-accounts", json={"member_ids": [str(uuid.uuid4())]}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.json() == {"removed": 1}
+    assert 'knohow_device=""' not in response.headers.get("set-cookie", "")
+
+
+def test_removing_the_last_row_clears_the_cookie(monkeypatch):
+    monkeypatch.setattr(auth_routes, "forget_device", lambda device_id, db, member_ids=None: 1)
+    monkeypatch.setattr(auth_routes, "list_remembered_orgs", lambda device_id, db: [])
+    try:
+        client = _client()
+        client.cookies.set("knohow_device", DEVICE)
+        response = client.request(
+            "DELETE", "/auth/remembered-accounts", json={"member_ids": [str(uuid.uuid4())]}
+        )
+    finally:
+        app.dependency_overrides.clear()
+
     assert 'knohow_device=""' in response.headers["set-cookie"]
 
 

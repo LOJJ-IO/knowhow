@@ -15,7 +15,7 @@ from app.auth.identity import (
     link_account_to_person,
     person_for,
 )
-from app.auth.remembered import list_remembered_orgs, remember_account
+from app.auth.remembered import forget_device, list_remembered_orgs, remember_account
 from app.db import SessionLocal
 from app.models.org_member import AuthType, MemberStanding, OrgMember
 from app.models.organization import Organization
@@ -208,3 +208,20 @@ def test_an_unlinked_account_carries_no_personal_chip(db):
     remember_account(device, solo, db)
 
     assert list_remembered_orgs(device, db)[0].linked_personal_emails == []
+
+
+def test_forgetting_one_row_leaves_the_others(db):
+    device = uuid.uuid4()
+    org = _org(db, "Acme", "acme.org")
+    a = _member(db, org, "a@acme.org", "A", AuthType.DOMAIN_DELEGATED)
+    b = _member(db, _org(db, "Beta"), "b@gmail.com", "B")
+    for m in (a, b):
+        person_for(m, db)
+        remember_account(device, m, db)
+
+    assert forget_device(device, db, [a.id]) == 1
+
+    remaining = list_remembered_orgs(device, db)
+    assert [r.email for r in remaining] == ["b@gmail.com"]
+    # Forgetting a row must not touch the member or its organization.
+    assert db.get(OrgMember, a.id) is not None

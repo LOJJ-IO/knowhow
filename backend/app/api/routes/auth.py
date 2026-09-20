@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -297,21 +298,43 @@ def remembered_accounts(
     }
 
 
+class ForgetAccountsRequest(BaseModel):
+    """Which rows to forget. `member_ids` omitted means all of them."""
+
+    member_ids: list[uuid.UUID] | None = None
+
+
 @router.delete("/remembered-accounts")
 def remove_remembered_accounts(
-    response: Response, db: Session = Depends(get_db), knohow_device: str | None = Cookie(default=None)
+    response: Response,
+    payload: ForgetAccountsRequest | None = None,
+    db: Session = Depends(get_db),
+    knohow_device: str | None = Cookie(default=None),
 ) -> dict:
-    """"Remove accounts" on the picker. Forgets every account on this
-    browser and drops the device cookie, so the next sign-in starts a fresh
-    device. Nothing about the members or their orgs changes."""
+    """The picker's "Remove accounts" screen. Forgets the chosen rows on this
+    browser, or all of them when none are named. Nothing about the members,
+    their organizations or their linked identities changes."""
+    member_ids = payload.member_ids if payload else None
     removed = 0
     if knohow_device:
         try:
-            removed = forget_device(uuid.UUID(knohow_device), db)
+            removed = forget_device(uuid.UUID(knohow_device), db, member_ids)
         except ValueError:
             removed = 0
-    response.delete_cookie(DEVICE_COOKIE)
+    # Only drop the device itself when nothing is left to remember; a partial
+    # removal must keep the cookie or the remaining rows become unreachable.
+    if member_ids is None or not _device_has_rows(knohow_device, db):
+        response.delete_cookie(DEVICE_COOKIE)
     return {"removed": removed}
+
+
+def _device_has_rows(device_cookie: str | None, db: Session) -> bool:
+    if not device_cookie:
+        return False
+    try:
+        return bool(list_remembered_orgs(uuid.UUID(device_cookie), db))
+    except ValueError:
+        return False
 
 
 @router.get("/link-account/start")

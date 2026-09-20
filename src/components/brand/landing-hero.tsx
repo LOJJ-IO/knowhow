@@ -139,12 +139,18 @@ async function fetchRememberedOrgs(): Promise<RememberedOrg[]> {
   }
 }
 
-async function forgetRememberedAccounts(): Promise<void> {
+/** Forgets the named rows on this browser, or all of them when none are
+ *  named. Members, organizations and linked identities are untouched. */
+async function forgetRememberedAccounts(memberIds?: string[]): Promise<void> {
   if (!BACKEND_API_URL) return;
   try {
-    await backendFetch("/auth/remembered-accounts", { method: "DELETE" });
+    await backendFetch("/auth/remembered-accounts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_ids: memberIds ?? null }),
+    });
   } catch {
-    // Nothing to recover: the caller clears the list either way.
+    // Nothing to recover: the caller updates the list either way.
   }
 }
 
@@ -1802,13 +1808,14 @@ const DEMO_SEGMENTS = [
  *  colour; nothing else changes. */
 const DEMO_SEGMENT_CLASS = `relative flex w-full cursor-pointer items-start gap-3 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white p-4 text-left text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
 
-/** Last Book a Demo step: which kind of organization this is. One choice,
- *  and skippable — Continue moves on with nothing picked. Continue has
- *  nowhere to go yet (the screen after this one isn't designed). */
+/** Last Book a Demo field step: which kind of organization this is. One
+ *  choice, skippable. Continue / Skip → team-size step → Cal. */
 function DemoSegmentStep() {
   const [picked, setPicked] = useState<string | null>(null);
   const [other, setOther] = useState("");
-  const [booking, setBooking] = useState(false);
+  const [phase, setPhase] = useState<"segment" | "size" | "booking">(
+    "segment",
+  );
   const otherRef = useRef<HTMLInputElement>(null);
 
   // Focus the box the moment "Other" opens it.
@@ -1816,7 +1823,9 @@ function DemoSegmentStep() {
     if (picked === "other") otherRef.current?.focus();
   }, [picked]);
 
-  if (booking) return <DemoBookingStep />;
+  if (phase === "booking") return <DemoBookingStep />;
+  if (phase === "size")
+    return <DemoSizeStep onContinue={() => setPhase("booking")} />;
 
   return (
     <div>
@@ -1878,7 +1887,57 @@ function DemoSegmentStep() {
       <div className="mt-3 flex justify-end">
         <button
           type="button"
-          onClick={() => setBooking(true)}
+          onClick={() => setPhase("size")}
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        >
+          {picked ? "Continue" : "Skip"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Team-size chips — ranges from the hotel reference UI; question copy
+ *  affirmed by the user 2026-09-20. */
+const DEMO_SIZES = ["1", "2–5", "6–20", "21–50", "51–100", "100+"] as const;
+
+const DEMO_SIZE_CLASS = `flex h-11 min-w-0 cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-1 text-[0.9rem] font-bold text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
+
+/** After industry: how many people. Skippable like the segment step; then Cal. */
+function DemoSizeStep({ onContinue }: { onContinue: () => void }) {
+  const [picked, setPicked] = useState<string | null>(null);
+
+  return (
+    <div>
+      <h2
+        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      >
+        How many people on your team?
+      </h2>
+      <div
+        className={`${satoshi.className} mt-6 grid grid-cols-3 gap-2`}
+        role="group"
+        aria-label="Team size"
+      >
+        {DEMO_SIZES.map((size) => (
+          <button
+            key={size}
+            type="button"
+            aria-pressed={picked === size}
+            onClick={() => setPicked(size)}
+            className={cn(
+              DEMO_SIZE_CLASS,
+              picked === size && "border-[#1c1917]",
+            )}
+          >
+            {size}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={onContinue}
           className={cn(CTA_CLASS, satoshi.className, "bg-black")}
         >
           {picked ? "Continue" : "Skip"}
@@ -2198,7 +2257,7 @@ function SignInResultPanel({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
-  /** "No — just me" was chosen: now name the workspace. */
+  /** "No, just me" was chosen: now name the workspace. */
   const [naming, setNaming] = useState(false);
   const [orgName, setOrgName] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
@@ -2432,18 +2491,147 @@ function AccountBadge({
   );
 }
 
+/** Second screen behind the picker's "Remove accounts" link: tick the rows to
+ *  forget on this device. Singular or plural follows **how many are in the
+ *  list**, not how many are ticked (user 2026-09-20). PLACEHOLDER copy.
+ *
+ *  Only remembered rows appear. A linked personal address isn't remembered on
+ *  a device, so removing it would be unlinking an identity, which is a
+ *  different action and doesn't belong here. */
+function RemoveAccountsScreen({
+  organizations,
+  onBack,
+  onRemoved,
+}: {
+  organizations: RememberedOrg[];
+  onBack: () => void;
+  /** The member ids that were forgotten. */
+  onRemoved: (removed: string[]) => void;
+}) {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [removing, setRemoving] = useState(false);
+  const many = organizations.length > 1;
+
+  function toggle(memberId: string) {
+    setSelected((current) =>
+      current.includes(memberId)
+        ? current.filter((id) => id !== memberId)
+        : [...current, memberId],
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Back"
+          className="flex size-7 shrink-0 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="size-5">
+            <path
+              d="M15 5l-7 7 7 7"
+              stroke="currentColor"
+              strokeWidth={3}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <h2
+          className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        >
+          {many ? "Remove accounts" : "Remove account"}
+        </h2>
+      </div>
+      <p
+        className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+      >
+        {many
+          ? "Select the accounts you want to remove from this device."
+          : "Select the account you want to remove from this device."}
+      </p>
+      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-2 p-0`}>
+        {organizations.map((row) => {
+          const checked = selected.includes(row.member_id);
+          return (
+            <li key={row.member_id}>
+              <label
+                className={cn(
+                  "flex cursor-pointer items-center gap-3 rounded-[var(--login-button-radius)] border bg-white px-3 py-2 transition-colors",
+                  checked ? "border-[#1c1917]" : "border-[#d9d9de]",
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(row.member_id)}
+                  disabled={removing}
+                  className="size-4 shrink-0 accent-[#1c1917]"
+                />
+                <span
+                  aria-hidden
+                  style={{ backgroundColor: avatarTint(row.email) }}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
+                >
+                  {row.organization_name.charAt(0).toUpperCase()}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
+                    {row.organization_name}
+                  </span>
+                  <span className="block truncate text-[0.8rem] text-[#1c1917]/70">
+                    {row.email}
+                  </span>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        disabled={removing || selected.length === 0}
+        onClick={() => {
+          setRemoving(true);
+          void forgetRememberedAccounts(selected).then(() => onRemoved(selected));
+        }}
+        className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
+      >
+        {many ? "Remove selected accounts" : "Remove selected account"}
+      </button>
+    </>
+  );
+}
+
 /** "Which account today?" — one row per organization this browser has signed
  *  in to. The org's name leads; the person's name is the subtext under it.
  *  PLACEHOLDER copy. */
 function AccountPicker({
   organizations,
-  onForget,
+  onRemoved,
 }: {
   organizations: RememberedOrg[];
-  /** "Remove accounts" succeeded — the picker gives way to the Log In screen. */
-  onForget: () => void;
+  /** Rows were forgotten; the caller drops them from the list, and shows the
+   *  plain Log In screen once none are left. */
+  onRemoved: (removedMemberIds: string[]) => void;
 }) {
-  const [forgetting, setForgetting] = useState(false);
+  /** The "Remove accounts" link opens a second screen in this modal rather
+   *  than forgetting everything on the spot (user 2026-09-20). */
+  const [removing, setRemoving] = useState(false);
+
+  if (removing)
+    return (
+      <RemoveAccountsScreen
+        organizations={organizations}
+        onBack={() => setRemoving(false)}
+        onRemoved={(removed) => {
+          setRemoving(false);
+          onRemoved(removed);
+        }}
+      />
+    );
 
   return (
     // Scoped to the picker rather than the app root: it's the only surface
@@ -2468,11 +2656,10 @@ function AccountPicker({
           >
             <button
               type="button"
-              disabled={forgetting}
               // Signing in to this organization: its account is the hint, and
               // Google can still override it.
               onClick={() => continueWithGoogle(null, row.email)}
-              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]"
             >
               <span
                 aria-hidden
@@ -2519,7 +2706,6 @@ function AccountPicker({
       </div>
       <button
         type="button"
-        disabled={forgetting}
         onClick={() => continueWithGoogle(readInviteToken())}
         className={`${satoshi.className} relative mt-6 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
       >
@@ -2540,14 +2726,10 @@ function AccountPicker({
       </p>
       <button
         type="button"
-        disabled={forgetting}
-        onClick={() => {
-          setForgetting(true);
-          void forgetRememberedAccounts().then(onForget);
-        }}
-        className={`${satoshi.className} mt-4 cursor-pointer text-[0.8rem] font-bold text-[#1c1917] underline underline-offset-2 disabled:cursor-default disabled:opacity-60`}
+        onClick={() => setRemoving(true)}
+        className={`${satoshi.className} mt-4 cursor-pointer text-[0.8rem] font-bold text-[#1c1917] underline underline-offset-2`}
       >
-        Remove accounts
+        {organizations.length > 1 ? "Remove accounts" : "Remove account"}
       </button>
     </TooltipProvider>
   );
@@ -3319,7 +3501,11 @@ function LandingHero() {
             {sheetKind === "login" && rememberedOrgs.length > 0 ? (
               <AccountPicker
                 organizations={rememberedOrgs}
-                onForget={() => setRememberedOrgs([])}
+                onRemoved={(removed) =>
+                  setRememberedOrgs((rows) =>
+                    rows.filter((row) => !removed.includes(row.member_id)),
+                  )
+                }
               />
             ) : sheetKind === "login" ? (
               <>

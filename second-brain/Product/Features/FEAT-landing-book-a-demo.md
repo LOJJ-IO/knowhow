@@ -10,7 +10,7 @@ related: ["[[FEAT-landing-login-panel]]", "[[FEAT-landing-header-nav]]", "[[Curr
 # FEAT: Landing Book a Demo sheet
 
 ## Status
-`in-progress` — sheet + form + segment + Cal embed built; **abandoned-demo Resend recovery decided 2026-09-20 (not built)** — leads must persist to `backend/` once a valid work email exists.
+`in-progress` — sheet + form + segment + **team-size step** + Cal embed built; **abandoned-demo Resend recovery decided 2026-09-20 (not built)** — leads must persist to `backend/` once a valid work email exists.
 
 ## Problem
 The desktop header's **Book a Demo** button (renamed from Talk to Sales 2026-09-17, [[FEAT-landing-header-nav]]) did nothing. User: "a replica of log in but the modal's content should be" a demo-request form (reference screenshot: "Get Started", First/Last name, Work email, Company website, Continue pill with an arrow circle).
@@ -39,7 +39,15 @@ After the website field validates, the fields are **replaced** by a segment scre
 - **Selection: one choice, skippable** (user). Picking a card **darkens its hairline** to `#1c1917` — no fill, no checkmark. `aria-pressed` on each card. Continue is always enabled and never shakes here; no "Other" option.
 - **"Other" opens a text box** (2026-09-19, user): picking it grows a single `t-demo-input` in **below the cards** (user's pick over replacing them or expanding inside the card), which takes focus. Cards stay visible; the modal's `.t-resize` tweens the growth, same as a field step. `aria-label` only, no visible label or placeholder — no invented copy. **The Other card itself does not darken** (2026-09-19, user: "when other is selected just the text box should be highlighted") — the highlight is on the box, via `.t-demo-input.is-picked` → `#1c1917` in `globals.css` (a class, not `:focus-visible`, so it stays dark after focus moves away; Tailwind utilities can't beat the existing `.t-demo-input` border rule). The text is local state, sent nowhere.
 - **The button reads "Skip" until a card is picked, then "Continue"** (2026-09-19, user: "the button should skip instead of continue"; Skip→Continue swap chosen over one fixed label or two pills). Same black `CTA_CLASS` pill, right-aligned, in both states.
-- **Skip / Continue opens the booking screen** (2026-09-20) — see below. The segment pick and the Other text are still local state, sent nowhere.
+- **Skip / Continue opens the team-size step** (2026-09-20) — see below. The segment pick and the Other text are still local state, sent nowhere.
+
+### Team size step (2026-09-20)
+After industry, Skip / Continue replaces the segment cards with a size picker (same modal, `.t-resize`). User affirmed the hotel-reference chip pattern with Knohow copy:
+- **Heading "How many people on your team?"** (Söhne H2, same as the other demo steps).
+- **Six chips:** `1` · `2–5` · `6–20` · `21–50` · `51–100` · `100+` — white, `border-[#d9d9de]`, picked hairline `#1c1917`, `var(--login-button-radius)`, in a **3×2 grid** (420px modal; reference was one row on a wider layout).
+- **Skippable** like segment — button reads **Skip** until a chip is picked, then **Continue**.
+- **Continue / Skip → Cal booking screen.** Size pick is local state, sent nowhere yet.
+- Counts as an **earlier** (pre-Cal) step for abandoned-recovery idle rules.
 
 ### Booking screen — Cal.com embed (2026-09-20)
 Skip / Continue replaces the segment cards with the user's **Cal.com booking embed** (`DemoBookingStep`). User: "embed this after continue in that same bounce… it might need to be an area bounce", then supplied the Cal snippet.
@@ -77,7 +85,7 @@ If someone starts Book a Demo and goes idle, send **one** Resend email after **2
 **Rules (user):**
 - **Clock arm:** first time a **valid work email** is present. Before that, nothing can be emailed.
 - **Inactivity:** no typing and no clicks **inside the demo sheet** for 20 minutes — whether the sheet stays open or they Close / leave. Clicks elsewhere on the landing (deck, Get Started, etc.) do **not** reset the idle timer. Any activity **inside** the sheet resets the 20‑minute idle timer. (The 5:00 "reserved" hold always expires first; the nudge is intentionally after Hold Expired.)
-- **Which steps can trigger a send:** only **earlier** steps (fields + segment) — **not** the Cal booking screen. If they reach Cal and go idle there, no recovery email.
+- **Which steps can trigger a send:** only **earlier** steps (fields + segment + team size) — **not** the Cal booking screen. If they reach Cal and go idle there, no recovery email.
 - **One shot** — only one recovery email per lead; no follow-up sequence.
 - **Cancel / suppress send if** any of: they **book on Cal**, they **reopen Book a Demo**, or they **click the email CTA** (resume link).
 - **Resume:** deep link reopens Book a Demo at the **step they stopped on**, with fields **prefilled**, so Continue advances to the next step.
