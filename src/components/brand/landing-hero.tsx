@@ -2709,6 +2709,7 @@ function AccountPicker({
         onClick={() => continueWithGoogle(readInviteToken())}
         className={`${satoshi.className} relative mt-6 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
       >
+        <GoogleG className="absolute left-[13px] size-5" />
         Continue with another account
       </button>
       <p

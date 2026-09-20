@@ -71,7 +71,7 @@ scoping and the `login_hint` behaviour are [[0011-device-remembered-accounts]].
   still decides who signs in.
 - The earlier per-account row with the org named only on divergence was replaced by this; that
   rule is gone.
-- Below: OR divider, **Continue with another account** (ordinary sign-in, keeps any `?invite=`
+- Below: OR divider, **Continue with another account** (Google G mark, same placement as Continue with Google; ordinary sign-in, keeps any `?invite=`
   token), the Terms/Privacy line, and **Remove accounts** → `DELETE /auth/remembered-accounts`,
   after which the picker gives way to the plain Log In screen.
 - **Sizing:** accounts are fetched on mount, not when the sheet opens, so `LoginModal` measures

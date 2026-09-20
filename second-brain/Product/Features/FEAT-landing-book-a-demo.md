@@ -47,7 +47,7 @@ After industry, Skip / Continue replaces the segment cards with a size picker (s
 - **Six chips:** `1` · `2–5` · `6–20` · `21–50` · `51–100` · `100+` — white, `border-[#d9d9de]`, picked hairline `#1c1917`, `var(--login-button-radius)`, in a **3×2 grid** (420px modal; reference was one row on a wider layout).
 - **Skippable** like segment — button reads **Skip** until a chip is picked, then **Continue**.
 - **Continue / Skip → Cal booking screen.** Size pick is local state, sent nowhere yet.
-- Counts as an **earlier** (pre-Cal) step for abandoned-recovery idle rules.
+- Counts as a pre-Cal step in the flow; abandoned recovery arms from email onward (including Cal) — see below.
 
 ### Booking screen — Cal.com embed (2026-09-20)
 Skip / Continue replaces the segment cards with the user's **Cal.com booking embed** (`DemoBookingStep`). User: "embed this after continue in that same bounce… it might need to be an area bounce", then supplied the Cal snippet.
@@ -83,11 +83,11 @@ Verified in-browser 2026-09-17: empty Continue → both name fields shake/red, f
 If someone starts Book a Demo and goes idle, send **one** Resend email after **20 minutes** of inactivity asking them to continue. **Copy locked** (see Final body copy below). **Resend domain verified** 2026-09-20.
 
 **Rules (user):**
-- **Clock arm:** first time a **valid work email** is present. Before that, nothing can be emailed.
+- **Clock arm:** first time a **valid work email** is present — counting starts then, regardless of step. Before that, nothing can be emailed.
 - **Inactivity:** no typing and no clicks **inside the demo sheet** for 20 minutes — whether the sheet stays open or they Close / leave. Clicks elsewhere on the landing (deck, Get Started, etc.) do **not** reset the idle timer. Any activity **inside** the sheet resets the 20‑minute idle timer. (The 5:00 "reserved" hold always expires first; the nudge is intentionally after Hold Expired.)
-- **Which steps can trigger a send:** only **earlier** steps (fields + segment + team size) — **not** the Cal booking screen. If they reach Cal and go idle there, no recovery email.
+- **Which steps can trigger a send:** **any** step after the email is known — fields, segment, team size, **and Cal** — as long as they **have not finished booking** on Cal. (Revised 2026-09-20: previously excluded Cal; user wants abandon on Cal to count too.)
 - **One shot** — only one recovery email per lead; no follow-up sequence.
-- **Cancel / suppress send if** any of: they **book on Cal**, they **reopen Book a Demo**, or they **click the email CTA** (resume link).
+- **Cancel / suppress send if** any of: they **book on Cal** (finished the Cal step), they **reopen Book a Demo**, or they **click the email CTA** (resume link).
 - **Resume:** deep link reopens Book a Demo at the **step they stopped on**, with fields **prefilled**, so Continue advances to the next step.
 - **Tone:** personalized transactional; **structure copied from a Lance reference email** (user pasted 2026-09-20) — see Email template below. Final Knohow wording TBD where noted.
 - **From:** `noreply@knohow.app` (user 2026-09-20). **Resend domain verified** (user 2026-09-20) — ready to send once API key is in `backend/.env` and the feature is built.
@@ -148,7 +148,8 @@ Only merge field in the body: `{firstName}`. Envelope From remains `noreply@knoh
 
 **Still open for this slice:**
 - Resume token format / expiry (should not put PII in the URL).
-- Cal booking webhook (or equivalent) so "booked" can cancel a pending send — still needed even though idle-on-Cal does not *trigger* a send (they might book after the email was already queued from an earlier step).
+- Cal booking webhook (or equivalent) so "booked" cancels a pending send — required because idle-on-Cal **does** arm the recovery email until they finish booking.
+- Whether clicks **inside the Cal iframe** reset the sheet idle timer (cross-origin; may need a blur/focus or Cal callback strategy).
 - `RESEND_API_KEY` in `backend/.env` (user added 2026-09-20); also `RESEND_FROM_EMAIL=noreply@knohow.app` in `.env` / `.env.example`. Domain verified; feature not built yet.
 
 ## Open questions
