@@ -548,10 +548,14 @@ def decode_pending_personal_signup_token(token: str) -> dict:
     return payload
 
 
-def create_domainless_org(pending_token: str, db: Session) -> LoginResult:
+def create_domainless_org(pending_token: str, db: Session, name: str | None = None) -> LoginResult:
     """The "No / just me" answer for a personal Google account: a domainless
-    org with exactly one owner, the creator. A person can't hold two — the
-    email lookup below turns a repeat into a login."""
+    org with exactly one owner, the creator. A person can't hold two of these
+    — the email lookup below turns a repeat into a login.
+
+    `name` is what the person called their personal org; it's the label the
+    Log In picker leads with (user, 2026-09-20), so it matters more than it
+    looks. Falling back to their Google name keeps old callers working."""
     payload = decode_pending_personal_signup_token(pending_token)
     email = payload["email"]
 
@@ -559,7 +563,8 @@ def create_domainless_org(pending_token: str, db: Session) -> LoginResult:
     if existing is not None:
         return _login_result(existing)
 
-    org = Organization(id=uuid.uuid4(), name=payload.get("name") or email, observed_domain=None, verified_domain=None)
+    org_name = (name or "").strip() or payload.get("name") or email
+    org = Organization(id=uuid.uuid4(), name=org_name, observed_domain=None, verified_domain=None)
     member = OrgMember(
         id=uuid.uuid4(),
         organization_id=org.id,

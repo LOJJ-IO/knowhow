@@ -8,7 +8,8 @@ from app.api import deps
 from app.api.routes import auth as auth_routes
 from app.auth.login import LOGIN_STATE_PURPOSE
 from app.auth.pkce import build_state_token
-from app.auth.remembered import RememberedAccountView
+from app.auth.identity import LinkedAccount
+from app.auth.remembered import RememberedPersonView
 from app.main import app
 from app.onboarding import service as onboarding_service
 from app.security.jwt import issue_access_token, issue_refresh_token
@@ -36,32 +37,37 @@ def test_no_device_cookie_returns_no_accounts():
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert response.json() == {"accounts": []}
+    assert response.json() == {"people": []}
 
 
 def test_malformed_device_cookie_returns_no_accounts(monkeypatch):
     # A hand-edited cookie must not 500 the screen that runs before sign-in.
-    monkeypatch.setattr(auth_routes, "list_remembered_accounts", lambda device_id, db: 1 / 0)
+    monkeypatch.setattr(auth_routes, "list_remembered_people", lambda device_id, db: 1 / 0)
     try:
         client = _client()
         client.cookies.set("knohow_device", "not-a-uuid")
         response = client.get("/auth/remembered-accounts")
     finally:
         app.dependency_overrides.clear()
-    assert response.json() == {"accounts": []}
+    assert response.json() == {"people": []}
 
 
-def test_lists_remembered_accounts_for_this_device(monkeypatch):
-    org_id = uuid.uuid4()
+def test_lists_one_row_per_person_with_their_accounts(monkeypatch):
+    person_id = uuid.uuid4()
     monkeypatch.setattr(
         auth_routes,
-        "list_remembered_accounts",
+        "list_remembered_people",
         lambda device_id, db: [
-            RememberedAccountView(
-                email="ronald@acme.org",
+            RememberedPersonView(
+                person_id=person_id,
                 display_name="Ronald Wopara",
-                organization_id=org_id,
-                organization_name="Acme",
+                primary_email="ronald@acme.org",
+                accounts=[
+                    LinkedAccount(email="ronald@acme.org", kind="org", organization_name="Acme"),
+                    LinkedAccount(
+                        email="ronald@gmail.com", kind="personal", organization_name="Ronald"
+                    ),
+                ],
             )
         ],
     )
@@ -73,12 +79,19 @@ def test_lists_remembered_accounts_for_this_device(monkeypatch):
         app.dependency_overrides.clear()
 
     assert response.json() == {
-        "accounts": [
+        "people": [
             {
-                "email": "ronald@acme.org",
+                "person_id": str(person_id),
                 "display_name": "Ronald Wopara",
-                "organization_id": str(org_id),
-                "organization_name": "Acme",
+                "primary_email": "ronald@acme.org",
+                "accounts": [
+                    {"email": "ronald@acme.org", "kind": "org", "organization_name": "Acme"},
+                    {
+                        "email": "ronald@gmail.com",
+                        "kind": "personal",
+                        "organization_name": "Ronald",
+                    },
+                ],
             }
         ]
     }
@@ -105,6 +118,7 @@ def test_sign_in_remembers_the_account_and_mints_a_device_id(monkeypatch):
     remembered: list[tuple] = []
     monkeypatch.setattr(auth_routes, "complete_login", lambda code, state, db: _fake_login_result())
     monkeypatch.setattr(auth_routes, "accept_invitations_on_sign_in", lambda member, db: False)
+    monkeypatch.setattr(auth_routes, "person_for", lambda member, db: None)
     monkeypatch.setattr(
         auth_routes, "remember_account", lambda device_id, member, db: remembered.append((device_id, member))
     )
@@ -121,6 +135,7 @@ def test_sign_in_remembers_the_account_and_mints_a_device_id(monkeypatch):
 def test_a_failure_to_remember_never_breaks_sign_in(monkeypatch):
     monkeypatch.setattr(auth_routes, "complete_login", lambda code, state, db: _fake_login_result())
     monkeypatch.setattr(auth_routes, "accept_invitations_on_sign_in", lambda member, db: False)
+    monkeypatch.setattr(auth_routes, "person_for", lambda member, db: None)
     monkeypatch.setattr(
         auth_routes, "remember_account", lambda device_id, member, db: (_ for _ in ()).throw(RuntimeError("db down"))
     )

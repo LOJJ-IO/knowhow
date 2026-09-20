@@ -39,8 +39,11 @@ class LoginResult:
     refresh_token: str
 
 
-def complete_login(code: str, state: str, db: Session) -> LoginResult:
-    state_payload = decode_state_token(state, expected_purpose=LOGIN_STATE_PURPOSE)
+def complete_login(code: str, state: str, db: Session, expected_purpose: str = LOGIN_STATE_PURPOSE) -> LoginResult:
+    """expected_purpose lets the identity-linking flow reuse this: adding
+    another account is an ordinary login that happens to carry a different
+    state purpose (app/auth/identity.py)."""
+    state_payload = decode_state_token(state, expected_purpose=expected_purpose)
     code_verifier = state_payload["code_verifier"]
 
     tokens = exchange_code_for_tokens(code, code_verifier)

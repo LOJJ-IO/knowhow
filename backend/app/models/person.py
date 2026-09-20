@@ -17,9 +17,9 @@ class Person(Base):
     someone signed in to both deliberately (see app/auth/identity.py). A
     matching display name proves nothing and is never used.
 
-    A Person holds **at most one Workspace (org) account** and any number of
-    personal ones (user, 2026-09-20) — enforced by a partial unique index on
-    org_members.person_id.
+    A Person may belong to **several organizations** (user, 2026-09-20) — two
+    companies and a personal org are all legitimate. The account picker lists
+    one row per organization, with the person's name as subtext.
     """
 
     __tablename__ = "people"

@@ -263,3 +263,29 @@ real endpoint, the real CORS/cookie path and the real redirect — the row click
 the way to `accounts.google.com` and its `login_hint` asserted. Gotcha: the desktop **Log In
 button doesn't exist until the CTA split**, so the script must click Get Started and wait ~4s
 first. Playwright isn't a repo dependency — install it in the scratchpad, not in `package.json`.
+
+## A portal escapes clipping, not ranking (2026-09-20)
+The account picker's badge tooltips are portaled to `document.body` so the Log In modal's measured
+height and rounded surface can't clip them. That fixed the clipping and the tooltip still didn't
+paint: the slide-up sheet is `z-[400]` (`landing-hero.tsx`) and the portal's positioner was
+`z-50`. Portalling makes the tooltip a **sibling** of the sheet on `<body>`, and siblings are
+ranked by z-index — so escaping the parent's stacking context is only half the job when the thing
+you must clear is also a root-level layer. Positioner is now `z-[500]`. Symptom to recognise: the
+element measures **visible, opacity 1, non-zero rect**, and simply isn't in the screenshot.
+Debug by asserting the computed style and rect, not by eye. See [[FEAT-landing-login-panel]].
+
+## Playwright `hover()` doesn't reliably hold a tooltip open for a screenshot (2026-09-20)
+`locator.hover()` → `waitForTimeout` → `screenshot()` kept capturing the frame *after* the tooltip
+closed, while a DOM assertion in the same run said it was open. `page.mouse.move(x, y, {steps: 10})`
+onto the measured bounding box holds the pointer and the tooltip survives the capture. Assert the
+computed state in the same run as the screenshot, or a "missing" tooltip will send you fixing code
+that works.
+
+## `@base-ui/react` added to the frontend stack (2026-09-20, user request)
+New dependency for the tooltip primitive, at the user's explicit request (they specified Base UI).
+Note it is **not** Radix: there's no `asChild`; the real element goes through `render={<button/>}`
+and the children go inside the trigger. `clsx`, `tailwind-merge` and `tw-animate-css` were already
+present. The tooltip was **written fresh in this repo** — Knohow stays independent of Sage_v1
+(CLAUDE.md invariant 5); the user was asked and chose the fresh implementation over porting.
+Lives at `src/components/brand/tooltip.tsx`, deliberately **not** `src/components/ui/`, which is
+the path invariant 5 calls out.

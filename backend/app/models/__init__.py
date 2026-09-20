@@ -10,6 +10,7 @@ from app.models.org_membership import OrgMembership, OrgRole
 from app.models.organization import Organization
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
 from app.models.person import Person
+from app.models.person_email import PersonEmail
 from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
@@ -39,6 +40,7 @@ __all__ = [
     "Organization",
     "PendingReassignment",
     "Person",
+    "PersonEmail",
     "ProcessedActivityEvent",
     "ReassignmentStatus",
     "RememberedAccount",

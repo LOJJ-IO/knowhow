@@ -10,7 +10,10 @@ related: ["[[0006-observed-domain-tenant-identity]]", "[[0008-continue-with-goog
 # ADR-0011: Remembered accounts are scoped to a browser, not to a person
 
 ## Status
-`active` (2026-09-20)
+`active` (2026-09-20). **Extended the same day by [[0012-identity-linking-one-person-many-accounts]]:**
+the user asked for one row per *person*, so identity linking was built after all. This ADR's
+device scoping still holds — the device decides *which* accounts are remembered; ADR-0012 decides
+how they group into people.
 
 ## Context
 The user asked for a Canva-style account picker on Log In — "Which account today?", listing
@@ -75,4 +78,4 @@ over the hint.
 - Backend: `app/models/remembered_account.py`, `app/auth/remembered.py`,
   `app/api/routes/auth.py`, migration `0008_remembered_accounts`, `tests/test_remembered_accounts.py`
 - Frontend: `AccountPicker` in `src/components/brand/landing-hero.tsx` — [[FEAT-landing-login-panel]]
-- Identity linking remains unbuilt — see [[FEAT-workspace-onboarding-flow]].
+- Identity linking is now built — [[0012-identity-linking-one-person-many-accounts]].

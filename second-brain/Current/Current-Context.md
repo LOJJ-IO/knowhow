@@ -4,7 +4,7 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-20
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]"]
 ---
 
 # Current Context
@@ -52,8 +52,9 @@ also records the correction that a personal Gmail is only its own org when it's 
   /auth/remembered-accounts`, and `/onboarding/signup?email=` → Google `login_hint`. Logout keeps
   the device cookie on purpose. 75 backend tests pass (9 new, `tests/test_remembered_accounts.py`).
 - **Frontend:** `AccountPicker` in `landing-hero.tsx` — initial-circle avatars (Google gives us no
-  picture; tint is a deterministic hash of the email, **placeholder palette**), name + email, the
-  org named **only when the remembered accounts span more than one org** (user's choice), OR divider,
+  picture; tint is a deterministic hash, **placeholder palette**), **one row per person** with black
+  `Org` / `Personal (n)` chips beside the name and the addresses behind a **tooltip** (revised later
+  the same day — see below), OR divider,
   "Continue with another account", Terms/Privacy line, "Remove accounts". Light modal, matching the
   existing sheet. Accounts are fetched **on mount, not on open**, so the modal sizes once
   ([[FEAT-landing-book-a-demo]]'s lesson). Copy is **placeholder**.
@@ -65,6 +66,30 @@ also records the correction that a personal Gmail is only its own org when it's 
   the scratchpad `seed-picker.py` cleans and re-creates them; delete the `@seed.test` members and
   those two orgs to remove it entirely.
 - **Open:** Privacy Policy must describe the `knohow_device` cookie before launch ([[Known-Issues]]).
+
+## Identity linking built (2026-09-20)
+The picker repeated a person's name once per account, so the user asked for **one name + chips**.
+That needed identity linking, previously "next pass" — built and recorded as
+[[0012-identity-linking-one-person-many-accounts]]. **One org account, many personal** (user's
+choice); `personal` = any non-Workspace account, so a contractor's Gmail in a company org reads as
+personal. Links are **only ever made deliberately** (sign in, then "add another account") — never
+inferred from a matching name, which a test guards.
+
+- **Backend:** `people` table + `org_members.person_id` (migration `0009_identity_linking`, applied
+  to the dev **and** test DBs), `app/models/person.py`, `app/auth/identity.py`,
+  `GET /auth/link-account/start` → shared `/auth/callback` (purpose `link_account`) →
+  `?link=linked|already_linked|has_org_account`. Partial unique index `uq_person_one_org_account`
+  enforces the one-org rule in the database, not just in the service. `/auth/remembered-accounts`
+  now returns **people**, each with `accounts[{email, kind, organization_name}]`.
+  **83 backend tests pass** (8 new in `tests/test_identity_linking.py`, against real Postgres).
+- **Frontend:** black chips + portaled compact tooltip (`src/components/brand/tooltip.tsx`, new dep
+  `@base-ui/react`, written fresh — **not** ported from Sage_v1, user asked and chose that).
+  Clicking a person signs in with their most recent account; **no account picking**.
+- **Verified in a real browser** (Playwright, seeded DB): four accounts collapse to two rows
+  ("Ronald Wopara" with `Org` + `Personal (2)`, "Dana Okafor" with `Org`), and the tooltip shows
+  both personal addresses.
+- **Not built:** any UI to *create* a link. The endpoint exists but nothing calls it, so in practice
+  every person still has one account until that screen is designed. **Next obvious gap.**
 
 ## Brand spelling (2026-09-17, user)
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.

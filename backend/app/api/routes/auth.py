@@ -7,8 +7,17 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_member, get_db
 from app.auth.login import complete_login, start_login
 from app.auth.personal_oauth import complete_personal_oauth_consent, start_personal_oauth_consent
-from app.auth.pkce import InvalidOAuthState, peek_state_purpose
-from app.auth.remembered import forget_device, list_remembered_accounts, remember_account
+from app.auth.pkce import InvalidOAuthState, decode_state_token, peek_state_purpose
+from app.auth.identity import (
+    AccountAlreadyLinked,
+    LINK_ACCOUNT_STATE_PURPOSE,
+    attach_pending_personal_email,
+    link_account_to_person,
+    person_for,
+    start_link_account,
+    start_link_account_for_pending_personal,
+)
+from app.auth.remembered import forget_device, list_remembered_orgs, remember_account
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.google.directory import DirectoryLookupError
@@ -57,6 +66,9 @@ def remember_on_this_device(
     except ValueError:
         device_id = uuid.uuid4()
     try:
+        # Every account belongs to a person from its first sign-in; linking
+        # is what later brings two accounts under one.
+        person_for(member, db)
         remember_account(device_id, member, db)
     except Exception as exc:  # noqa: BLE001 - never break sign-in over the picker
         logger.warning("auth.remember_account_failed", error=str(exc))
@@ -108,6 +120,43 @@ def signup_redirect(
     return response
 
 
+def link_account_redirect(
+    code: str, state: str, device_cookie: str | None, db: Session
+) -> RedirectResponse:
+    """Back from Google after "add another account". The account that just
+    signed in joins the person who started the flow; the session stays as
+    that newly signed-in account."""
+    settings = get_settings()
+    state_payload = decode_state_token(state, expected_purpose=LINK_ACCOUNT_STATE_PURPOSE)
+    result = complete_login(code, state, db, expected_purpose=LINK_ACCOUNT_STATE_PURPOSE)
+    # Two ways in: an already-signed-in person adding an account, or a
+    # personal sign-in that answered "yes, I have an organization account"
+    # and so has no session yet.
+    pending_email = state_payload.get("pending_personal_email")
+    person_id = (
+        person_for(result.member, db).id
+        if pending_email
+        else uuid.UUID(state_payload["person_id"])
+    )
+    try:
+        if pending_email:
+            attach_pending_personal_email(person_id, pending_email, db)
+        else:
+            link_account_to_person(person_id, result.member, db)
+        outcome = "linked"
+    except AccountAlreadyLinked:
+        outcome = "already_linked"
+    response = RedirectResponse(
+        f"{settings.frontend_origin}?link={outcome}", status_code=status.HTTP_302_FOUND
+    )
+    set_session_cookies(response, result.access_token, result.refresh_token)
+    # The pending personal signup is spent either way — no domainless org was
+    # created for it, by design.
+    response.delete_cookie(PENDING_PERSONAL_SIGNUP_COOKIE)
+    remember_on_this_device(response, device_cookie, result.member, db)
+    return response
+
+
 def admin_proof_redirect(code: str, state: str, db: Session) -> RedirectResponse:
     """Back to the frontend with `?admin_proof=verified|not_verified|error`."""
     settings = get_settings()
@@ -143,6 +192,8 @@ def login_callback(
             return signup_redirect(complete_signup(code, state, db), knohow_device, db)
         if purpose == ADMIN_PROOF_STATE_PURPOSE:
             return admin_proof_redirect(code, state, db)
+        if purpose == LINK_ACCOUNT_STATE_PURPOSE:
+            return link_account_redirect(code, state, knohow_device, db)
         result = complete_login(code, state, db)
         needs_admin_proof = accept_invitations_on_sign_in(result.member, db)
     except InvalidOAuthState as exc:
@@ -218,26 +269,29 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
 def remembered_accounts(
     db: Session = Depends(get_db), knohow_device: str | None = Cookie(default=None)
 ) -> dict:
-    """Accounts this browser has signed in with, newest first — the Log In
-    screen's account picker. Unauthenticated on purpose: it runs *before*
+    """Organizations this browser has signed in to, newest first — the Log In
+    screen's picker. Signing in is signing in to an org (user, 2026-09-20), so
+    a row is an org, not a person: two companies plus a personal org is three
+    rows, each carrying the person's name as subtext. Unauthenticated on purpose: it runs *before*
     sign-in, and the device cookie is the only thing identifying the browser.
     It returns names and emails, so it stays limited to what this browser
     itself did; it never reveals an organization's members."""
     if not knohow_device:
-        return {"accounts": []}
+        return {"organizations": []}
     try:
         device_id = uuid.UUID(knohow_device)
     except ValueError:
-        return {"accounts": []}
+        return {"organizations": []}
     return {
-        "accounts": [
+        "organizations": [
             {
-                "email": account.email,
-                "display_name": account.display_name,
-                "organization_id": str(account.organization_id),
-                "organization_name": account.organization_name,
+                "member_id": str(row.member_id),
+                "organization_name": row.organization_name,
+                "person_name": row.person_name,
+                "email": row.email,
+                "kind": row.kind,
             }
-            for account in list_remembered_accounts(device_id, db)
+            for row in list_remembered_orgs(device_id, db)
         ]
     }
 
@@ -257,6 +311,15 @@ def remove_remembered_accounts(
             removed = 0
     response.delete_cookie(DEVICE_COOKIE)
     return {"removed": removed}
+
+
+@router.get("/link-account/start")
+def link_account_start(member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)) -> RedirectResponse:
+    """Adds another of this person's Google accounts. Identity linking is
+    only ever done this way — by someone already signed in choosing to sign
+    in again as themselves. Nothing is inferred from names or devices."""
+    person_for(member, db)
+    return RedirectResponse(start_link_account(member).authorization_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/admin-proof/start")

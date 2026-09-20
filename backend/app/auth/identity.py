@@ -12,7 +12,7 @@ files or standing.
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.auth.google_oauth import build_authorization_url
@@ -21,16 +21,13 @@ from app.google.scopes import LOGIN_SCOPES
 from app.models.org_member import AuthType, OrgMember
 from app.models.organization import Organization
 from app.models.person import Person
+from app.models.person_email import PersonEmail
 
 LINK_ACCOUNT_STATE_PURPOSE = "link_account"
 
 
 class AccountAlreadyLinked(Exception):
     """The account signed in with already belongs to a different person."""
-
-
-class PersonAlreadyHasOrgAccount(Exception):
-    """A person holds at most one Workspace account (user, 2026-09-20)."""
 
 
 @dataclass
@@ -52,6 +49,32 @@ def person_for(member: OrgMember, db: Session) -> Person:
     member.person_id = person.id
     db.commit()
     return person
+
+
+def start_link_account_for_pending_personal(email: str) -> LinkAccountStart:
+    """"Yes, I have an organization account" — said by someone who has just
+    proved a personal Google identity but has no Knohow session or member row
+    yet (they hold a pending_personal_signup cookie).
+
+    They sign in to the work account; the callback creates/finds that member
+    and attaches the personal email to the same person. **No personal org is
+    created** for them (user, 2026-09-20) — they asked for the company, not a
+    workspace of their own.
+    """
+    code_verifier = generate_code_verifier()
+    state = build_state_token(
+        code_verifier,
+        purpose=LINK_ACCOUNT_STATE_PURPOSE,
+        extra={"pending_personal_email": email},
+    )
+    url = build_authorization_url(
+        LOGIN_SCOPES,
+        state=state,
+        code_challenge=derive_code_challenge(code_verifier),
+        access_type="online",
+        prompt="select_account",
+    )
+    return LinkAccountStart(authorization_url=url, state=state)
 
 
 def start_link_account(member: OrgMember) -> LinkAccountStart:
@@ -106,25 +129,11 @@ def link_account_to_person(person_id: uuid.UUID, member: OrgMember, db: Session)
         if stale is not None:
             db.delete(stale)
 
-    if member.auth_type is AuthType.DOMAIN_DELEGATED and _has_org_account(person.id, db):
-        raise PersonAlreadyHasOrgAccount("this person already has a Workspace account")
-
     member.person_id = person.id
     if person.display_name is None:
         person.display_name = member.display_name
     db.commit()
     return person
-
-
-def _has_org_account(person_id: uuid.UUID, db: Session) -> bool:
-    return (
-        db.execute(
-            select(OrgMember.id).where(
-                OrgMember.person_id == person_id, OrgMember.auth_type == AuthType.DOMAIN_DELEGATED
-            )
-        ).first()
-        is not None
-    )
 
 
 @dataclass
@@ -152,3 +161,30 @@ def accounts_of(person_id: uuid.UUID, db: Session) -> list[LinkedAccount]:
         )
         for member, organization in rows
     ]
+
+
+def attach_pending_personal_email(person_id: uuid.UUID, email: str, db: Session) -> None:
+    """Records a verified personal address against the person who just signed
+    in to their company, without creating an org for it.
+
+    Refused if the address is already another person's — same rule as
+    link_account_to_person: refusing is better than silently re-pointing an
+    identity.
+    """
+    normalized = email.lower()
+    existing = db.execute(
+        select(PersonEmail).where(PersonEmail.email == normalized)
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.person_id != person_id:
+            raise AccountAlreadyLinked(f"{normalized} already belongs to another person")
+        return
+    member = db.execute(
+        select(OrgMember).where(func.lower(OrgMember.email) == normalized)
+    ).scalar_one_or_none()
+    if member is not None:
+        # It does have a membership after all — link it properly instead.
+        link_account_to_person(person_id, member, db)
+        return
+    db.add(PersonEmail(person_id=person_id, email=normalized))
+    db.commit()

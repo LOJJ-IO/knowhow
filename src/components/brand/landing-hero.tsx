@@ -19,6 +19,12 @@ import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
 import dynamic from "next/dynamic";
 import { DemoBookingSlot } from "@/components/brand/demo-booking-slot";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./tooltip";
 
 /** Cal.com's embed is ~100KB of the landing bundle and is only ever needed
  *  on the last Book a Demo step, so it loads on demand (user 2026-09-20:
@@ -101,19 +107,33 @@ async function backendError(res: Response): Promise<string> {
 /** One account this browser has signed in with before — the Log In picker.
  *  The backend keys these to an opaque device cookie, not to a person:
  *  Knohow can't tell that two Google accounts are the same human. */
-type RememberedAccount = {
+type LinkedAccount = {
   email: string;
-  display_name: string | null;
-  organization_id: string;
+  /** "org" — a Workspace account. "personal" — any non-Workspace account,
+   *  whichever org it belongs to (user 2026-09-20), so a contractor's Gmail
+   *  inside a company org reads as personal. */
+  kind: "org" | "personal";
   organization_name: string;
 };
 
-async function fetchRememberedAccounts(): Promise<RememberedAccount[]> {
+/** One person in the picker. A person holds at most one org account and any
+ *  number of personal ones, and is only ever formed by deliberate identity
+ *  linking — never inferred from a matching name ([[0012]]). */
+type RememberedPerson = {
+  person_id: string;
+  display_name: string | null;
+  /** Their most recently used account — what a click signs in with, since
+   *  Google still needs one email to open on. */
+  primary_email: string;
+  accounts: LinkedAccount[];
+};
+
+async function fetchRememberedPeople(): Promise<RememberedPerson[]> {
   if (!BACKEND_API_URL) return [];
   try {
     const res = await backendFetch("/auth/remembered-accounts");
     if (!res.ok) return [];
-    return ((await res.json()) as { accounts: RememberedAccount[] }).accounts;
+    return ((await res.json()) as { people: RememberedPerson[] }).people;
   } catch {
     // Backend down — the picker just doesn't appear, and Log In falls back
     // to "Continue with Google".
@@ -2253,7 +2273,7 @@ function SignInResultPanel({
 
 /** Initial-circle tints. Google gives us no profile picture (`/auth/me`
  *  returns a name and an email only), so a row's avatar is the initial on a
- *  tint picked deterministically from the email — same account, same colour
+ *  tint picked deterministically from the email — same person, same colour
  *  every visit. PLACEHOLDER palette. */
 const AVATAR_TINTS = ["#2F6F4E", "#8E3B8E", "#2F6F8E", "#8E5A2F", "#4A3F8E"];
 
@@ -2263,25 +2283,63 @@ function avatarTint(email: string) {
   return AVATAR_TINTS[hash % AVATAR_TINTS.length];
 }
 
-/** "Which account today?" — the accounts this browser has signed in with.
- *  Shown instead of the plain Log In screen when there are any. PLACEHOLDER
- *  copy. */
+/** Black chip beside a person's name. The emails live in its tooltip, so the
+ *  row stays one line per person instead of repeating the name. */
+function AccountBadge({
+  label,
+  count,
+  emails,
+}: {
+  label: string;
+  /** Shown as "(n)" from two up — one of a kind needs no counting. */
+  count: number;
+  /** What the tooltip reveals: one address for the org badge, all of them
+   *  for the personal badge. */
+  emails: string[];
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <span
+            tabIndex={0}
+            aria-label={`${label}: ${emails.join(", ")}`}
+            className="inline-flex cursor-default items-center gap-1 rounded-full bg-[#1c1917] px-2 py-[0.15rem] text-[0.7rem] font-bold leading-[1.1rem] text-white"
+          />
+        }
+      >
+        {label}
+        {count > 1 ? ` (${count})` : ""}
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6}>
+        {emails.map((email) => (
+          <span key={email} className="block">
+            {email}
+          </span>
+        ))}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** "Which account today?" — one row per person, badges for what's attached.
+ *  There's no account to choose: a person signs in as themselves, and the
+ *  badges say what Knohow knows about them. PLACEHOLDER copy. */
 function AccountPicker({
-  accounts,
+  people,
   onForget,
 }: {
-  accounts: RememberedAccount[];
+  people: RememberedPerson[];
   /** "Remove accounts" succeeded — the picker gives way to the Log In screen. */
   onForget: () => void;
 }) {
   const [forgetting, setForgetting] = useState(false);
-  // The org is worth naming only when the rows don't all lead to the same
-  // place; on one org it's noise (user 2026-09-20).
-  const orgs = new Set(accounts.map((a) => a.organization_id));
-  const showOrg = orgs.size > 1;
 
   return (
-    <>
+    // Scoped to the picker rather than the app root: it's the only surface
+    // with tooltips, and the root layout is a Server Component — no reason
+    // to push a client boundary up there for one screen.
+    <TooltipProvider delay={0}>
       <h2
         className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
@@ -2293,33 +2351,53 @@ function AccountPicker({
         Pick up where you left off or continue as another user.
       </p>
       <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-1 p-0`}>
-        {accounts.map((account) => (
-          <li key={account.email}>
-            <button
-              type="button"
-              disabled={forgetting}
-              onClick={() => continueWithGoogle(null, account.email)}
-              className="flex w-full cursor-pointer items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
+        {people.map((person) => {
+          const org = person.accounts.filter((a) => a.kind === "org");
+          const personal = person.accounts.filter((a) => a.kind === "personal");
+          const name = person.display_name || person.primary_email;
+          return (
+            <li
+              key={person.person_id}
+              className="flex items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2"
             >
-              <span
-                aria-hidden
-                style={{ backgroundColor: avatarTint(account.email) }}
-                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
+              <button
+                type="button"
+                disabled={forgetting}
+                // Signing in as the person: their most recent account is the
+                // hint, and Google can still override it. Nothing is picked.
+                onClick={() => continueWithGoogle(null, person.primary_email)}
+                className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
               >
-                {(account.display_name || account.email).charAt(0).toUpperCase()}
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
-                  {account.display_name || account.email}
+                <span
+                  aria-hidden
+                  style={{ backgroundColor: avatarTint(person.primary_email) }}
+                  className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
+                >
+                  {name.charAt(0).toUpperCase()}
                 </span>
-                <span className="block truncate text-[0.8rem] text-[#1c1917]/70">
-                  {account.email}
-                  {showOrg ? ` · ${account.organization_name}` : ""}
+                <span className="truncate text-[1rem] font-bold text-[#1c1917]">
+                  {name}
                 </span>
+              </button>
+              <span className="flex shrink-0 items-center gap-1.5">
+                {org.length > 0 ? (
+                  <AccountBadge
+                    label="Org"
+                    count={org.length}
+                    emails={org.map((a) => a.email)}
+                  />
+                ) : null}
+                {personal.length > 0 ? (
+                  <AccountBadge
+                    label="Personal"
+                    count={personal.length}
+                    emails={personal.map((a) => a.email)}
+                  />
+                ) : null}
               </span>
-            </button>
-          </li>
-        ))}
+            </li>
+          );
+        })}
       </ul>
       <div className={`${satoshi.className} mt-6 flex items-center gap-3`}>
         <span className="h-px flex-1 bg-[#d9d9de]" />
@@ -2358,7 +2436,7 @@ function AccountPicker({
       >
         Remove accounts
       </button>
-    </>
+    </TooltipProvider>
   );
 }
 
@@ -2663,9 +2741,9 @@ function LandingHero() {
   /** Accounts this browser has used before. Fetched on mount, not on open,
    *  so the modal sizes once (the Cal embed taught us that — see
    *  FEAT-landing-book-a-demo). */
-  const [rememberedAccounts, setRememberedAccounts] = useState<
-    RememberedAccount[]
-  >([]);
+  const [rememberedPeople, setRememberedPeople] = useState<RememberedPerson[]>(
+    [],
+  );
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** When Book a Demo first opened this visit — its "reserved" countdown
@@ -2712,8 +2790,8 @@ function LandingHero() {
   // organization, reopen the sheet on the setup questions.
   useEffect(() => {
     let cancelled = false;
-    void fetchRememberedAccounts().then((accounts) => {
-      if (!cancelled) setRememberedAccounts(accounts);
+    void fetchRememberedPeople().then((people) => {
+      if (!cancelled) setRememberedPeople(people);
     });
     return () => {
       cancelled = true;
@@ -3127,10 +3205,10 @@ function LandingHero() {
         {/* Centred modal — Log In or Book a Demo content. */}
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <LoginModal open={sheetAtTop}>
-            {sheetKind === "login" && rememberedAccounts.length > 0 ? (
+            {sheetKind === "login" && rememberedPeople.length > 0 ? (
               <AccountPicker
-                accounts={rememberedAccounts}
-                onForget={() => setRememberedAccounts([])}
+                people={rememberedPeople}
+                onForget={() => setRememberedPeople([])}
               />
             ) : sheetKind === "login" ? (
               <>

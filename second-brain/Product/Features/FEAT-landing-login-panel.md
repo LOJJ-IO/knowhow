@@ -58,12 +58,19 @@ Clicking **Log In** shows the accounts this browser has signed in with, instead 
 (fresh, incognito, cookies cleared). User's reference was Canva's picker; the device-not-person
 scoping and the `login_hint` behaviour are [[0011-device-remembered-accounts]].
 
-- **Row:** initial circle (no Google profile picture is available — `/auth/me` returns a name and
-  an email only; tint is a deterministic hash of the email, **placeholder palette**), display name
-  over email. The **organization is named only when the remembered accounts span more than one
-  org** (user's choice, 2026-09-20) — on a single org it's noise.
-- **Click a row** → `/onboarding/signup?email=…` → Google `login_hint`. It pre-selects, it does not
-  authenticate: Google still decides who signs in.
+- **Row = one person, not one account** (revised 2026-09-20 same day, [[0012-identity-linking-one-person-many-accounts]]).
+  The name appears once; what used to be the email line is now **black chips** beside it — `Org`
+  and `Personal`, each showing `(n)` from two up. Grouping is by linked identity only, never by
+  name. Avatar is an initial circle (Google gives us no profile picture; tint is a deterministic
+  hash, **placeholder palette**).
+- **Hover a chip** → compact black tooltip listing the addresses behind it: one for `Org`, all of
+  them for `Personal`. Same string on `aria-label`, and the chip is focusable, so it doesn't
+  depend on hover.
+- **Click a person** → signs in as them, passing their most recently used account as Google's
+  `login_hint`. **There is no account picking** (user: *"account picking doesn't exist"*) — Google
+  still decides who signs in.
+- The earlier per-account row with the org named only on divergence was replaced by this; that
+  rule is gone.
 - Below: OR divider, **Continue with another account** (ordinary sign-in, keeps any `?invite=`
   token), the Terms/Privacy line, and **Remove accounts** → `DELETE /auth/remembered-accounts`,
   after which the picker gives way to the plain Log In screen.
@@ -71,3 +78,11 @@ scoping and the `login_hint` behaviour are [[0011-device-remembered-accounts]].
   once — the same trap the Cal embed hit ([[FEAT-landing-book-a-demo]]).
 - **All copy is placeholder** pending the user's design.
 - Verified in a real browser (Playwright, seeded DB + device cookie) at 1470×956.
+
+### Tooltip primitive (2026-09-20)
+`src/components/brand/tooltip.tsx` — compact black chip (12px semibold white on `bg-black`,
+`px-2.5 py-1.5`, `rounded-md`, caret), portaled to `document.body`, instant open (`delay={0}`,
+user's choice). Provider is scoped to the picker, not the root layout, which is a Server Component.
+**Positioner must be `z-[500]`** to clear the sheet's `z-[400]` — see [[Lessons-Learned]], the
+portal alone doesn't do it. Written fresh for this repo, not ported from Sage_v1 (invariant 5;
+the user was asked). New dependency: `@base-ui/react`, at the user's request.

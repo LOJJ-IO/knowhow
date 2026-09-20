@@ -192,7 +192,7 @@ Not designed. **The sign-in and onboarding screens live inside the Log In slide-
 - **Owner join controls (2026-09-18, migration `0004_owner_join_controls`):** `GET /organizations/{id}/members/pending` (owner only), `PATCH /organizations/{id}/settings` `{auto_accept_workspace_members}` (owner only); `confirm_owner_on_sign_in` on every signup/login; `super_admin_email` on the org-chart request → `OrgChart.nominated_super_admin_email`; `/auth/me` returns `is_owner`. Fixes the "owner confirmation is possession-only" gap for the sign-in path (the old token link still works).
 - **Confirmed live 2026-09-18:** Google sends `hd = ualberta.ca` for the user's UAlberta account — the real sign-in created an org with `observed_domain = ualberta.ca`. `/auth/me` also returns `needs_org_setup` (founding member, no org chart yet).
 - Tests: `backend/tests/test_domain_check.py` against a real Postgres test DB (`knohow_test`).
-- **Not built:** identity linking (next pass), invite-link path, org rename, admin proof, any frontend for `?signup=personal` / standing.
+- **Not built:** ~~identity linking~~ — **built 2026-09-20** ([[0012-identity-linking-one-person-many-accounts]]; one org account + many personal, links only ever made deliberately, no UI to create one yet), invite-link path, org rename, admin proof, any frontend for `?signup=personal` / standing.
 
 Gaps as of 2026-09-16 (struck where fixed 2026-09-18):
 The backend already asks the two authority questions separately (`create_org_chart(is_owner, is_super_admin, owner_email)`, owner confirmation tokens) — see `backend/app/onboarding/service.py`. Gaps against this spec (as of 2026-09-16):

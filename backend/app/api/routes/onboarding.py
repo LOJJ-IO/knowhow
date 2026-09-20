@@ -11,11 +11,13 @@ from app.api.routes.auth import (  # reuse: same cookie contract as login
     set_session_cookies,
     signup_redirect,
 )
+from app.auth.identity import start_link_account_for_pending_personal
 from app.auth.pkce import InvalidOAuthState
 from app.models.invitation import InvitationKind
 from app.models.org_member import OrgMember
 from app.onboarding.service import (
     add_member,
+    decode_pending_personal_signup_token,
     approve_member,
     list_invitations,
     list_pending_members,
@@ -54,18 +56,43 @@ def signup_callback(code: str, state: str, db: Session = Depends(get_db)) -> Red
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
 
+@router.get("/onboarding/link-org-account")
+def link_org_account(knohow_pending_signup: str | None = Cookie(default=None)) -> RedirectResponse:
+    """"Yes, my company uses Google Workspace" — sends them to sign in to the
+    work account. The personal identity they already proved is carried in the
+    OAuth state and recorded against the same person on the way back; **no
+    personal org is created** (user, 2026-09-20)."""
+    if knohow_pending_signup is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no pending personal signup — sign in with Google again")
+    try:
+        payload = decode_pending_personal_signup_token(knohow_pending_signup)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    start = start_link_account_for_pending_personal(payload["email"])
+    return RedirectResponse(start.authorization_url, status_code=status.HTTP_302_FOUND)
+
+
+class PersonalOrgRequest(BaseModel):
+    """What the person called their own workspace. The Log In picker leads
+    with the org name, so this is the label they'll see next time."""
+
+    name: str | None = None
+
+
 @router.post("/onboarding/personal-org")
 def personal_org(
     response: Response,
+    payload: PersonalOrgRequest | None = None,
     db: Session = Depends(get_db),
     knohow_pending_signup: str | None = Cookie(default=None),
 ) -> dict:
     """The "No / just me" answer after a personal-account sign-in: creates
-    the person's domainless org and starts their session."""
+    the person's domainless org, under the name they chose, and starts their
+    session. That name is what the Log In picker shows for this row."""
     if knohow_pending_signup is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no pending personal signup — sign in with Google again")
     try:
-        result = create_domainless_org(knohow_pending_signup, db)
+        result = create_domainless_org(knohow_pending_signup, db, name=payload.name if payload else None)
     except ValueError as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
