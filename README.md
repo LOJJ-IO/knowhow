@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Knohow
 
-## Getting Started
+Google Workspace knowledge and ownership control — company files stay company-owned.
 
-First, run the development server:
+The **product** is spelled **Knohow**. This repo folder and the engineering vault still use `knowhow`.
+
+## What’s in the repo
+
+| Path | Role |
+|---|---|
+| `src/` | Next.js landing (App Router) — `/`, `/terms`, `/privacy` |
+| `public/` | Served assets (`hero/`, `deck/`, marks) |
+| `backend/` | FastAPI service — Google OAuth, org identity, Drive tooling (local / not deployed yet) |
+| `second-brain/` | Engineering memory (Obsidian vault) — start at [`Current/Current-Context.md`](second-brain/Current/Current-Context.md) |
+| `docs/business/` | Non-app business / scratch media |
+
+Agent-oriented invariants and write-back rules live in [`AGENTS.md`](AGENTS.md) and [`CLAUDE.md`](CLAUDE.md).
+
+## Frontend (landing)
 
 ```bash
+cp .env.example .env   # NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Stack: Next.js 16 · React 19 · Tailwind v4 · TypeScript. The landing works without the backend; **Continue with Google** needs the backend running.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Backend (optional for landing)
 
-## Learn More
+Python 3.12 · FastAPI · SQLAlchemy · Alembic · Postgres.
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cd backend
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # fill Google + DB keys — see docs/gcp-setup.md
+alembic upgrade head
+uvicorn app.main:app --port 8000 --reload
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+GCP / Railway production deploy is not provisioned yet. Details: [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Scripts
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Next.js dev server |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | ESLint |
