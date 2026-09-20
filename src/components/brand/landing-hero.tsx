@@ -39,12 +39,17 @@ const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL;
 
 /** Hands the browser to the backend's Google sign-in. `/onboarding/signup` signs in existing members and bootstraps new ones, so one button covers both.
  *  An invite token (from a forwarded `?invite=` link) pre-selects the invited Google account. */
-function continueWithGoogle(inviteToken?: string | null) {
+function continueWithGoogle(inviteToken?: string | null, emailHint?: string | null) {
   if (!BACKEND_API_URL) {
     console.error("NEXT_PUBLIC_BACKEND_API_URL is not set — cannot start Google sign-in.");
     return;
   }
-  const query = inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : "";
+  // `email` only pre-selects the account at Google (login_hint) — Google
+  // still decides who signs in, so a remembered row grants nothing.
+  const params = new URLSearchParams();
+  if (inviteToken) params.set("invite", inviteToken);
+  if (emailHint) params.set("email", emailHint);
+  const query = params.size ? `?${params}` : "";
   // External origin (the backend), not a Next.js route — a router push can't leave the app.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.assign(`${BACKEND_API_URL}/onboarding/signup${query}`);
@@ -91,6 +96,38 @@ async function backendError(res: Response): Promise<string> {
   if (Array.isArray(detail) && typeof detail[0]?.msg === "string")
     return detail[0].msg;
   return `Request failed (${res.status})`;
+}
+
+/** One account this browser has signed in with before — the Log In picker.
+ *  The backend keys these to an opaque device cookie, not to a person:
+ *  Knohow can't tell that two Google accounts are the same human. */
+type RememberedAccount = {
+  email: string;
+  display_name: string | null;
+  organization_id: string;
+  organization_name: string;
+};
+
+async function fetchRememberedAccounts(): Promise<RememberedAccount[]> {
+  if (!BACKEND_API_URL) return [];
+  try {
+    const res = await backendFetch("/auth/remembered-accounts");
+    if (!res.ok) return [];
+    return ((await res.json()) as { accounts: RememberedAccount[] }).accounts;
+  } catch {
+    // Backend down — the picker just doesn't appear, and Log In falls back
+    // to "Continue with Google".
+    return [];
+  }
+}
+
+async function forgetRememberedAccounts(): Promise<void> {
+  if (!BACKEND_API_URL) return;
+  try {
+    await backendFetch("/auth/remembered-accounts", { method: "DELETE" });
+  } catch {
+    // Nothing to recover: the caller clears the list either way.
+  }
 }
 
 async function fetchMe(): Promise<Me | null> {
@@ -1836,12 +1873,12 @@ function DemoSegmentStep() {
 /** Choice buttons in the setup steps — the Continue with Google button's look. */
 const SETUP_CHOICE_CLASS = `relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`;
 
-type SetupStep = "owner" | "ownerEmail" | "superAdmin" | "done";
+type SetupStep = "owner" | "ownerEmail" | "superAdmin" | "verifyAdmin" | "done";
 
 /** First sign-in for a new organization: the owner and Super Admin
  *  questions (FEAT-workspace-onboarding-flow). Copy is the spec's wording,
  *  a placeholder until the user designs these screens. */
-function OrgSetupForm({ me }: { me: Me }) {
+function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
   const [step, setStep] = useState<SetupStep>("owner");
   const [isOwner, setIsOwner] = useState(true);
   const [ownerEmail, setOwnerEmail] = useState("");
@@ -1878,7 +1915,9 @@ function OrgSetupForm({ me }: { me: Me }) {
         startAdminProof();
         return;
       }
-      setStep("done");
+      // "No" and "I don't know" both land here: any member may still prove
+      // they're the Workspace admin, and only Google can settle it.
+      setStep("verifyAdmin");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1892,6 +1931,13 @@ function OrgSetupForm({ me }: { me: Me }) {
     >
       {text}
     </h2>
+  );
+  const body = (text: string) => (
+    <p
+      className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+    >
+      {text}
+    </p>
   );
   const errorLine = error ? (
     <p
@@ -2005,6 +2051,31 @@ function OrgSetupForm({ me }: { me: Me }) {
           </button>
         </div>
         {errorLine}
+      </div>
+    );
+
+  // Nobody has to know who the Super Admin is: whoever passes admin proof is
+  // it. Google asks for an extra permission, so this can't run at sign-in —
+  // it needs its own round trip, hence a button. PLACEHOLDER copy.
+  if (step === "verifyAdmin")
+    return (
+      <div>
+        {heading("Not sure who your Workspace admin is?")}
+        {body(
+          "If you're a Google Workspace admin, Google can confirm it. You'll be asked for one extra permission.",
+        )}
+        <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={startAdminProof}
+          >
+            Verify I&rsquo;m the Workspace admin
+          </button>
+          <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
+            Skip for now
+          </button>
+        </div>
       </div>
     );
 
@@ -2178,6 +2249,117 @@ function SignInResultPanel({
         </div>
       );
   }
+}
+
+/** Initial-circle tints. Google gives us no profile picture (`/auth/me`
+ *  returns a name and an email only), so a row's avatar is the initial on a
+ *  tint picked deterministically from the email — same account, same colour
+ *  every visit. PLACEHOLDER palette. */
+const AVATAR_TINTS = ["#2F6F4E", "#8E3B8E", "#2F6F8E", "#8E5A2F", "#4A3F8E"];
+
+function avatarTint(email: string) {
+  let hash = 0;
+  for (const ch of email) hash = (hash * 31 + ch.charCodeAt(0)) % 100003;
+  return AVATAR_TINTS[hash % AVATAR_TINTS.length];
+}
+
+/** "Which account today?" — the accounts this browser has signed in with.
+ *  Shown instead of the plain Log In screen when there are any. PLACEHOLDER
+ *  copy. */
+function AccountPicker({
+  accounts,
+  onForget,
+}: {
+  accounts: RememberedAccount[];
+  /** "Remove accounts" succeeded — the picker gives way to the Log In screen. */
+  onForget: () => void;
+}) {
+  const [forgetting, setForgetting] = useState(false);
+  // The org is worth naming only when the rows don't all lead to the same
+  // place; on one org it's noise (user 2026-09-20).
+  const orgs = new Set(accounts.map((a) => a.organization_id));
+  const showOrg = orgs.size > 1;
+
+  return (
+    <>
+      <h2
+        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      >
+        Which account today?
+      </h2>
+      <p
+        className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+      >
+        Pick up where you left off or continue as another user.
+      </p>
+      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-1 p-0`}>
+        {accounts.map((account) => (
+          <li key={account.email}>
+            <button
+              type="button"
+              disabled={forgetting}
+              onClick={() => continueWithGoogle(null, account.email)}
+              className="flex w-full cursor-pointer items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2 text-left transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60"
+            >
+              <span
+                aria-hidden
+                style={{ backgroundColor: avatarTint(account.email) }}
+                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
+              >
+                {(account.display_name || account.email).charAt(0).toUpperCase()}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
+                  {account.display_name || account.email}
+                </span>
+                <span className="block truncate text-[0.8rem] text-[#1c1917]/70">
+                  {account.email}
+                  {showOrg ? ` · ${account.organization_name}` : ""}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className={`${satoshi.className} mt-6 flex items-center gap-3`}>
+        <span className="h-px flex-1 bg-[#d9d9de]" />
+        <span className="text-[0.75rem] text-[#1c1917]/70">OR</span>
+        <span className="h-px flex-1 bg-[#d9d9de]" />
+      </div>
+      <button
+        type="button"
+        disabled={forgetting}
+        onClick={() => continueWithGoogle(readInviteToken())}
+        className={`${satoshi.className} relative mt-6 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
+      >
+        Continue with another account
+      </button>
+      <p
+        className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+      >
+        By continuing, you agree to Knohow&rsquo;s{" "}
+        <span className="font-bold">
+          <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
+        </span>
+        . Read our{" "}
+        <span className="font-bold">
+          <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
+        </span>
+        .
+      </p>
+      <button
+        type="button"
+        disabled={forgetting}
+        onClick={() => {
+          setForgetting(true);
+          void forgetRememberedAccounts().then(onForget);
+        }}
+        className={`${satoshi.className} mt-4 cursor-pointer text-[0.8rem] font-bold text-[#1c1917] underline underline-offset-2 disabled:cursor-default disabled:opacity-60`}
+      >
+        Remove accounts
+      </button>
+    </>
+  );
 }
 
 /** Book a Demo's reservation window, from first open (`DEMO_RESERVED_MS`). */
@@ -2478,6 +2660,12 @@ function LandingHero() {
   const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
   /** Who's signed in (backend `/auth/me`), once known. */
   const [me, setMe] = useState<Me | null>(null);
+  /** Accounts this browser has used before. Fetched on mount, not on open,
+   *  so the modal sizes once (the Cal embed taught us that — see
+   *  FEAT-landing-book-a-demo). */
+  const [rememberedAccounts, setRememberedAccounts] = useState<
+    RememberedAccount[]
+  >([]);
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** When Book a Demo first opened this visit — its "reserved" countdown
@@ -2522,6 +2710,16 @@ function LandingHero() {
 
   // Back from Google sign-in: if this person still has to set up their new
   // organization, reopen the sheet on the setup questions.
+  useEffect(() => {
+    let cancelled = false;
+    void fetchRememberedAccounts().then((accounts) => {
+      if (!cancelled) setRememberedAccounts(accounts);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     void fetchMe().then((result) => {
@@ -2929,7 +3127,12 @@ function LandingHero() {
         {/* Centred modal — Log In or Book a Demo content. */}
         <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
           <LoginModal open={sheetAtTop}>
-            {sheetKind === "login" ? (
+            {sheetKind === "login" && rememberedAccounts.length > 0 ? (
+              <AccountPicker
+                accounts={rememberedAccounts}
+                onForget={() => setRememberedAccounts([])}
+              />
+            ) : sheetKind === "login" ? (
               <>
                 <h2
                   className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
@@ -2964,7 +3167,13 @@ function LandingHero() {
                 </p>
               </>
             ) : sheetKind === "setup" && me ? (
-              <OrgSetupForm me={me} />
+              <OrgSetupForm
+                me={me}
+                onDone={() => {
+                  setSheetAtTop(false);
+                  setSheetOpen(false);
+                }}
+              />
             ) : sheetKind === "result" && signInResult ? (
               <SignInResultPanel
                 result={signInResult}

@@ -35,9 +35,12 @@ router = APIRouter(tags=["onboarding"])
 
 @router.get("/onboarding/signup")
 def signup(
-    switch_account: bool = False, invite: str | None = None, db: Session = Depends(get_db)
+    switch_account: bool = False,
+    invite: str | None = None,
+    email: str | None = None,
+    db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = start_signup(switch_account=switch_account, invite_token=invite, db=db)
+    result = start_signup(switch_account=switch_account, invite_token=invite, db=db, email_hint=email)
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
 

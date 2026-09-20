@@ -1,16 +1,16 @@
 ---
 type: feature
 status: in-progress
-tags: [area/frontend]
+tags: [area/frontend, area/backend]
 created: 2026-09-17
-updated: 2026-09-19
+updated: 2026-09-20
 related: ["[[FEAT-landing-login-panel]]", "[[FEAT-landing-header-nav]]", "[[Current-Context]]"]
 ---
 
 # FEAT: Landing Book a Demo sheet
 
 ## Status
-`in-progress` — sheet + form built 2026-09-17; **segment step added 2026-09-19**; nothing is submitted anywhere yet.
+`in-progress` — sheet + form + segment + Cal embed built; **abandoned-demo Resend recovery decided 2026-09-20 (not built)** — leads must persist to `backend/` once a valid work email exists.
 
 ## Problem
 The desktop header's **Book a Demo** button (renamed from Talk to Sales 2026-09-17, [[FEAT-landing-header-nav]]) did nothing. User: "a replica of log in but the modal's content should be" a demo-request form (reference screenshot: "Get Started", First/Last name, Work email, Company website, Continue pill with an arrow circle).
@@ -66,19 +66,67 @@ Skip / Continue replaces the segment cards with the user's **Cal.com booking emb
 Verified in-browser 2026-09-17: empty Continue → both name fields shake/red, focus on First name; names filled → email grows in, focused; bad email → only email flagged; valid email → website grows in, focused; all valid → nothing flagged; Close → Log In still shows its own content; no page errors.
 
 ## Out of scope
-- Sending the request anywhere (no backend endpoint, no email, no CRM) — not asked.
 - Mobile trigger — there's no Book a Demo control on mobile (same as Log In).
 - Success/confirmation state after a valid submit (Cal owns the confirmation once a slot is booked).
+- Multi-email drip sequences (one shot only — see abandoned recovery below).
+- Marketing / promotional email — abandoned recovery is **transactional only**.
+
+## Abandoned demo recovery — Resend (decided 2026-09-20, not built)
+If someone starts Book a Demo and goes idle, send **one** Resend email after **20 minutes** of inactivity asking them to continue. Email copy/templates TBD (user will supply).
+
+**Rules (user):**
+- **Clock arm:** first time a **valid work email** is present. Before that, nothing can be emailed.
+- **Inactivity:** no typing and no clicks **inside the demo sheet** for 20 minutes — whether the sheet stays open or they Close / leave. Clicks elsewhere on the landing (deck, Get Started, etc.) do **not** reset the idle timer. Any activity **inside** the sheet resets the 20‑minute idle timer. (The 5:00 "reserved" hold always expires first; the nudge is intentionally after Hold Expired.)
+- **Which steps can trigger a send:** only **earlier** steps (fields + segment) — **not** the Cal booking screen. If they reach Cal and go idle there, no recovery email.
+- **One shot** — only one recovery email per lead; no follow-up sequence.
+- **Cancel / suppress send if** any of: they **book on Cal**, they **reopen Book a Demo**, or they **click the email CTA** (resume link).
+- **Resume:** deep link reopens Book a Demo at the **step they stopped on**, with fields **prefilled**, so Continue advances to the next step.
+- **Tone:** personalized transactional; **structure copied from a Lance reference email** (user pasted 2026-09-20) — see Email template below. Final Knohow wording TBD where noted.
+- **From:** `noreply@knohow.app` (user 2026-09-20). Needs Resend domain verification for `knohow.app` before sends work. Body may still be signed by a person (Lance-style) even when the envelope From is noreply.
+- **Storage / send:** `backend/` owns the lead record + idle scheduler + Resend send. Frontend must persist partial progress once email is valid (and heartbeat / last-activity updates **from sheet interaction only**).
+
+### Email template (reference → Knohow mapping)
+
+Lance reference the user wants to mirror (hotel onboarding abandon):
+
+> Hey Ronald,  
+> Great to meet you - I'm Caleb, one of the co-founders of Lance. It looks like you started telling us about your hotel but got pulled away. No worries; it happens all the time.  
+> You can pick up right where you left off here:  
+> **Continue getting started**  
+> It takes about two minutes, and you'll have the option to book time on my calendar at the end if that would be helpful. I would love to chat!  
+> Cheers,  
+> Caleb Chan · Chief Executive Officer · Lance  
+> Email · LinkedIn
+
+**Locked structure for Knohow:**
+1. Greeting with **first name**
+2. Short intro of who is writing + that they're with Knohow
+3. Soft line: you started [demo / telling us about your org] but got pulled away — no guilt
+4. Single CTA: continue where they left off (deep link) — label TBD (Lance: "Continue getting started")
+5. ~two minutes + mention they can book time on the calendar at the end
+6. Personal sign-off (name, title, Knohow, email, LinkedIn)
+
+**Still need from user (don't invent):**
+- Signer name / title / personal email / LinkedIn URL (envelope is `noreply@…`; body sign-off is human)
+- Exact body copy (or approve a draft)
+- CTA button label
+- Subject line
+- How to phrase the "pulled away" line when we know segment (Agencies / Startups / …) vs when we only have name + email
+
+**Still open for this slice:**
+- Resume token format / expiry (should not put PII in the URL).
+- Cal booking webhook (or equivalent) so "booked" can cancel a pending send — still needed even though idle-on-Cal does not *trigger* a send (they might book after the email was already queued from an earlier step).
+- Resend account + DNS for `knohow.app` (SPF/DKIM) so `noreply@knohow.app` can actually send — From address decided; domain verification is a user provisioning step.
 
 ## Open questions
 - **Long browser messages wrap:** Chrome's invalid-email text ("Please include an '@' in the email address. 'x' is missing an '@'.") takes two lines at 420px, so the modal grows ~20px (animated by `.t-resize`). Options: custom copy, single-line truncation, or accept it.
 - Browser validation text differs per browser/locale.
-- Where a valid request goes, and what the user sees afterwards.
 - Company website: any format check (currently required only).
 - Segment card copy (titles + blurbs, including Other's "Tell us below.") — placeholder until the user writes it.
-- Whether the picked segment **and the Other text** are sent anywhere once there's a destination (both local state today) — Cal takes name/email again on its own form, so the demo fields are currently collected twice.
+- Whether the picked segment **and the Other text** are stored on the backend lead (needed for personalized email + resume) — leaning yes once abandoned recovery ships.
 - **Embed size:** 920 × 538 on the booking step (`useSlotsViewOnSmallScreen` still set); 538 is Cal's own `month_view` height at that width, measured at 1470×956. If Cal's height differs at other widths/layouts the slot won't follow — it's fixed on purpose (see the double-bounce fix).
 - ~~Booking screen not yet opened in a browser~~ — verified 2026-09-20 at 1470×956 (Playwright): single growth 530 → 540px, modal 920×540 centred, card centred, no page errors. Other viewports still unverified; **mobile is untested** and there's no mobile Book a Demo trigger anyway.
+- ~~Where a valid request goes~~ — partial leads → backend; recovery → Resend; booking still Cal (see abandoned recovery).
 
 ## Related
 [[FEAT-landing-login-panel]] · [[FEAT-landing-header-nav]] · [[FEAT-workspace-onboarding-flow]]

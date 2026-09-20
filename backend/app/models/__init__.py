@@ -9,6 +9,7 @@ from app.models.org_member import AuthType, OrgMember
 from app.models.org_membership import OrgMembership, OrgRole
 from app.models.organization import Organization
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
+from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
 from app.models.transfer_batch import (
@@ -38,6 +39,7 @@ __all__ = [
     "PendingReassignment",
     "ProcessedActivityEvent",
     "ReassignmentStatus",
+    "RememberedAccount",
     "SuggestedShare",
     "SuggestedShareStatus",
     "Team",

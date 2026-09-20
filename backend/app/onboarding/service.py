@@ -346,7 +346,12 @@ class SignupStart:
     state: str
 
 
-def start_signup(switch_account: bool = False, invite_token: str | None = None, db: Session | None = None) -> SignupStart:
+def start_signup(
+    switch_account: bool = False,
+    invite_token: str | None = None,
+    db: Session | None = None,
+    email_hint: str | None = None,
+) -> SignupStart:
     """Google OAuth, same as app/auth/login.py's login flow (same scopes,
     same PKCE primitives — imported, not reimplemented) but with its own
     state purpose, so the callback knows a brand-new Organization/OrgMember
@@ -358,7 +363,12 @@ def start_signup(switch_account: bool = False, invite_token: str | None = None, 
 
     invite_token (from a forwarded `?invite=` link) pre-selects the invited
     Google account; the invitation is still only accepted by signing in as
-    that account."""
+    that account.
+
+    email_hint comes from picking a row in the Log In account picker. Like
+    the invite hint it only pre-selects the account at Google — it proves
+    nothing and grants nothing, and Google still decides who signs in. An
+    invitation's own email always wins over it."""
     invitation = find_invitation(invite_token, db) if invite_token and db is not None else None
     code_verifier = generate_code_verifier()
     code_challenge = derive_code_challenge(code_verifier)
@@ -374,7 +384,7 @@ def start_signup(switch_account: bool = False, invite_token: str | None = None, 
         code_challenge=code_challenge,
         access_type="online",
         prompt="select_account" if switch_account else None,
-        login_hint=invitation.email if invitation and invitation.email else None,
+        login_hint=(invitation.email if invitation and invitation.email else None) or email_hint,
     )
     return SignupStart(authorization_url=url, state=state)
 

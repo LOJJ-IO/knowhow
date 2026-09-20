@@ -8,6 +8,7 @@ from app.api.deps import get_current_member, get_db
 from app.auth.login import complete_login, start_login
 from app.auth.personal_oauth import complete_personal_oauth_consent, start_personal_oauth_consent
 from app.auth.pkce import InvalidOAuthState, peek_state_purpose
+from app.auth.remembered import forget_device, list_remembered_accounts, remember_account
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.google.directory import DirectoryLookupError
@@ -31,6 +32,11 @@ logger = get_logger(__name__)
 ACCESS_COOKIE = "knohow_access_token"
 REFRESH_COOKIE = "knohow_refresh_token"
 PENDING_PERSONAL_SIGNUP_COOKIE = "knohow_pending_signup"
+# Opaque per-browser id behind the Log In account picker. Long-lived on
+# purpose — it has to outlive sessions to be worth anything — and it names
+# no one by itself; the accounts it maps to are removable from the picker.
+DEVICE_COOKIE = "knohow_device"
+DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 ADMIN_PROOF_START_PATH = "/auth/admin-proof/start"
 
 
@@ -40,6 +46,26 @@ def cookie_kwargs() -> dict:
     return {"httponly": True, "secure": is_prod, "samesite": "none" if is_prod else "lax"}
 
 
+def remember_on_this_device(
+    response: Response, device_cookie: str | None, member: OrgMember, db: Session
+) -> None:
+    """Adds the member to this browser's account picker, minting the device
+    id if the browser doesn't have one yet. Failing to remember must never
+    fail a sign-in, so this is best-effort."""
+    try:
+        device_id = uuid.UUID(device_cookie) if device_cookie else uuid.uuid4()
+    except ValueError:
+        device_id = uuid.uuid4()
+    try:
+        remember_account(device_id, member, db)
+    except Exception as exc:  # noqa: BLE001 - never break sign-in over the picker
+        logger.warning("auth.remember_account_failed", error=str(exc))
+        return
+    response.set_cookie(
+        DEVICE_COOKIE, str(device_id), max_age=DEVICE_COOKIE_MAX_AGE, **cookie_kwargs()
+    )
+
+
 def set_session_cookies(response: Response, access_token: str, refresh_token: str) -> None:
     settings = get_settings()
     kwargs = cookie_kwargs()
@@ -47,7 +73,9 @@ def set_session_cookies(response: Response, access_token: str, refresh_token: st
     response.set_cookie(REFRESH_COOKIE, refresh_token, max_age=settings.jwt_refresh_token_ttl_seconds, **kwargs)
 
 
-def signup_redirect(result: SignupResult) -> RedirectResponse:
+def signup_redirect(
+    result: SignupResult, device_cookie: str | None = None, db: Session | None = None
+) -> RedirectResponse:
     """Where the browser goes after a signup callback. A personal Google
     account with no org yet gets no session — only a short-lived pending
     cookie — and `?signup=personal`, so the frontend can ask whether their
@@ -75,6 +103,8 @@ def signup_redirect(result: SignupResult) -> RedirectResponse:
         location = settings.frontend_origin
     response = RedirectResponse(location, status_code=status.HTTP_302_FOUND)
     set_session_cookies(response, result.login.access_token, result.login.refresh_token)
+    if db is not None:
+        remember_on_this_device(response, device_cookie, result.login.member, db)
     return response
 
 
@@ -98,14 +128,19 @@ def login() -> RedirectResponse:
 
 
 @router.get("/callback")
-def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
+def login_callback(
+    code: str,
+    state: str,
+    db: Session = Depends(get_db),
+    knohow_device: str | None = Cookie(default=None),
+) -> RedirectResponse:
     settings = get_settings()
     try:
         # Signup shares this redirect URI with login (one GOOGLE_OAUTH_REDIRECT_URI),
         # so Google returns a signup here too — route it by its state purpose.
         purpose = peek_state_purpose(state)
         if purpose == SIGNUP_STATE_PURPOSE:
-            return signup_redirect(complete_signup(code, state, db))
+            return signup_redirect(complete_signup(code, state, db), knohow_device, db)
         if purpose == ADMIN_PROOF_STATE_PURPOSE:
             return admin_proof_redirect(code, state, db)
         result = complete_login(code, state, db)
@@ -125,6 +160,7 @@ def login_callback(code: str, state: str, db: Session = Depends(get_db)) -> Redi
         ADMIN_PROOF_START_PATH if needs_admin_proof else settings.frontend_origin, status_code=status.HTTP_302_FOUND
     )
     set_session_cookies(response, result.access_token, result.refresh_token)
+    remember_on_this_device(response, knohow_device, result.member, db)
     return response
 
 
@@ -156,6 +192,8 @@ def refresh(
 
 @router.post("/logout")
 def logout(response: Response) -> dict:
+    # DEVICE_COOKIE deliberately survives: after logging out the picker
+    # should still offer the account ("pick up where you left off").
     for cookie_name in (ACCESS_COOKIE, REFRESH_COOKIE, PENDING_PERSONAL_SIGNUP_COOKIE):
         response.delete_cookie(cookie_name)
     return {"status": "logged_out"}
@@ -174,6 +212,51 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "needs_org_setup": needs_org_setup(member, db),
         "is_super_admin": member.super_admin_verified_at is not None,
     }
+
+
+@router.get("/remembered-accounts")
+def remembered_accounts(
+    db: Session = Depends(get_db), knohow_device: str | None = Cookie(default=None)
+) -> dict:
+    """Accounts this browser has signed in with, newest first — the Log In
+    screen's account picker. Unauthenticated on purpose: it runs *before*
+    sign-in, and the device cookie is the only thing identifying the browser.
+    It returns names and emails, so it stays limited to what this browser
+    itself did; it never reveals an organization's members."""
+    if not knohow_device:
+        return {"accounts": []}
+    try:
+        device_id = uuid.UUID(knohow_device)
+    except ValueError:
+        return {"accounts": []}
+    return {
+        "accounts": [
+            {
+                "email": account.email,
+                "display_name": account.display_name,
+                "organization_id": str(account.organization_id),
+                "organization_name": account.organization_name,
+            }
+            for account in list_remembered_accounts(device_id, db)
+        ]
+    }
+
+
+@router.delete("/remembered-accounts")
+def remove_remembered_accounts(
+    response: Response, db: Session = Depends(get_db), knohow_device: str | None = Cookie(default=None)
+) -> dict:
+    """"Remove accounts" on the picker. Forgets every account on this
+    browser and drops the device cookie, so the next sign-in starts a fresh
+    device. Nothing about the members or their orgs changes."""
+    removed = 0
+    if knohow_device:
+        try:
+            removed = forget_device(uuid.UUID(knohow_device), db)
+        except ValueError:
+            removed = 0
+    response.delete_cookie(DEVICE_COOKIE)
+    return {"removed": removed}
 
 
 @router.get("/admin-proof/start")
