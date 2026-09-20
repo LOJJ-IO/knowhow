@@ -3,11 +3,14 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-19
+updated: 2026-09-20
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]"]
 ---
 
 # Current Context
+
+## Repo root cleanup (2026-09-20)
+Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Cleanup staged, not committed yet.
 
 ## ✅ Backend merged into `main` (2026-09-15)
 The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].

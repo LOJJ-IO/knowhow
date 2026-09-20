@@ -34,6 +34,8 @@ This repo has an Obsidian vault at [`second-brain/`](second-brain/00-Home.md) th
 - `src/lib/` — small shared helpers (`utils.ts`, `use-hydrated.ts`). No data/auth/workspace layer in tree right now.
 - `src/components/brand/` — landing UI (`landing-hero`, `logo-mark`, `logo-lockup`, `fonts`).
 - `src/components/legal/` — shared layout for the legal pages.
+- `public/` — served assets only (`hero/`, `deck/`, marks). Do not keep duplicate copies at the repo root.
+- `docs/business/` — non-app business/scratch media (proposals, projections, draft video).
 - `second-brain/` — persistent engineering memory (see above).
 - `backend/` — merged into `main` 2026-09-15. A separate FastAPI (Python 3.12) service — real Google OAuth/Drive/Admin-SDK integration, SQLAlchemy 2.x + Alembic, meant for Railway + Postgres. Not deployed/provisioned yet (no GCP project, no Railway instance). See [`second-brain/Architecture/Architecture-Overview.md`](second-brain/Architecture/Architecture-Overview.md)'s "Backend integration contract" section before writing any frontend code that calls it.
 
