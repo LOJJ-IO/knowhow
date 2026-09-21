@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit_entry
 from app.exceptions import CrossOrgAccessDenied
 from app.models.org_membership import OrgMembership, OrgRole
+from app.models.organization import Organization
 from app.models.team import Team
 from app.offboarding.service import OffboardResult, revoke_and_offboard
 
@@ -17,6 +18,40 @@ def _require_team_in_org(team_id: uuid.UUID, org_id: uuid.UUID, db: Session) -> 
     if team.org_id != org_id:
         raise CrossOrgAccessDenied(f"team {team_id} does not belong to organization {org_id}")
     return team
+
+
+def rename_organization(
+    org_id: uuid.UUID,
+    name: str,
+    actor_member_id: uuid.UUID,
+    db: Session,
+) -> Organization:
+    """What the organization is called. A Workspace org is created with its
+    hosted domain as the name (`acme.org`), which is a placeholder, not a
+    name anyone chose: setup asks the founder for the real one, and it is what
+    everyone else sees on the invite link and in the account picker."""
+    trimmed = name.strip()
+    if not trimmed:
+        raise ValueError("organization name cannot be empty")
+
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise ValueError(f"no Organization with id={org_id}")
+
+    previous = org.name
+    org.name = trimmed
+    db.commit()
+    db.refresh(org)
+
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor_member_id,
+        action_type="organization.renamed",
+        target_resource_id=str(org_id),
+        details={"from": previous, "to": trimmed},
+        db=db,
+    )
+    return org
 
 
 def create_team(
@@ -43,6 +78,41 @@ def create_team(
         db=db,
     )
     return team
+
+
+def delete_team(
+    org_id: uuid.UUID,
+    team_id: uuid.UUID,
+    actor_member_id: uuid.UUID,
+    db: Session,
+) -> None:
+    """Removes a team typed by mistake during setup. Teams are saved the moment
+    they're added ([[0014-org-setup-and-join-link]]), so the only way back out
+    of a typo is a delete. Deliberately refuses once the team has people or
+    child teams in it: at that point removing it is an org-chart change with
+    consequences for someone's access, not an undo, and it needs its own
+    screen rather than the setup list's Remove control."""
+    team = _require_team_in_org(team_id, org_id, db)
+
+    members = db.execute(select(OrgMembership).where(OrgMembership.team_id == team_id)).scalars().all()
+    if members:
+        raise ValueError("team has people in it")
+    children = db.execute(select(Team).where(Team.parent_team_id == team_id)).scalars().all()
+    if children:
+        raise ValueError("team has teams under it")
+
+    name = team.name
+    db.delete(team)
+    db.commit()
+
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor_member_id,
+        action_type="org_chart.team.deleted",
+        target_resource_id=str(team_id),
+        details={"name": name},
+        db=db,
+    )
 
 
 def edit_team(

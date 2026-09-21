@@ -25,6 +25,7 @@ import {
   type DemoLeadStep,
 } from "@/lib/demo-lead";
 import Link from "next/link";
+import { UserRoundX } from "lucide-react";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
@@ -91,6 +92,8 @@ function startAdminProof() {
 /** The backend's `/auth/me` — who's signed in, if anyone. */
 type Me = {
   organization_id: string;
+  organization_name: string;
+  organization_domain: string | null;
   email: string;
   standing: "approved" | "auto_affiliated";
   is_owner: boolean;
@@ -2120,12 +2123,30 @@ function DemoSizeStep({
 /** Choice buttons in the setup steps — the Continue with Google button's look. */
 const SETUP_CHOICE_CLASS = `relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`;
 
+const setupHeading = (text: string) => (
+  <h2
+    className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+  >
+    {text}
+  </h2>
+);
+
+const setupBody = (text: string) => (
+  <p
+    className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+  >
+    {text}
+  </p>
+);
+
 type SetupStep =
   | "owner"
   | "knowOwnerEmail"
   | "ownerEmail"
   | "superAdmin"
   | "verifyAdmin"
+  | "orgName"
+  | "teams"
   | "done";
 
 /** First sign-in for a new organization: the owner and Super Admin
@@ -2134,6 +2155,9 @@ type SetupStep =
 function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
   const [step, setStep] = useState<SetupStep>("owner");
   const [isOwner, setIsOwner] = useState(true);
+  // Starts as whatever the org is called now (its domain, until the naming
+  // screen replaces it) so the teams heading always has something to say.
+  const [orgName, setOrgName] = useState(me.organization_name);
   const [ownerEmail, setOwnerEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -2178,20 +2202,8 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
     }
   }
 
-  const heading = (text: string) => (
-    <h2
-      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
-    >
-      {text}
-    </h2>
-  );
-  const body = (text: string) => (
-    <p
-      className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
-    >
-      {text}
-    </p>
-  );
+  const heading = setupHeading;
+  const body = setupBody;
   const errorLine = error ? (
     <p
       aria-live="polite"
@@ -2354,15 +2366,351 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
           >
             Verify I&rsquo;m the Workspace admin
           </button>
-          <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={() => setStep("orgName")}
+          >
             Skip for now
           </button>
         </div>
       </div>
     );
 
+  // Setup proper: name the organization, then build its teams.
+  if (step === "orgName")
+    return (
+      <OrgNameStep
+        me={me}
+        onDone={(name) => {
+          setOrgName(name);
+          setStep("teams");
+        }}
+      />
+    );
+
+  if (step === "teams")
+    return <TeamsStep me={me} orgName={orgName} onDone={onDone} />;
+
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   return null;
+}
+
+/** A Workspace org is created with its hosted domain as its name, because at
+ *  that moment nobody has been asked. `acme.org` is a placeholder; this turns
+ *  it into the guess a founder is most likely to accept. */
+function suggestOrgName(me: Me): string {
+  const domain = me.organization_domain;
+  // Already named by a human (or a personal org, which was named at creation).
+  if (!domain || me.organization_name.toLowerCase() !== domain.toLowerCase())
+    return me.organization_name;
+  return domain
+    .split(".")[0]
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/** "What's your organization called?" — the first screen of setup proper.
+ *
+ *  Everything downstream reads this name: the invite link's sign-in screen,
+ *  the "already with {OtherOrg}" refusal, and the Log In account picker. Left
+ *  unasked it would read `acme.org` in all three. */
+function OrgNameStep({
+  me,
+  onDone,
+}: {
+  me: Me;
+  onDone: (name: string) => void;
+}) {
+  const [name, setName] = useState(() => suggestOrgName(me));
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus();
+    // The guess is a suggestion, not an answer: selecting it means one
+    // keystroke replaces it for anyone whose name isn't their domain.
+    input.select();
+  }, []);
+
+  async function submit() {
+    const trimmed = name.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await backendFetch(`/organizations/${me.organization_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) throw new Error(await backendError(res));
+      const org = await res.json();
+      onDone(org.name);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      {setupHeading("What\u2019s your organization called?")}
+      {setupBody("This is the name your team sees when they join.")}
+
+      <div className={`t-input-wrap ${satoshi.className} mt-6 flex flex-col`}>
+        <input
+          ref={inputRef}
+          type="text"
+          autoComplete="off"
+          aria-label="Organization name"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError("");
+          }}
+          className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+        />
+      </div>
+
+      {error ? (
+        <p
+          aria-live="polite"
+          className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <div className="mt-6 flex justify-end">
+        <button
+          type="submit"
+          disabled={submitting || !name.trim()}
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        >
+          Continue
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** A team as the setup list holds it. Setup only makes flat teams; nesting
+ *  isn't part of this screen. */
+type SetupTeam = { id: string; name: string };
+
+/** "What teams are in your organization?" — the first screen of setup proper
+ *  ([[0014-org-setup-and-join-link]], copy approved 2026-09-21).
+ *
+ *  Each team is written to the backend the moment it's added, not batched at
+ *  Continue: the founder who types three teams and closes the tab comes back
+ *  to those three teams. That's also why every row has Remove — once a typo is
+ *  saved, deleting it is the only way back out. */
+function TeamsStep({
+  me,
+  orgName,
+  onDone,
+}: {
+  me: Me;
+  orgName: string;
+  onDone: () => void;
+}) {
+  const [teams, setTeams] = useState<SetupTeam[]>([]);
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Resume: whatever was saved on an earlier visit is already the list.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await backendFetch(`/org-chart/${me.organization_id}`);
+        if (!res.ok) throw new Error(await backendError(res));
+        const chart = await res.json();
+        if (cancelled) return;
+        setTeams(
+          (chart.teams ?? []).map((t: { id: string; name: string }) => ({
+            id: t.id,
+            name: t.name,
+          })),
+        );
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [me.organization_id]);
+
+  useEffect(() => {
+    if (!loading) inputRef.current?.focus();
+  }, [loading]);
+
+  async function addTeam() {
+    const trimmed = name.trim();
+    if (!trimmed || busy) return;
+    if (teams.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
+      // PLACEHOLDER copy: the approved set doesn't cover a repeated name.
+      setError(`You already have a team called ${trimmed}.`);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${me.organization_id}/teams`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed }),
+        },
+      );
+      if (!res.ok) throw new Error(await backendError(res));
+      const team = await res.json();
+      setTeams((current) => [...current, { id: team.id, name: team.name }]);
+      setName("");
+      setSaved(true);
+      inputRef.current?.focus();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeTeam(team: SetupTeam) {
+    if (busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${me.organization_id}/teams/${team.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) throw new Error(await backendError(res));
+      setTeams((current) => current.filter((t) => t.id !== team.id));
+      setSaved(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault();
+        void addTeam();
+      }}
+    >
+      {setupHeading(`What teams are in ${orgName}?`)}
+      {setupBody("Add the ones that exist today. You can change them later.")}
+
+      <div className={`t-input-wrap ${satoshi.className} mt-6 flex flex-col`}>
+        <input
+          ref={inputRef}
+          type="text"
+          autoComplete="off"
+          aria-label="Team name"
+          placeholder="Team name"
+          value={name}
+          disabled={loading}
+          onChange={(e) => {
+            setName(e.target.value);
+            setError("");
+            setSaved(false);
+          }}
+          className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+        />
+      </div>
+
+      {error ? (
+        <p
+          aria-live="polite"
+          className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+        >
+          {error}
+        </p>
+      ) : (
+        // Quiet confirmation that the last team is already stored, so closing
+        // the tab doesn't feel like losing it.
+        <p
+          aria-live="polite"
+          className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#1c1917]/50 transition-opacity duration-300 ${saved ? "opacity-100" : "opacity-0"}`}
+        >
+          Saved
+        </p>
+      )}
+
+      <button
+        type="submit"
+        disabled={loading || busy || !name.trim()}
+        className={cn(SETUP_CHOICE_CLASS, satoshi.className, "mt-3")}
+      >
+        Add team
+      </button>
+
+      {teams.length > 0 ? (
+        <ul
+          className={`${satoshi.className} m-0 mt-3 flex list-none flex-col gap-2 p-0`}
+        >
+          {teams.map((team) => (
+            <li
+              key={team.id}
+              className="flex h-12 items-center justify-between rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-4"
+            >
+              <span className="text-[1rem] font-bold text-[#1c1917]">
+                {team.name}
+              </span>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void removeTeam(team)}
+                className="cursor-pointer text-[0.85rem] text-[#1c1917]/60 transition-colors hover:text-[#1c1917] disabled:cursor-default disabled:opacity-60"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {/* The pill only exists once there is something to continue with. */}
+      {teams.length > 0 ? (
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDone}
+            className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+          >
+            Continue
+          </button>
+        </div>
+      ) : null}
+    </form>
+  );
 }
 
 /** Outcomes the backend reports back in the URL after a Google round trip. */
@@ -2898,8 +3246,9 @@ function AccountPicker({
       <button
         type="button"
         onClick={() => setRemoving(true)}
-        className={`${satoshi.className} mt-4 cursor-pointer text-[0.8rem] font-bold text-[#1c1917] underline underline-offset-2`}
+        className={`${satoshi.className} mt-4 inline-flex cursor-pointer items-center gap-[4px] border-b border-current pb-px text-[0.8rem] font-bold text-[#1c1917]`}
       >
+        <UserRoundX className="size-[1em] shrink-0" aria-hidden />
         {organizations.length > 1 ? "Remove accounts" : "Remove account"}
       </button>
     </TooltipProvider>

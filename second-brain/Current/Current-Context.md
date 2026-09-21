@@ -3,7 +3,7 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-20
+updated: 2026-09-21
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
@@ -42,6 +42,11 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Personal-account screen** (backend ready 2026-09-18) — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
+
+## Account picker — Remove link icon (2026-09-21)
+Lucide `UserRoundX` before the picker's "Remove account(s)" link only (`gap-[4px]`, same
+size/color as the label, underline spans icon + text). Second-screen heading unchanged. See
+[[FEAT-landing-login-panel]].
 
 ## Log In account picker built (2026-09-20)
 "Which account today?" — the accounts this browser has signed in with, shown instead of the plain
@@ -174,9 +179,45 @@ org, pick a team, enter the app. Security edge cases worked through and locked i
   **Saved as they go** — each team persists as it's typed, so a half-built chart is a real state: setup
   completion is its own flag (not "has teams"), the join link is unsendable until it's set, and a team typed
   by mistake needs a way to be removed.
-Still needed before building: **all copy** (user's to write), and the pending-request state + approver UI +
+- **Copy approved 2026-09-21** for every setup + join screen (founder's teams, Workspace-group import,
+  founder's own team, link creation/lifetime/ready, all four joiner rejection screens, team pick, waiting
+  state, approver list, lead question, resume, removal). Drafted by Claude at the user's request and
+  accepted as written; lives in [[FEAT-workspace-onboarding-flow]] → "Copy for setup + join".
+Still needed before building: the pending-request state + approver UI +
 empty in-app state + link records + team-lead role + admin-proof ownership takeover + a stored onboarding
 state with a resume route don't exist yet.
+
+## Org naming + team creation screens built (2026-09-21)
+**The org was never named.** A Workspace org is created with `name` set to its hosted domain
+(`app/onboarding/service.py:478`), so it was literally called `acme.org` — which would have shown on the
+invite link's sign-in screen, in the "already with {OtherOrg}" refusal and in the Log In picker. Only the
+personal-org path ever asked a human. Fixed: **setup now names the organization first**, prefilled with a
+guess from the domain (`acme.org` → `Acme`), pre-selected so one keystroke replaces it.
+- **Frontend:** `OrgNameStep` + `suggestOrgName` in `src/components/brand/landing-hero.tsx`. Copy: "What's
+  your organization called?" / "This is the name your team sees when they join."
+- **Backend:** `rename_organization` (`app/org_chart/service.py`) + `PATCH /organizations/{org_id}`;
+  `/auth/me` now returns `organization_name` and `organization_domain` for the prefill.
+- Step order in `OrgSetupForm`: owner questions → `verifyAdmin` → **`orgName`** → `teams`.
+
+## Team creation screen built (2026-09-21)
+First screen of setup proper, from the approved copy ([[FEAT-workspace-onboarding-flow]] → "Copy for setup
++ join", [[0014-org-setup-and-join-link]]).
+- **Frontend:** `TeamsStep` in `src/components/brand/landing-hero.tsx` — **"What teams are in {Org}?"**
+  (the name from the screen before; falls back to the org's current name), team-name field + **Add team**, each team **POSTed as it's added** (save-as-you-go), a
+  quiet **Saved** line, one row per team with **Remove**, and a **Continue** pill that only appears once
+  there's at least one team. On mount it **GETs `/org-chart/{org_id}`**, so a founder who closed the tab
+  comes back to the teams they already added. The setup `heading`/`body` helpers were hoisted to module
+  scope (`setupHeading` / `setupBody`) so this screen shares the questions' type.
+- **Wiring:** reached from the `verifyAdmin` step's **"Skip for now"**, which used to close the sheet.
+  The admin-proof return path (`?admin_proof=verified`) still lands in `SignInResultPanel` and does **not**
+  continue into teams yet.
+- **Backend:** `delete_team` (`app/org_chart/service.py`) + `DELETE /organizations/{org_id}/teams/{team_id}`
+  — new, because Remove had nothing to call. Deliberately **refuses once the team has people or child
+  teams**: at that point it's an org-chart change affecting someone's access, not an undo of a typo.
+  7 new tests (`tests/test_team_setup.py`, covering both screens), **96 backend tests pass**; tsc/eslint/next build clean.
+- **Invented copy to review:** the repeated-name error `You already have a team called {name}.` — the
+  approved set doesn't cover duplicates. Marked PLACEHOLDER in the code.
+- **Unverified in a browser** (needs the backend running and a real sign-in).
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.

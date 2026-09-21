@@ -256,6 +256,11 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
     return {
         "id": str(member.id),
         "organization_id": str(member.organization_id),
+        # The org's name starts out as its hosted domain, which nobody chose —
+        # setup asks for the real one. The frontend prefills that field from
+        # the domain, so it needs both.
+        "organization_name": member.organization.name,
+        "organization_domain": member.organization.observed_domain,
         "email": member.email,
         "display_name": member.display_name,
         "auth_type": member.auth_type.value,

@@ -283,14 +283,21 @@ in-app state, stored link records (issuer, chosen lifetime, revoked flag, joins)
 signed URL, a **team lead** role, and an **admin-proof ownership takeover** path. **All copy is the user's
 to write.**
 
-## Copy draft for setup + join (Claude, 2026-09-21, user asked)
-**Status: draft for the user to cut.** Written to match the voice already in the product ("Which account
+## Copy for setup + join (drafted by Claude at the user's request, **approved by the user 2026-09-21**)
+**Status: approved.** The user asked for a draft in their voice and accepted it as written, so this is the
+copy to build against. Changes to it are still the user's call. Written to match the voice already in the product ("Which account
 today?", "Are you the owner of the organization?", "Who's this for?"): short question headlines, sentence
 case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow**. Braces are variables.
 
+### Founder: naming the organization (first screen of setup proper)
+- H: What's your organization called?
+- Sub: This is the name your team sees when they join.
+- Field: prefilled with a guess from the domain (`acme.org` → `Acme`), pre-selected
+- Pill: Continue
+
 ### Founder: building the teams
 **Teams**
-- H: What teams are in your organization?
+- H: What teams are in {Org}? (the name given on the screen before)
 - Sub: Add the ones that exist today. You can change them later.
 - Field placeholder: Team name
 - Add control: Add team

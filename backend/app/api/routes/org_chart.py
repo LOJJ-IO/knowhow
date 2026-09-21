@@ -10,9 +10,11 @@ from app.models.org_membership import OrgRole
 from app.org_chart.service import (
     assign_leader,
     create_team,
+    delete_team,
     edit_team,
     get_org_chart,
     offboard_member,
+    rename_organization,
     remove_membership,
     upsert_membership,
 )
@@ -25,6 +27,22 @@ def read_org_chart(
     org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
 ) -> dict:
     return get_org_chart(org_id, db)
+
+
+class RenameOrganizationRequest(BaseModel):
+    name: str
+
+
+@router.patch("/organizations/{org_id}")
+def rename_organization_route(
+    org_id: uuid.UUID,
+    body: RenameOrganizationRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Setup's first question: what the organization is actually called."""
+    org = rename_organization(org_id, body.name, member.id, db)
+    return {"id": str(org.id), "name": org.name}
 
 
 class CreateTeamRequest(BaseModel):
@@ -66,6 +84,19 @@ def edit_team_route(
         "parent_team_id": str(team.parent_team_id) if team.parent_team_id else None,
         "auto_own_enabled": team.auto_own_enabled,
     }
+
+
+@router.delete("/organizations/{org_id}/teams/{team_id}")
+def delete_team_route(
+    org_id: uuid.UUID,
+    team_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Undo for a team typed by mistake while setting up. Refuses once the team
+    has people or child teams (see `delete_team`)."""
+    delete_team(org_id, team_id, member.id, db)
+    return {"deleted": str(team_id)}
 
 
 class AssignLeaderRequest(BaseModel):

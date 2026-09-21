@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-20
+updated: 2026-09-21
 related: ["[[Current-Context]]", "[[Patterns-landing-mc-recess-deck]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-carousel]]"]
 ---
 
@@ -140,3 +140,8 @@ light surface rather than its dark one).
   `member_ids`; members, orgs and linked identities are never touched.
 - Verified in a browser: four rows to two by ticking two, then the singular wording with one left,
   and the back chevron returning to "Which account today?".
+
+### Remove-accounts link icon (2026-09-21)
+Picker link only (not the second-screen heading): Lucide `UserRoundX` before the label,
+`inline-flex` / `gap-[4px]`, icon `size-[1em]` matching `text-[0.8rem]` and `#1c1917`, continuous
+underline under icon + text (`border-b border-current`). Dependency: `lucide-react`.

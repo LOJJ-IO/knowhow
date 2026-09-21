@@ -28,6 +28,11 @@ own access) is where the security edge cases live. This ADR records the answers 
   front of it. The blast radius is contained by the link being domain-locked and joins needing approval, so
   the worst case stays inside the company. If the wrong person got there first, **admin proof takes the org
   over**: a proven Workspace admin claims ownership using the admin-proof flow already built.
+- **Setup names the organization first** (user, 2026-09-21). A Workspace org is created with its hosted
+  domain as its name (`acme.org`) because nobody has been asked yet; that placeholder would otherwise
+  surface on the invite link's sign-in screen, in the "already with {OtherOrg}" refusal and in the Log In
+  account picker. The field is **prefilled with a guess from the domain** (`acme.org` → `Acme`), selected
+  so one keystroke replaces it.
 - The chart built at setup holds **teams only, no named seats**. People fill in as they join, so the
   owner is not entering a roster of emails up front and nobody has to "claim" a name.
 - Teams are **typed in one at a time**, and **pulled from the org's Google Workspace groups when that is
@@ -106,6 +111,11 @@ own access) is where the security edge cases live. This ADR records the answers 
   enabled yet. Proof became the *recovery* path instead of the entry gate.
 - **Suggested starter team names** (Engineering, Sales, Finance) — rejected: that is invented copy in the
   product.
+- **Leaving the org name empty, or prefilled with the raw domain** — rejected: empty is one more thing to
+  do, and the raw domain is the name most people would simply accept, which is how `acme.org` ends up on
+  everyone's screen.
+- **Naming the org before the owner/Super Admin questions** — rejected: the authority questions come first,
+  naming opens setup proper.
 - **A lead field on each team at setup** — rejected: it reintroduces the roster of emails the no-seats
   decision exists to avoid.
 - **First person approved into a team becomes its lead** — rejected: wrong whenever the first joiner isn't
