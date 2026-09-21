@@ -16,7 +16,7 @@ Removed ~15MB of tracked root duplicates of assets already under `public/deck/` 
 After "Who's this for?", Skip/Continue → **"How many people on your team?"** with chips `1` · `2–5` · `6–20` · `21–50` · `51–100` · `100+` (3×2 grid, skippable); then Cal. [[FEAT-landing-book-a-demo]].
 
 ## Book a Demo — abandoned recovery (built 2026-09-20)
-**Counting starts** when Continue validates the work email (website field appears) → `demo_leads`. After **`DEMO_RECOVERY_IDLE_SECONDS`** (default 20 min) idle in the demo sheet, one Resend from **`noreply@knohow.app`**. Includes Cal until booked. Cancel on reopen / email CTA / Cal book. Resume: `/?demo_resume=<token>`. Migration `0012_demo_leads`; scheduler every 1 min. Local test: set `DEMO_RECOVERY_IDLE_SECONDS=60` and restart uvicorn. Full rules [[FEAT-landing-book-a-demo]].
+**Counting starts** when Continue validates the work email (website field appears) → `demo_leads`. After **`DEMO_RECOVERY_IDLE_SECONDS`** (default 20 min) idle in the demo sheet, one Resend from **`noreply@knohow.app`**. Includes Cal until booked. Cancel on reopen / email CTA / Cal book. Resume: `/?demo_resume=<token>`. Migration `0012_demo_leads`; scheduler every 1 min. Local test: set `DEMO_RECOVERY_IDLE_SECONDS=60` and restart uvicorn. **APScheduler noise silenced 2026-09-21** (`apscheduler*` → ERROR in `logging_config`; job `coalesce` on wake) — only `jobs.demo_recovery_sent` when mail goes out. Full rules [[FEAT-landing-book-a-demo]].
 
 ## ✅ Backend merged into `main` (2026-09-15)
 The FastAPI backend — auth/identity (Google OAuth login, domain-wide delegation, personal-OAuth fallback, encrypted token storage, tamper-evident audit log, Google API retry/backoff) plus org chart, sharing/ownership engine (TransferBatch dry-run/execute/reverse), activity detection, and DeepSearch — was merged from `backend/auth-foundation` into `main` on 2026-09-15 (user go-ahead: "merge into main"). `backend/` now lives on `main` as a second, independent codebase (Python/FastAPI) alongside the Next.js app — see [`AGENTS.md`](../../AGENTS.md)/[`CLAUDE.md`](../../CLAUDE.md), updated to drop the pre-merge standing reminder. Full reasoning and integration contract in [[0004-fastapi-backend-for-auth-and-identity]] and the "Backend integration contract" section of [[Architecture-Overview]].
@@ -167,8 +167,16 @@ org, pick a team, enter the app. Security edge cases worked through and locked i
   org → **refuse and explain** ([[0013-sign-in-is-to-an-organization]]).
 - Owner sees **who joined, when, and who's pending**. Removal from the chart **revokes the sharing Knohow
   granted** and reports it; Google access granted outside Knohow is stated as out of our reach.
+- **Resume, don't restart (user, 2026-09-21):** if an onboarding step hasn't been completed, signing in
+  takes the person **back to that step**, never to Get Started. **Not true today** — `signup_redirect`
+  (`backend/app/api/routes/auth.py`) redirects to `frontend_origin` with no marker of where they stopped.
+  Waiting-for-approval is **not** an unfinished step (those resume into the empty in-app state).
+  **Saved as they go** — each team persists as it's typed, so a half-built chart is a real state: setup
+  completion is its own flag (not "has teams"), the join link is unsendable until it's set, and a team typed
+  by mistake needs a way to be removed.
 Still needed before building: **all copy** (user's to write), and the pending-request state + approver UI +
-empty in-app state + link records + team-lead role + admin-proof ownership takeover don't exist yet.
+empty in-app state + link records + team-lead role + admin-proof ownership takeover + a stored onboarding
+state with a resume route don't exist yet.
 
 ## Active priority
 The user is rebuilding the frontend from scratch, screen by screen — **not** a Claude-driven redesign. **Implement only what is explicitly asked; never invent copy, layout, or visual decisions; ask rather than fill gaps.** Update second-brain after every change.

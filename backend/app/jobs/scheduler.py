@@ -118,7 +118,15 @@ def run_demo_recovery_emails() -> None:
 
 
 def create_scheduler() -> BackgroundScheduler:
-    scheduler = BackgroundScheduler()
+    # coalesce: after sleep/wake, run each job once instead of replaying a
+    # backlog of missed minutes (those were the "missed by 0:0x:xx" lines).
+    scheduler = BackgroundScheduler(
+        job_defaults={
+            "coalesce": True,
+            "max_instances": 1,
+            "misfire_grace_time": 30,
+        }
+    )
     scheduler.add_job(
         run_reconciliation_sweeps, "interval", hours=6, id="reconciliation_sweep", replace_existing=True
     )

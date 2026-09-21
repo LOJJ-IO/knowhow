@@ -282,3 +282,121 @@ approver UI showing requested team beside requester email (and the lead-naming c
 in-app state, stored link records (issuer, chosen lifetime, revoked flag, joins) rather than a stateless
 signed URL, a **team lead** role, and an **admin-proof ownership takeover** path. **All copy is the user's
 to write.**
+
+## Copy draft for setup + join (Claude, 2026-09-21, user asked)
+**Status: draft for the user to cut.** Written to match the voice already in the product ("Which account
+today?", "Are you the owner of the organization?", "Who's this for?"): short question headlines, sentence
+case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow**. Braces are variables.
+
+### Founder: building the teams
+**Teams**
+- H: What teams are in your organization?
+- Sub: Add the ones that exist today. You can change them later.
+- Field placeholder: Team name
+- Add control: Add team
+- Row control: Remove
+- Save hint (quiet, after each add): Saved
+- Pill: Continue (appears once there is one team)
+
+**Workspace groups found** (only when delegation makes the import available)
+- H: We found {n} groups in your Google Workspace.
+- Sub: Tick the ones that are real teams. You can add more after.
+- Pill: Use these
+- Secondary: I'll type them myself
+
+**Founder's own team**
+- H: Which team is yours?
+- Sub: Pick the one you work in.
+- Extra option: I'm not in one
+- Pill: Continue
+
+### Founder: the invite link
+**Before creating it**
+- H: Ready to bring everyone in?
+- Sub: One link works for everyone at {domain}. They pick their team, you approve.
+- Pill: Create invite link
+
+**Lifetime**
+- H: How long should the link work?
+- Chips: 24 hours · 7 days · 30 days · No end date
+- Sub: You can turn it off at any time.
+- Pill: Continue
+
+**Link ready**
+- H: Your link is ready.
+- Sub: Anyone with a {domain} account can use it. Everyone else is turned away.
+- Pill: Copy link
+- Secondary: Done
+
+### Joiner: arriving on the link
+**Sign in**
+- H: Join {Org} on Knohow.
+- Sub: Sign in with your {domain} account to get started.
+- Pill: Continue with Google
+
+**Wrong account already signed in**
+- H: This link is for {domain} accounts.
+- Sub: You're signed in as {email}. Switch to your work account to join {Org}.
+- Pill: Switch account
+
+**Account is off-domain or personal**
+- H: You need a {domain} account to join.
+- Sub: This link only works for people at {Org}. If you work there, sign in with your work email.
+- Pill: Try another account
+
+**Account already belongs to another org**
+- H: This account is already with {OtherOrg}.
+- Sub: An account can belong to one organization on Knohow. Sign in with a different account to join {Org}.
+- Pill: Use a different account
+
+**Link expired**
+- H: This link has expired.
+- Sub: Ask whoever sent it for a new one.
+- (no action)
+
+**Link turned off**
+- H: This link has been turned off.
+- Sub: Ask whoever sent it for a new one.
+- (no action)
+
+### Joiner: picking a team
+- H: Which team are you in?
+- Sub: Your choice goes to {approver} to approve.
+- Pill: Send request
+
+**Waiting, inside the app**
+- H: You're in. {approver} needs to approve your team.
+- Sub: We'll let you know as soon as they do. Nothing to do until then.
+
+### Approver
+**Pending list**
+- H: {n} people are waiting to join.
+- Row: {name}, {email}, asked for {team}
+- Controls: Approve · Decline
+
+**Empty pending list**
+- H: No one is waiting.
+- Sub: Requests show up here when people use your invite link.
+
+**Naming a lead, right after approving**
+- H: Does {name} lead {team}?
+- Sub: Leads can add and change people in their own team.
+- Controls: Yes · No
+
+### Resuming an unfinished setup
+- H: Welcome back. Let's finish setting up {Org}.
+- Sub: You left off {step}.
+- Pill: Pick up where you left off
+
+### Removing someone
+- H: Remove {name} from {Org}?
+- Sub: Knohow will take back the files it shared with them. Anything they were given directly in Google
+  stays with them.
+- Pill: Remove
+
+### Deliberate choices
+- "Send request" and "Your choice goes to {approver}" keep the request-not-grant model honest at the moment
+  the person picks. Calling it Continue would imply they just granted themselves the team.
+- The removal line says out loud what Knohow cannot take back, per [[0014-org-setup-and-join-link]].
+- The off-domain and wrong-account screens name the domain rather than saying "not allowed", so the person
+  knows what to do next.

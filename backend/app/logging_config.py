@@ -16,6 +16,19 @@ def configure_logging() -> None:
         level=settings.log_level,
     )
 
+    # APScheduler logs every tick at INFO ("Running job… executed successfully")
+    # and "missed by…" at WARNING when the laptop sleeps — drown the terminal
+    # without adding signal. Keep ERROR+ so real scheduler failures still show.
+    # Our jobs use structlog (`jobs.demo_recovery_sent`, etc.) when something
+    # actually happened.
+    for name in (
+        "apscheduler",
+        "apscheduler.scheduler",
+        "apscheduler.executors",
+        "apscheduler.executors.default",
+    ):
+        logging.getLogger(name).setLevel(logging.ERROR)
+
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

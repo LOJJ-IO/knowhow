@@ -57,6 +57,23 @@ own access) is where the security edge cases live. This ADR records the answers 
 - While waiting, the person is **in the app but empty** — oriented, no team content, with a line saying
   it is with the owner.
 
+**Resuming an unfinished onboarding (user, 2026-09-21)**
+- **If an onboarding step hasn't been completed, signing in takes the person back to that step — never to
+  Get Started.** Sign-in is the resume point, not a fresh start.
+- This is currently **not true**: `signup_redirect` in `backend/app/api/routes/auth.py` sends a successful
+  sign-in to `frontend_origin` with nothing marking the unfinished step, so the person lands on the landing
+  page where Get Started is the only thing on offer.
+- Implies the backend must report **where the person stopped** (an onboarding state on the member/org that
+  the callback and the session both expose), and the frontend must route on it before rendering the landing.
+- **Waiting for approval is not an unfinished step** — those people resume into the empty in-app state, not
+  back into setup.
+- Someone whose onboarding is finished must **never** see a resumed step.
+- **Work is saved as they go** (user, 2026-09-21), not batched at the end of a step. A founder who types
+  three teams and closes the tab comes back to those three teams, not to an empty team step. Each team is
+  persisted as it is added, so the org chart can exist in a half-built state while setup is still
+  incomplete — which means setup completion is its own flag, not "does the org have teams", and the join
+  link stays unsendable until that flag is set. Also implies a way to **remove** a team typed by mistake.
+
 **Edge cases at the link**
 - **Wrong account already signed in:** name the account/domain the link expects and offer one button to
   switch. Same shape as the existing `?invite=wrong_account` case.
@@ -102,6 +119,8 @@ own access) is where the security edge cases live. This ADR records the answers 
 - Revocation-on-removal depends on delegation being provisioned; until then it is mocked in `src/` per
   [[0001-mocked-data-first-prototype]] and only `backend/` can do the real Drive calls.
 - Needs a **team lead** role on team membership, set from the approval screen.
+- Needs a stored **onboarding state per person** and a resume route, replacing the current bare redirect to
+  `frontend_origin`.
 - Needs an **ownership takeover** path driven by admin proof, on top of the existing proof flow.
 - The Workspace-groups import must **degrade to typing** when delegation isn't approved, and must not read
   the directory before the org has agreed to delegation.
