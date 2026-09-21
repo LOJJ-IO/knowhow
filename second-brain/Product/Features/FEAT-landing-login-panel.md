@@ -93,6 +93,8 @@ the user was asked). New dependency: `@base-ui/react`, at the user's request.
 - **One row per organization this browser has signed in to.** Org name leads (bold), the person's
   name is small subtext under it, avatar initial comes from the org name. Two companies plus a
   personal workspace is **three rows**, and the same person legitimately appears on several.
+- **Row spacing tightened 50%** (user 2026-09-21): `py-1` / `gap-0.5` / `leading-tight`, OR rule
+  `mt-3` (was `py-2` / `gap-1` / `mt-6`).
 - **One black chip per row**, `Org` or `Personal`, with that row's address in the **tooltip**
   (the user confirmed tooltip, not dropdown). The tooltip must be given
   `className={satoshi.className}` — portaled content inherits no font ([[Lessons-Learned]]).
@@ -132,8 +134,10 @@ light surface rather than its dark one).
   (user's choice): "Remove account" / "Remove accounts", "Remove selected account" / "...accounts".
 - **Rows show org name over the account's email** (user's choice) with a checkbox and the same
   avatar tint as the picker. The button is disabled until something is ticked.
-- **A linked personal address never appears here.** It isn't remembered on a device, so removing it
-  would be unlinking an identity, which is a different action.
+- **Linked personal addresses are listed too** (user 2026-09-21) — one extra row per unique
+  address from `linked_personal_emails`, after the remembered org/personal rows. They aren't
+  device-remembered themselves; selecting one forgets every remembered org row that surfaces
+  that Personal chip. Identity linking is untouched.
 - **Backend:** `DELETE /auth/remembered-accounts` now accepts `{member_ids: [...]}`; omitting it
   still means all. The device cookie is dropped **only when no rows remain** - a partial removal
   must keep it or the surviving rows become unreachable. `forget_device` takes an optional
@@ -144,4 +148,5 @@ light surface rather than its dark one).
 ### Remove-accounts link icon (2026-09-21)
 Picker link only (not the second-screen heading): Lucide `UserRoundX` before the label,
 `inline-flex` / `gap-[4px]`, icon `size-[1em]` matching `text-[0.8rem]` and `#1c1917`, continuous
-underline under icon + text (`border-b border-current`). Dependency: `lucide-react`.
+underline under icon + text (`border-b border-current leading-none`, tight like Terms links).
+Dependency: `lucide-react`.

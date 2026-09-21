@@ -91,6 +91,7 @@ function startAdminProof() {
 
 /** The backend's `/auth/me` — who's signed in, if anyone. */
 type Me = {
+  id: string;
   organization_id: string;
   organization_name: string;
   organization_domain: string | null;
@@ -98,6 +99,9 @@ type Me = {
   standing: "approved" | "auto_affiliated";
   is_owner: boolean;
   needs_org_setup: boolean;
+  /** Where setup stopped, if it did: "orgName" | "teams" | "ownTeam".
+   *  Null when there's nothing to resume. */
+  setup_step: string | null;
   is_super_admin: boolean;
 };
 
@@ -155,13 +159,23 @@ async function fetchRememberedOrgs(): Promise<RememberedOrg[]> {
 
 /** Forgets the named rows on this browser, or all of them when none are
  *  named. Members, organizations and linked identities are untouched. */
-async function forgetRememberedAccounts(memberIds?: string[]): Promise<void> {
+/** Forgets remembered rows, hides linked personal addresses, or both.
+ *  Passing neither forgets everything on this browser. A linked address has
+ *  no row of its own, so removing one from the sign-in screen is a hide on
+ *  this device, never an unlink (user, 2026-09-21). */
+async function forgetRememberedAccounts(
+  memberIds?: string[],
+  emails?: string[],
+): Promise<void> {
   if (!BACKEND_API_URL) return;
   try {
     await backendFetch("/auth/remembered-accounts", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ member_ids: memberIds ?? null }),
+      body: JSON.stringify({
+        member_ids: memberIds ?? null,
+        emails: emails ?? null,
+      }),
     });
   } catch {
     // Nothing to recover: the caller updates the list either way.
@@ -2147,17 +2161,23 @@ type SetupStep =
   | "verifyAdmin"
   | "orgName"
   | "teams"
+  | "ownTeam"
+  | "inviteLink"
   | "done";
 
 /** First sign-in for a new organization: the owner and Super Admin
  *  questions (FEAT-workspace-onboarding-flow). Copy is the spec's wording,
  *  a placeholder until the user designs these screens. */
 function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
-  const [step, setStep] = useState<SetupStep>("owner");
+  // Resume where they stopped; "owner" only when setup hasn't started.
+  const [step, setStep] = useState<SetupStep>(
+    (me.setup_step as SetupStep | null) ?? "owner",
+  );
   const [isOwner, setIsOwner] = useState(true);
   // Starts as whatever the org is called now (its domain, until the naming
   // screen replaces it) so the teams heading always has something to say.
   const [orgName, setOrgName] = useState(me.organization_name);
+  const [teams, setTeams] = useState<SetupTeam[]>([]);
   const [ownerEmail, setOwnerEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -2369,7 +2389,10 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
           <button
             type="button"
             className={SETUP_CHOICE_CLASS}
-            onClick={() => setStep("orgName")}
+            onClick={() => {
+              void recordSetupStep("orgName");
+              setStep("orgName");
+            }}
           >
             Skip for now
           </button>
@@ -2384,16 +2407,66 @@ function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
         me={me}
         onDone={(name) => {
           setOrgName(name);
+          void recordSetupStep("teams");
           setStep("teams");
         }}
       />
     );
 
   if (step === "teams")
-    return <TeamsStep me={me} orgName={orgName} onDone={onDone} />;
+    return (
+      <TeamsStep
+        me={me}
+        orgName={orgName}
+        onDone={(created) => {
+          setTeams(created);
+          void recordSetupStep("ownTeam");
+          setStep("ownTeam");
+        }}
+      />
+    );
+
+  if (step === "ownTeam")
+    return (
+      <OwnTeamStep
+        me={me}
+        teams={teams}
+        onDone={() => {
+          void recordSetupStep("inviteLink");
+          setStep("inviteLink");
+        }}
+      />
+    );
+
+  if (step === "inviteLink")
+    return (
+      <InviteLinkStep
+        me={me}
+        onDone={() => {
+          void recordSetupStep("done");
+          onDone();
+        }}
+      />
+    );
 
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   return null;
+}
+
+/** Remembers how far setup got, so the next sign-in resumes here instead of
+ *  the landing page. Best-effort: failing to record progress must never block
+ *  the founder from moving on, it only costs them the resume. */
+async function recordSetupStep(step: string): Promise<void> {
+  if (!BACKEND_API_URL) return;
+  try {
+    await backendFetch("/onboarding/setup-step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ step }),
+    });
+  } catch {
+    // Nothing to recover.
+  }
 }
 
 /** A Workspace org is created with its hosted domain as its name, because at
@@ -2511,13 +2584,23 @@ function OrgNameStep({
  *  isn't part of this screen. */
 type SetupTeam = { id: string; name: string };
 
-/** "What teams are in your organization?" — the first screen of setup proper
- *  ([[0014-org-setup-and-join-link]], copy approved 2026-09-21).
+/** One committed team, as a pill. The chip owns its height and its maximum
+ *  width; the label owns its natural width and is the only part allowed to
+ *  shrink; the remove control never compresses. */
+const TEAM_PILL_CLASS =
+  "inline-flex h-7 w-fit max-w-[min(70%,24ch)] shrink-0 items-center gap-1 rounded-full bg-[#1c1917]/[0.07] px-2.5 text-xs font-bold text-[#1c1917]";
+
+/** "What teams are in {Org}?" — a tag field, not a form.
  *
- *  Each team is written to the backend the moment it's added, not batched at
- *  Continue: the founder who types three teams and closes the tab comes back
- *  to those three teams. That's also why every row has Remove — once a typo is
- *  saved, deleting it is the only way back out. */
+ *  Type a name, press Enter, it commits as a pill and the caret stays put for
+ *  the next one. **One button on the screen** (user, 2026-09-21): Enter is the
+ *  commit, so there is no Add button competing with Continue, and Enter can
+ *  never carry you to the next screen — the earlier version submitted the form
+ *  and skipped ahead, which is precisely what one-button-per-screen exists to
+ *  stop. Nothing here is ever rendered greyed-out.
+ *
+ *  Each team is written to the backend the moment it commits, so a founder who
+ *  closes the tab comes back to the pills they already made. */
 function TeamsStep({
   me,
   orgName,
@@ -2525,17 +2608,14 @@ function TeamsStep({
 }: {
   me: Me;
   orgName: string;
-  onDone: () => void;
+  onDone: (teams: SetupTeam[]) => void;
 }) {
   const [teams, setTeams] = useState<SetupTeam[]>([]);
   const [name, setName] = useState("");
-  const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Resume: whatever was saved on an earlier visit is already the list.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -2553,7 +2633,7 @@ function TeamsStep({
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) inputRef.current?.focus();
       }
     })();
     return () => {
@@ -2561,16 +2641,11 @@ function TeamsStep({
     };
   }, [me.organization_id]);
 
-  useEffect(() => {
-    if (!loading) inputRef.current?.focus();
-  }, [loading]);
-
-  async function addTeam() {
+  async function commit() {
     const trimmed = name.trim();
     if (!trimmed || busy) return;
     if (teams.some((t) => t.name.toLowerCase() === trimmed.toLowerCase())) {
-      // PLACEHOLDER copy: the approved set doesn't cover a repeated name.
-      setError(`You already have a team called ${trimmed}.`);
+      setError(`${trimmed} is already there.`);
       return;
     }
     setBusy(true);
@@ -2588,16 +2663,15 @@ function TeamsStep({
       const team = await res.json();
       setTeams((current) => [...current, { id: team.id, name: team.name }]);
       setName("");
-      setSaved(true);
-      inputRef.current?.focus();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      inputRef.current?.focus();
     }
   }
 
-  async function removeTeam(team: SetupTeam) {
+  async function remove(team: SetupTeam) {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -2608,40 +2682,75 @@ function TeamsStep({
       );
       if (!res.ok) throw new Error(await backendError(res));
       setTeams((current) => current.filter((t) => t.id !== team.id));
-      setSaved(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+      inputRef.current?.focus();
     }
   }
 
   return (
-    <form
-      noValidate
-      onSubmit={(e) => {
-        e.preventDefault();
-        void addTeam();
-      }}
-    >
+    <div>
       {setupHeading(`What teams are in ${orgName}?`)}
       {setupBody("Add the ones that exist today. You can change them later.")}
 
-      <div className={`t-input-wrap ${satoshi.className} mt-6 flex flex-col`}>
+      {/* The field is the list: pills and the caret share one row and wrap
+          together, so there is nothing to scroll and no separate list below. */}
+      <div
+        onClick={() => inputRef.current?.focus()}
+        className={`t-input-wrap ${satoshi.className} mt-6 flex w-full min-w-0 flex-wrap items-center gap-1.5 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-2.5 py-1.5`}
+      >
+        {teams.map((team) => (
+          <span key={team.id} className={TEAM_PILL_CLASS}>
+            <span className="min-w-0 truncate text-left">{team.name}</span>
+            <button
+              type="button"
+              aria-label={`Remove ${team.name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                void remove(team);
+              }}
+              className="size-4 shrink-0 cursor-pointer opacity-60 transition-opacity hover:opacity-100"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden className="size-4">
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          </span>
+        ))}
         <input
           ref={inputRef}
           type="text"
           autoComplete="off"
           aria-label="Team name"
-          placeholder="Team name"
+          placeholder={teams.length ? "" : "Team name"}
           value={name}
-          disabled={loading}
           onChange={(e) => {
             setName(e.target.value);
             setError("");
-            setSaved(false);
           }}
-          className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              // Commits the team. Never submits, never advances.
+              e.preventDefault();
+              void commit();
+              return;
+            }
+            // Backspace on an empty caret takes back the last pill, the way
+            // every other tag field behaves.
+            if (e.key === "Backspace" && !name && teams.length) {
+              e.preventDefault();
+              void remove(teams[teams.length - 1]);
+            }
+          }}
+          className="h-7 min-w-[8ch] flex-1 border-0 bg-transparent px-1 text-[0.95rem] text-[#1c1917] outline-none"
         />
       </div>
 
@@ -2652,64 +2761,327 @@ function TeamsStep({
         >
           {error}
         </p>
-      ) : (
-        // Quiet confirmation that the last team is already stored, so closing
-        // the tab doesn't feel like losing it.
+      ) : null}
+
+      <div className="mt-6 flex justify-end">
+        <button
+          type="button"
+          onClick={() => onDone(teams)}
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** "Which teams are you in?" — the pills made on the screen before, now the
+ *  thing you click. Several are allowed (user, 2026-09-21: "i could also be in
+ *  more than one team"). **One button on the screen**: picking a pill is not a
+ *  commitment, Continue is. */
+function OwnTeamStep({
+  me,
+  teams,
+  onDone,
+}: {
+  me: Me;
+  teams: SetupTeam[];
+  onDone: () => void;
+}) {
+  const NONE = "none";
+  const [selected, setSelected] = useState<string[]>([]);
+  const [known, setKnown] = useState<SetupTeam[]>(teams);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  // Resuming setup lands here with nothing carried over from the teams
+  // screen, so the list has to be able to stand on its own.
+  useEffect(() => {
+    if (teams.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await backendFetch(`/org-chart/${me.organization_id}`);
+        if (!res.ok) throw new Error(await backendError(res));
+        const chart = await res.json();
+        if (cancelled) return;
+        setKnown(
+          (chart.teams ?? []).map((t: { id: string; name: string }) => ({
+            id: t.id,
+            name: t.name,
+          })),
+        );
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [me.organization_id, teams.length]);
+
+  /** "Not in any" is the opposite of picking teams, so the two can't hold at
+   *  once, either way round. */
+  function toggle(value: string) {
+    setError("");
+    setSelected((current) => {
+      if (value === NONE) return current.includes(NONE) ? [] : [NONE];
+      const withoutNone = current.filter((v) => v !== NONE);
+      return withoutNone.includes(value)
+        ? withoutNone.filter((v) => v !== value)
+        : [...withoutNone, value];
+    });
+  }
+
+  async function submit() {
+    if (busy) return;
+    if (selected.length === 0 || selected.includes(NONE)) {
+      onDone();
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      // One membership row per team: the backend upserts per (team, member),
+      // so there is no batch endpoint to reach for.
+      for (const teamId of selected) {
+        const res = await backendFetch(
+          `/organizations/${me.organization_id}/memberships`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              member_id: me.id,
+              team_id: teamId,
+              // Being in a team isn't authority: whether they own the org is
+              // settled by the owner question, not by this membership.
+              role: "member",
+            }),
+          },
+        );
+        if (!res.ok) throw new Error(await backendError(res));
+      }
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setBusy(false);
+    }
+  }
+
+  const pill = (value: string, label: string) => {
+    const on = selected.includes(value);
+    return (
+      <button
+        key={value}
+        type="button"
+        aria-pressed={on}
+        onClick={() => toggle(value)}
+        className={cn(
+          "inline-flex h-9 w-fit max-w-[min(70%,24ch)] shrink-0 cursor-pointer items-center rounded-full border px-3.5 text-[0.85rem] font-bold transition-colors duration-150 active:scale-[0.98]",
+          on
+            ? "border-[#1c1917] bg-[#1c1917] text-white"
+            : "border-[#d9d9de] bg-white text-[#1c1917]",
+        )}
+      >
+        <span className="min-w-0 truncate">{label}</span>
+      </button>
+    );
+  };
+
+  return (
+    <div>
+      {setupHeading("Which teams are you in?")}
+      {setupBody("Pick as many as apply.")}
+
+      <div
+        className={`${satoshi.className} mt-6 flex flex-wrap items-center gap-1.5`}
+      >
+        {known.map((team) => pill(team.id, team.name))}
+        {pill(NONE, "I\u2019m not in any")}
+      </div>
+
+      {error ? (
         <p
           aria-live="polite"
-          className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#1c1917]/50 transition-opacity duration-300 ${saved ? "opacity-100" : "opacity-0"}`}
+          className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
         >
-          Saved
+          {error}
         </p>
-      )}
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={loading || busy || !name.trim()}
-        className={cn(SETUP_CHOICE_CLASS, satoshi.className, "mt-3")}
-      >
-        Add team
-      </button>
-
-      {teams.length > 0 ? (
-        <ul
-          className={`${satoshi.className} m-0 mt-3 flex list-none flex-col gap-2 p-0`}
+      <div className="mt-6 flex justify-end">
+        <button
+          type="button"
+          onClick={() => void submit()}
+          className={cn(CTA_CLASS, satoshi.className, "bg-black")}
         >
-          {teams.map((team) => (
-            <li
-              key={team.id}
-              className="flex h-12 items-center justify-between rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-4"
-            >
-              <span className="text-[1rem] font-bold text-[#1c1917]">
-                {team.name}
-              </span>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void removeTeam(team)}
-                className="cursor-pointer text-[0.85rem] text-[#1c1917]/60 transition-colors hover:text-[#1c1917] disabled:cursor-default disabled:opacity-60"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+          Continue
+        </button>
+      </div>
+    </div>
+  );
+}
 
-      {/* The pill only exists once there is something to continue with. */}
-      {teams.length > 0 ? (
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={onDone}
-            className={cn(CTA_CLASS, satoshi.className, "bg-black")}
-          >
-            Continue
-          </button>
+/** A choice pill: the shape the teams screens use, reused wherever a screen
+ *  offers options. Picking one is never the screen's action — the single
+ *  button is. */
+function ChoicePill({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={selected}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-9 w-fit max-w-[min(70%,24ch)] shrink-0 cursor-pointer items-center rounded-full border px-3.5 text-[0.85rem] font-bold transition-colors duration-150 active:scale-[0.98]",
+        selected
+          ? "border-[#1c1917] bg-[#1c1917] text-white"
+          : "border-[#d9d9de] bg-white text-[#1c1917]",
+      )}
+    >
+      <span className="min-w-0 truncate">{label}</span>
+    </button>
+  );
+}
+
+/** "Ready to bring everyone in?" — the invite link, one screen per action
+ *  (user, 2026-09-21): offer it, choose how long it lasts, hand it over.
+ *  Three screens rather than one, because each asks for a separate decision. */
+type LinkStep = "offer" | "lifetime" | "ready";
+
+const LINK_LIFETIMES: { value: string; label: string }[] = [
+  { value: "24h", label: "24 hours" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "forever", label: "No end date" },
+];
+
+function InviteLinkStep({ me, onDone }: { me: Me; onDone: () => void }) {
+  const [step, setStep] = useState<LinkStep>("offer");
+  // Pre-picked so the button is never dead and nothing is ever greyed out;
+  // the owner still chooses ([[0014-org-setup-and-join-link]]).
+  const [lifetime, setLifetime] = useState("7d");
+  const [url, setUrl] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const domain = me.organization_domain;
+
+  const errorLine = error ? (
+    <p
+      aria-live="polite"
+      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+    >
+      {error}
+    </p>
+  ) : null;
+
+  const oneButton = (label: string, onClick: () => void) => (
+    <div className="mt-6 flex justify-end">
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+      >
+        {label}
+      </button>
+    </div>
+  );
+
+  if (step === "offer")
+    return (
+      <div>
+        {setupHeading("Ready to bring everyone in?")}
+        {setupBody(
+          domain
+            ? `One link works for everyone at ${domain}. They pick their team, you approve.`
+            : "One link works for everyone. They pick their team, you approve.",
+        )}
+        {oneButton("Create invite link", () => setStep("lifetime"))}
+      </div>
+    );
+
+  if (step === "lifetime")
+    return (
+      <div>
+        {setupHeading("How long should the link work?")}
+        {setupBody("You can turn it off at any time.")}
+        <div
+          className={`${satoshi.className} mt-6 flex flex-wrap items-center gap-1.5`}
+        >
+          {LINK_LIFETIMES.map((option) => (
+            <ChoicePill
+              key={option.value}
+              label={option.label}
+              selected={lifetime === option.value}
+              onClick={() => {
+                setLifetime(option.value);
+                setError("");
+              }}
+            />
+          ))}
         </div>
-      ) : null}
-    </form>
+        {errorLine}
+        {oneButton("Continue", () => {
+          if (busy) return;
+          setBusy(true);
+          setError("");
+          void (async () => {
+            try {
+              const res = await backendFetch(
+                `/organizations/${me.organization_id}/join-link`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ lifetime }),
+                },
+              );
+              if (!res.ok) throw new Error(await backendError(res));
+              const link = await res.json();
+              setUrl(link.url);
+              setStep("ready");
+            } catch (e) {
+              setError(e instanceof Error ? e.message : String(e));
+            } finally {
+              setBusy(false);
+            }
+          })();
+        })}
+      </div>
+    );
+
+  return (
+    <div>
+      {setupHeading("Your link is ready.")}
+      {setupBody(
+        domain
+          ? `Anyone with a ${domain} account can use it. Everyone else is turned away.`
+          : "Anyone you send it to can use it.",
+      )}
+      <p
+        className={`${satoshi.className} mt-6 truncate rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-3 py-2 text-[0.85rem] text-[#1c1917]/70`}
+      >
+        {url}
+      </p>
+      {errorLine}
+      {/* Copying is the screen's one action, and it's also what finishes
+          setup — there's nothing left to decide after it. */}
+      {oneButton(copied ? "Copied" : "Copy link", () => {
+        void navigator.clipboard
+          ?.writeText(url)
+          .then(() => setCopied(true))
+          .catch(() => setCopied(true))
+          .finally(() => window.setTimeout(onDone, 600));
+      })}
+    </div>
   );
 }
 
@@ -3009,34 +3381,134 @@ function AccountBadge({
   );
 }
 
-/** Second screen behind the picker's "Remove accounts" link: tick the rows to
- *  forget on this device. Singular or plural follows **how many are in the
- *  list**, not how many are ticked (user 2026-09-20). PLACEHOLDER copy.
+/** One selectable row on the remove-accounts screen — either a remembered
+ *  org/personal member, or a linked personal address that has no row of its
+ *  own on the picker (user 2026-09-21). */
+/** One linked personal address, sitting under the organization row that
+ *  surfaces it. */
+type RemovableChild = {
+  key: string;
+  email: string;
+  title: string;
+  subtitle: string;
+};
+
+type RemovableAccount = {
+  key: string;
+  /** The remembered member id forgotten when this row is ticked. */
+  memberId: string;
+  title: string;
+  subtitle: string;
+  tintEmail: string;
+  avatarLetter: string;
+  children: RemovableChild[];
+};
+
+/** The remove screen's tree: one organization per row, with the person's
+ *  linked personal addresses nested under it the way a folder holds files
+ *  (user, 2026-09-21).
  *
- *  Only remembered rows appear. A linked personal address isn't remembered on
- *  a device, so removing it would be unlinking an identity, which is a
- *  different action and doesn't belong here. */
+ *  An address is listed under **every** org row that surfaces it, because
+ *  that is how the picker shows it — as a chip on each of the person's rows.
+ *  Hiding it is per address, not per row, so ticking it anywhere hides it
+ *  everywhere on this browser. */
+function removableAccounts(organizations: RememberedOrg[]): RemovableAccount[] {
+  return organizations.map((org) => ({
+    key: `member:${org.member_id}`,
+    memberId: org.member_id,
+    title: org.organization_name,
+    subtitle: org.email,
+    tintEmail: org.email,
+    avatarLetter: org.organization_name.charAt(0).toUpperCase(),
+    children: org.linked_personal_emails.map((email) => ({
+      key: `member:${org.member_id}:personal:${email}`,
+      email,
+      title: email,
+      subtitle: org.person_name ?? "Personal",
+    })),
+  }));
+}
+
+/** Second screen behind the picker's "Remove accounts" link: tick what to
+ *  forget on this device. A file tree, not a flat list (user, 2026-09-21):
+ *  each organization holds the person's linked personal addresses beneath it,
+ *  ticking the organization ticks the whole branch, and a child can be
+ *  unticked on its own to keep it.
+ *
+ *  The two ticks don't mean the same thing, which is why the branch matters.
+ *  An organization is **forgotten** on this browser. A child address has no
+ *  row to forget, so it is **hidden** here instead; the link itself survives.
+ *  Singular or plural follows **how many are in the list**, not how many are
+ *  ticked (user, 2026-09-20). PLACEHOLDER copy. */
 function RemoveAccountsScreen({
   organizations,
   onBack,
   onRemoved,
 }: {
   organizations: RememberedOrg[];
+  /** What the picker has to drop: whole rows, and addresses now hidden. */
+  onRemoved: (removed: { memberIds: string[]; emails: string[] }) => void;
   onBack: () => void;
-  /** The member ids that were forgotten. */
-  onRemoved: (removed: string[]) => void;
 }) {
+  const accounts = removableAccounts(organizations);
   const [selected, setSelected] = useState<string[]>([]);
   const [removing, setRemoving] = useState(false);
-  const many = organizations.length > 1;
+  const rowCount = accounts.reduce((n, row) => n + 1 + row.children.length, 0);
+  const many = rowCount > 1;
 
-  function toggle(memberId: string) {
+  const isSelected = (key: string) => selected.includes(key);
+
+  /** Ticking an organization takes its addresses with it; unticking it
+   *  releases them again. Either way the branch moves as one. */
+  function toggleParent(row: RemovableAccount) {
+    const keys = [row.key, ...row.children.map((c) => c.key)];
     setSelected((current) =>
-      current.includes(memberId)
-        ? current.filter((id) => id !== memberId)
-        : [...current, memberId],
+      current.includes(row.key)
+        ? current.filter((k) => !keys.includes(k))
+        : [...current.filter((k) => !keys.includes(k)), ...keys],
     );
   }
+
+  /** Unticking one address leaves the organization ticked: they are separate
+   *  removals, so keeping an address doesn't rescue the row above it. */
+  function toggleChild(key: string) {
+    setSelected((current) =>
+      current.includes(key)
+        ? current.filter((k) => k !== key)
+        : [...current, key],
+    );
+  }
+
+  function submit() {
+    setRemoving(true);
+    const memberIds = [
+      ...new Set(
+        accounts.filter((row) => isSelected(row.key)).map((row) => row.memberId),
+      ),
+    ];
+    const emails = [
+      ...new Set(
+        accounts
+          .flatMap((row) => row.children)
+          .filter((child) => isSelected(child.key))
+          .map((child) => child.email),
+      ),
+    ];
+    void forgetRememberedAccounts(memberIds, emails).then(() =>
+      onRemoved({ memberIds, emails }),
+    );
+  }
+
+  const tick = (checked: boolean, onChange: () => void, label: string) => (
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      disabled={removing}
+      aria-label={label}
+      className="size-4 shrink-0 accent-[#1c1917]"
+    />
+  );
 
   return (
     <>
@@ -3070,40 +3542,103 @@ function RemoveAccountsScreen({
           ? "Select the accounts you want to remove from this device."
           : "Select the account you want to remove from this device."}
       </p>
-      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-2 p-0`}>
-        {organizations.map((row) => {
-          const checked = selected.includes(row.member_id);
+      <ul
+        className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-2 p-0`}
+      >
+        {accounts.map((row) => {
+          const checked = isSelected(row.key);
           return (
-            <li key={row.member_id}>
+            <li key={row.key}>
               <label
                 className={cn(
                   "flex cursor-pointer items-center gap-3 rounded-[var(--login-button-radius)] border bg-white px-3 py-2 transition-colors",
                   checked ? "border-[#1c1917]" : "border-[#d9d9de]",
                 )}
               >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggle(row.member_id)}
-                  disabled={removing}
-                  className="size-4 shrink-0 accent-[#1c1917]"
-                />
+                {tick(checked, () => toggleParent(row), `Remove ${row.title}`)}
                 <span
                   aria-hidden
-                  style={{ backgroundColor: avatarTint(row.email) }}
+                  style={{ backgroundColor: avatarTint(row.tintEmail) }}
                   className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
                 >
-                  {row.organization_name.charAt(0).toUpperCase()}
+                  {row.avatarLetter}
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
-                    {row.organization_name}
+                    {row.title}
                   </span>
                   <span className="block truncate text-[0.8rem] text-[#1c1917]/70">
-                    {row.email}
+                    {row.subtitle}
                   </span>
                 </span>
               </label>
+
+              {row.children.length > 0 ? (
+                // Indented under the organization and joined to it by one
+                // continuous trunk: the spacing lives in each child's padding
+                // rather than a flex gap, so the line has nothing to jump.
+                // Children are a fixed height so the trunk meets each row at
+                // its middle (36px = 8px padding + half of the 56px row).
+                <ul className="m-0 flex list-none flex-col p-0 pl-6">
+                  {row.children.map((child, childIndex) => {
+                    const childChecked = isSelected(child.key);
+                    const isLast = childIndex === row.children.length - 1;
+                    return (
+                      <li key={child.key} className="relative pt-2">
+                        {isLast ? (
+                          // Last one turns the corner and stops.
+                          <span
+                            aria-hidden
+                            className="pointer-events-none absolute -left-3 top-0 h-9 w-3 rounded-bl-[6px] border-b border-l border-[#d9d9de]"
+                          />
+                        ) : (
+                          // Trunk carries on to the next child, with a stub
+                          // reaching out to this one.
+                          <>
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute -left-3 top-0 bottom-0 w-px bg-[#d9d9de]"
+                            />
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute -left-3 top-9 h-px w-3 bg-[#d9d9de]"
+                            />
+                          </>
+                        )}
+                        <label
+                          className={cn(
+                            "flex h-14 cursor-pointer items-center gap-3 rounded-[var(--login-button-radius)] border bg-white px-3 transition-colors",
+                            childChecked
+                              ? "border-[#1c1917]"
+                              : "border-[#d9d9de]",
+                          )}
+                        >
+                          {tick(
+                            childChecked,
+                            () => toggleChild(child.key),
+                            `Remove ${child.title}`,
+                          )}
+                          <span
+                            aria-hidden
+                            style={{ backgroundColor: avatarTint(child.email) }}
+                            className="flex size-7 shrink-0 items-center justify-center rounded-full text-[0.8rem] font-bold text-white"
+                          >
+                            {child.email.charAt(0).toUpperCase()}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-[0.9rem] font-bold text-[#1c1917]">
+                              {child.title}
+                            </span>
+                            <span className="block truncate text-[0.75rem] text-[#1c1917]/70">
+                              {child.subtitle}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </li>
           );
         })}
@@ -3111,10 +3646,7 @@ function RemoveAccountsScreen({
       <button
         type="button"
         disabled={removing || selected.length === 0}
-        onClick={() => {
-          setRemoving(true);
-          void forgetRememberedAccounts(selected).then(() => onRemoved(selected));
-        }}
+        onClick={submit}
         className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
       >
         {many ? "Remove selected accounts" : "Remove selected account"}
@@ -3131,9 +3663,9 @@ function AccountPicker({
   onRemoved,
 }: {
   organizations: RememberedOrg[];
-  /** Rows were forgotten; the caller drops them from the list, and shows the
-   *  plain Log In screen once none are left. */
-  onRemoved: (removedMemberIds: string[]) => void;
+  /** Rows were forgotten, or addresses hidden; the caller drops both from the
+   *  list, and shows the plain Log In screen once no rows are left. */
+  onRemoved: (removed: { memberIds: string[]; emails: string[] }) => void;
 }) {
   /** The "Remove accounts" link opens a second screen in this modal rather
    *  than forgetting everything on the spot (user 2026-09-20). */
@@ -3166,11 +3698,11 @@ function AccountPicker({
       >
         Pick up where you left off or continue as another user.
       </p>
-      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-1 p-0`}>
+      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-0.5 p-0`}>
         {organizations.map((row) => (
           <li
             key={row.member_id}
-            className="flex items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-2"
+            className="flex items-center gap-3 rounded-[var(--login-button-radius)] px-2 py-1"
           >
             <button
               type="button"
@@ -3186,7 +3718,7 @@ function AccountPicker({
               >
                 {row.organization_name.charAt(0).toUpperCase()}
               </span>
-              <span className="min-w-0">
+              <span className="min-w-0 leading-tight">
                 <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
                   {row.organization_name}
                 </span>
@@ -3217,7 +3749,7 @@ function AccountPicker({
       </ul>
       {/* Half width, centred (user 2026-09-20) — a full-width rule made the
           modal read as two stacked panels. */}
-      <div className={`${satoshi.className} mx-auto mt-6 flex w-1/2 items-center gap-3`}>
+      <div className={`${satoshi.className} mx-auto mt-3 flex w-1/2 items-center gap-3`}>
         <span className="h-px flex-1 bg-[#d9d9de]" />
         <span className="text-[0.75rem] text-[#1c1917]/70">OR</span>
         <span className="h-px flex-1 bg-[#d9d9de]" />
@@ -3246,14 +3778,19 @@ function AccountPicker({
       <button
         type="button"
         onClick={() => setRemoving(true)}
-        className={`${satoshi.className} mt-4 inline-flex cursor-pointer items-center gap-[4px] border-b border-current pb-px text-[0.8rem] font-bold text-[#1c1917]`}
+        className={`${satoshi.className} mt-4 inline-flex cursor-pointer items-center gap-[4px] border-b border-current leading-none text-[0.8rem] font-bold text-[#1c1917]`}
       >
         <UserRoundX className="size-[1em] shrink-0" aria-hidden />
-        {organizations.length > 1 ? "Remove accounts" : "Remove account"}
+        {removableAccounts(organizations).length > 1
+          ? "Remove accounts"
+          : "Remove account"}
       </button>
     </TooltipProvider>
   );
 }
+
+/** The sign-in sheet's slide, matching `duration-992` on the panel itself. */
+const SHEET_SLIDE_MS = 992;
 
 /** Book a Demo's reservation window, from first open (`DEMO_RESERVED_MS`). */
 const DEMO_RESERVED_MS = 5 * 60 * 1000;
@@ -3334,6 +3871,7 @@ function LoginModal({
   const shellRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [heights, setHeights] = useState<{ border: number; full: number }>();
+  const lastFull = useRef(0);
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
@@ -3341,7 +3879,16 @@ function LoginModal({
     if (!shell || !body) return;
     const measure = () => {
       const border = shell.offsetHeight - shell.clientHeight;
-      setHeights({ border, full: body.offsetHeight + border });
+      const full = body.offsetHeight + border;
+      // Skip the re-render when the height hasn't meaningfully changed.
+      // Cal.com's embed iframe resizes internally on every interaction (date
+      // pick, time select, form field focus) which fires this observer.  Each
+      // setHeights call triggers a React re-render and the .t-resize CSS
+      // transition tweens the modal height — the visible "blink".  A 1px
+      // threshold absorbs sub-pixel jitter without hiding real content swaps.
+      if (Math.abs(full - lastFull.current) < 2) return;
+      lastFull.current = full;
+      setHeights({ border, full });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -3559,6 +4106,20 @@ function LandingHero() {
   const [rememberedOrgs, setRememberedOrgs] = useState<RememberedOrg[]>([]);
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
+  /** The landing's own scroll container (the page doesn't scroll on <body>). */
+  const pageRef = useRef<HTMLDivElement>(null);
+
+  // The sheet reaches the top via its own `onTransitionEnd`, which only fires
+  // if a transition actually runs. A sheet opened on load — resuming an
+  // unfinished setup — can mount already open, so nothing transitions, the
+  // handler never fires, and `LoginModal` stays the thin closed line with the
+  // setup screen invisible behind it. Fall back to the slide's own duration;
+  // when a real slide does happen it wins first and this is cleared.
+  useEffect(() => {
+    if (!sheetOpen || sheetAtTop) return;
+    const id = window.setTimeout(() => setSheetAtTop(true), SHEET_SLIDE_MS + 60);
+    return () => window.clearTimeout(id);
+  }, [sheetOpen, sheetAtTop]);
   /** When Book a Demo first opened this visit — its "reserved" countdown
    *  runs from here and keeps running across Close / reopen. */
   const [demoReservedAt, setDemoReservedAt] = useState<number | null>(null);
@@ -3622,7 +4183,11 @@ function LandingHero() {
       if (result) setMe(result);
       const returned = readSignInResult();
       if (returned) clearSignInResultFromUrl();
-      if (result?.needs_org_setup) {
+      // `needs_org_setup` only covers the first questions — it goes false as
+      // soon as an org chart row exists, part-way through setup. `setup_step`
+      // covers the rest, so an unfinished setup reopens where it stopped
+      // instead of dropping them on the landing page (user, 2026-09-21).
+      if (result?.needs_org_setup || result?.setup_step) {
         setSheetKind("setup");
         setSheetOpen(true);
       } else if (returned) {
@@ -3700,10 +4265,16 @@ function LandingHero() {
   useEffect(() => {
     if (!sheetOpen) return;
     const { body } = document;
-    const previous = body.style.overflow;
+    const container = pageRef.current;
+    const previousBody = body.style.overflow;
+    const previousContainer = container?.style.overflowY ?? "";
     body.style.overflow = "hidden";
+    // The landing scrolls inside this container, not on the document, so the
+    // body lock alone let the backdrop keep moving under the sheet.
+    if (container) container.style.overflowY = "hidden";
     return () => {
-      body.style.overflow = previous;
+      body.style.overflow = previousBody;
+      if (container) container.style.overflowY = previousContainer;
     };
   }, [sheetOpen]);
 
@@ -3812,6 +4383,7 @@ function LandingHero() {
 
   return (
     <div
+      ref={pageRef}
       className="relative min-h-dvh overflow-hidden bg-[#F9F8F6]"
       onPointerDown={handleBackdropPointerDown}
       onClick={handleBackdropClick}
@@ -4026,7 +4598,7 @@ function LandingHero() {
       <div
         ref={demoSheetRef}
         className={cn(
-          "absolute inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden overscroll-none bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
+          "fixed inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden overscroll-none bg-white bg-[url(/hero/signinbg.png)] bg-cover bg-center transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
           sheetOpen ? "translate-y-0" : "translate-y-full",
           sheetAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
         )}
@@ -4073,9 +4645,23 @@ function LandingHero() {
             {sheetKind === "login" && rememberedOrgs.length > 0 ? (
               <AccountPicker
                 organizations={rememberedOrgs}
-                onRemoved={(removed) =>
+                onRemoved={({ memberIds, emails }) =>
                   setRememberedOrgs((rows) =>
-                    rows.filter((row) => !removed.includes(row.member_id)),
+                    rows
+                      .filter((row) => !memberIds.includes(row.member_id))
+                      // A hidden address stays linked; it just stops being
+                      // shown on this browser, so drop it from the chips too.
+                      .map((row) =>
+                        emails.length === 0
+                          ? row
+                          : {
+                              ...row,
+                              linked_personal_emails:
+                                row.linked_personal_emails.filter(
+                                  (email) => !emails.includes(email),
+                                ),
+                            },
+                      ),
                   )
                 }
               />

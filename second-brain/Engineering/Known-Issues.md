@@ -64,3 +64,38 @@ it: signing in with that address again still finds no `OrgMember`, so it falls i
 personal-signup path and asks the same question over again. The picker shows the link (a `Personal`
 chip), but nothing acts on it. Also still missing: any in-app UI to start `/auth/link-account/start`
 for someone already signed in.
+
+## The landing scrolls inside its own container, not the document (fixed 2026-09-21)
+**The real cause** of "the page looks nothing like my project" after signing in. The landing's root is
+`relative min-h-dvh overflow-hidden`, and its content (hero + deck) is ~1452px tall, so **the scrolling
+element is that container, not `<body>`**. `window.scrollY` stays 0 no matter how far down you are.
+
+Two things followed from that, both wrong:
+1. The sign-in sheet was `absolute inset-x-0 bottom-0`, so it lived in the **container's** coordinate
+   space and scrolled away with the content. Measured live with the container at `scrollTop: 639`, the
+   sheet sat at `top: -639` and its modal at `-380` — off-screen above. All you saw was a sliver of the
+   sheet's background and its bottom-left Edmonton mark, which reads as a broken landing page.
+2. The scroll lock set `document.body.style.overflow = "hidden"`, which **locks nothing** here.
+
+**Fix:** the sheet is `fixed` (it is a viewport overlay; no transformed ancestors, so `fixed` is safe),
+and the lock applies to the container via `pageRef` as well as the body.
+
+**Lesson:** before positioning an overlay `absolute`, check *what actually scrolls*. `window.scrollY === 0`
+does not mean the user is at the top. `el.parentElement.scrollTop` vs `scrollHeight` tells the truth.
+
+**How it was found:** static screenshots produced two wrong diagnoses in a row. Driving the page over CDP
+(headless Chrome + `Page.addScriptToEvaluateOnNewDocument` stubbing `/auth/me`) and reading real rects
+found it in one pass. Repro scripts kept in the session scratchpad.
+
+## Sheet opened on load never reached the top (also fixed 2026-09-21)
+`sheetAtTop` had exactly one setter: the sign-in sheet's own `onTransitionEnd` for `translate`. That is
+fine when a click slides the sheet up, but a sheet **opened on page load** — resuming an unfinished setup
+([[0014-org-setup-and-join-link]]) — can mount already open, so no transition runs, the handler never fires,
+and `LoginModal open={sheetAtTop}` stays the thin closed line. The result looks like a broken landing page:
+the sheet's `signinbg` and its bottom-left Edmonton mark with no modal on top of them.
+
+**Fix:** a fallback timer on `sheetOpen` (`SHEET_SLIDE_MS + 60`) that raises the sheet if the transition
+never fires; a real slide still wins first and clears it.
+
+**Lesson:** any state that only ever advances from a transition/animation event is unreachable when the
+element mounts in its final state. Worth checking every `onTransitionEnd` / `onAnimationEnd` that gates UI.

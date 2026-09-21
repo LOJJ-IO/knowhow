@@ -5,7 +5,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, require_same_org, require_same_org_any_standing
+from app.api.deps import get_current_member, get_db, require_same_org, require_same_org_any_standing
 from app.api.routes.auth import (  # reuse: same cookie contract as login
     PENDING_PERSONAL_SIGNUP_COOKIE,
     set_session_cookies,
@@ -29,6 +29,10 @@ from app.onboarding.service import (
     invite_to_org,
     invite_url,
     is_founding_member,
+    create_join_link,
+    join_link_url,
+    revoke_join_link,
+    record_setup_step,
     start_signup,
 )
 
@@ -70,6 +74,52 @@ def link_org_account(knohow_pending_signup: str | None = Cookie(default=None)) -
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     start = start_link_account_for_pending_personal(payload["email"])
     return RedirectResponse(start.authorization_url, status_code=status.HTTP_302_FOUND)
+
+
+class JoinLinkRequest(BaseModel):
+    """`lifetime` is one of the pills on "How long should the link work?":
+    24h / 7d / 30d / forever."""
+
+    lifetime: str
+
+
+@router.post("/organizations/{org_id}/join-link")
+def create_join_link_route(
+    org_id: uuid.UUID,
+    body: JoinLinkRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    link = create_join_link(org_id, body.lifetime, member, db)
+    return {
+        "url": join_link_url(link),
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+    }
+
+
+@router.delete("/organizations/{org_id}/join-link")
+def revoke_join_link_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    return {"revoked": revoke_join_link(org_id, member, db)}
+
+
+class SetupStepRequest(BaseModel):
+    step: str
+
+
+@router.post("/onboarding/setup-step")
+def record_setup_step_route(
+    body: SetupStepRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(get_current_member),
+) -> dict:
+    """Marks how far setup got, so signing in resumes there rather than
+    dropping the founder back on the landing page (user, 2026-09-21)."""
+    org = record_setup_step(member.organization_id, body.step, db)
+    return {"setup_step": org.setup_step}
 
 
 class PersonalOrgRequest(BaseModel):

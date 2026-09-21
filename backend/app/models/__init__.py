@@ -3,6 +3,7 @@ from app.models.audit_log import AuditLogEntry
 from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.demo_lead import DemoLead
 from app.models.file_index import FileIndex
+from app.models.join_link import JoinLink
 from app.models.invitation import Invitation, InvitationKind
 from app.models.oauth_credential import OAuthCredential
 from app.models.org_chart import OrgChart
@@ -12,6 +13,7 @@ from app.models.organization import Organization
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
 from app.models.person import Person
 from app.models.person_email import PersonEmail
+from app.models.hidden_remembered_email import HiddenRememberedEmail
 from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
@@ -32,8 +34,10 @@ __all__ = [
     "DelegationStatus",
     "DemoLead",
     "FileIndex",
+    "HiddenRememberedEmail",
     "Invitation",
     "InvitationKind",
+    "JoinLink",
     "OAuthCredential",
     "OrgChart",
     "OrgMember",

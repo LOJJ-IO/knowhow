@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.org_member import AuthType, OrgMember
 from app.models.organization import Organization
 from app.models.person import Person
+from app.models.hidden_remembered_email import HiddenRememberedEmail
 from app.models.person_email import PersonEmail
 from app.models.remembered_account import RememberedAccount
 
@@ -71,6 +72,13 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
         .where(RememberedAccount.device_id == device_id)
         .order_by(RememberedAccount.last_seen_at.desc())
     ).all()
+    hidden = {
+        email
+        for (email,) in db.execute(
+            select(HiddenRememberedEmail.email).where(HiddenRememberedEmail.device_id == device_id)
+        ).all()
+    }
+
     # One lookup per person, not per row.
     person_ids = {member.person_id for member, _o, _p in rows if member.person_id}
     linked: dict[uuid.UUID, list[str]] = {pid: [] for pid in person_ids}
@@ -80,7 +88,10 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
             .where(PersonEmail.person_id.in_(person_ids))
             .order_by(PersonEmail.created_at)
         ).all():
-            linked[person_id].append(email)
+            # Hidden on this browser only: the link itself is untouched, and
+            # the address still works everywhere else.
+            if email not in hidden:
+                linked[person_id].append(email)
 
     return [
         RememberedOrgView(
@@ -93,6 +104,34 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
         )
         for member, organization, person in rows
     ]
+
+
+def hide_emails(device_id: uuid.UUID, emails: list[str], db: Session) -> int:
+    """Stops showing these linked personal addresses in this browser's picker.
+
+    Not a deletion and not an unlink: the addresses stay the person's, on
+    every other browser and everywhere else in Knohow. This only answers
+    "don't show that one here"."""
+    if not emails:
+        return 0
+    existing = {
+        email
+        for (email,) in db.execute(
+            select(HiddenRememberedEmail.email).where(
+                HiddenRememberedEmail.device_id == device_id,
+                HiddenRememberedEmail.email.in_(emails),
+            )
+        ).all()
+    }
+    added = 0
+    for email in emails:
+        if email in existing:
+            continue
+        db.add(HiddenRememberedEmail(device_id=device_id, email=email))
+        existing.add(email)
+        added += 1
+    db.commit()
+    return added
 
 
 def forget_device(device_id: uuid.UUID, db: Session, member_ids: list[uuid.UUID] | None = None) -> int:
@@ -108,5 +147,9 @@ def forget_device(device_id: uuid.UUID, db: Session, member_ids: list[uuid.UUID]
             return 0
         condition = and_(condition, RememberedAccount.member_id.in_(member_ids))
     result = db.execute(delete(RememberedAccount).where(condition))
+    if member_ids is None:
+        # Forgetting the browser entirely takes its hide list with it —
+        # nothing is left for those entries to hide.
+        db.execute(delete(HiddenRememberedEmail).where(HiddenRememberedEmail.device_id == device_id))
     db.commit()
     return result.rowcount or 0

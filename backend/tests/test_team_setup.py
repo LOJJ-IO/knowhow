@@ -7,12 +7,14 @@ guard that keeps Remove an undo rather than a quiet org-chart change.
 """
 
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
 from app.exceptions import CrossOrgAccessDenied
 from app.models.organization import Organization
 from app.models.team import Team
+from app.onboarding import service as onboarding_service
 from app.org_chart import service as org_chart_service
 
 
@@ -145,3 +147,149 @@ def test_blank_organization_name_is_refused():
         org_chart_service.rename_organization(org_id, "   ", uuid.uuid4(), db)
 
     assert not db.committed
+
+
+class _SetupSession:
+    """Just enough session for the setup-progress helpers."""
+
+    def __init__(self, org, chart_rows=()):
+        self._org = org
+        self._chart_rows = list(chart_rows)
+        self.committed = False
+
+    def get(self, _model, _id):
+        return self._org
+
+    def execute(self, _stmt):
+        rows = self._chart_rows
+
+        class _R:
+            def first(self):
+                return rows[0] if rows else None
+
+        return _R()
+
+    def commit(self):
+        self.committed = True
+
+    def refresh(self, _obj):
+        pass
+
+
+def test_setup_step_is_recorded_and_completion_is_stamped():
+    org = Organization(id=uuid.uuid4(), name="Acme")
+    db = _SetupSession(org)
+
+    onboarding_service.record_setup_step(org.id, "teams", db)
+    assert org.setup_step == "teams"
+    assert org.setup_completed_at is None
+
+    onboarding_service.record_setup_step(org.id, "done", db)
+    assert org.setup_step == "done"
+    assert org.setup_completed_at is not None
+
+
+def test_unknown_setup_step_is_refused():
+    org = Organization(id=uuid.uuid4(), name="Acme")
+    db = _SetupSession(org)
+
+    with pytest.raises(ValueError, match="unknown setup step"):
+        onboarding_service.record_setup_step(org.id, "teamz", db)
+
+
+def test_finished_setup_has_nothing_to_resume(monkeypatch):
+    org = Organization(id=uuid.uuid4(), name="Acme")
+    org.setup_step = "done"
+    member = SimpleNamespace(id=uuid.uuid4(), organization_id=org.id)
+
+    assert onboarding_service.resume_setup_step(member, _SetupSession(org)) is None
+
+
+def test_only_the_founder_resumes_setup(monkeypatch):
+    org = Organization(id=uuid.uuid4(), name="Acme")
+    org.setup_step = "teams"
+    member = SimpleNamespace(id=uuid.uuid4(), organization_id=org.id)
+
+    monkeypatch.setattr(onboarding_service, "is_founding_member", lambda *a: False)
+    assert onboarding_service.resume_setup_step(member, _SetupSession(org)) is None
+
+    monkeypatch.setattr(onboarding_service, "is_founding_member", lambda *a: True)
+    assert onboarding_service.resume_setup_step(member, _SetupSession(org)) == "teams"
+
+
+def test_org_from_before_the_column_resumes_at_the_first_screen(monkeypatch):
+    """Answering the owner questions used to be the whole of setup, so these
+    orgs have a chart, no recorded step, and never saw the screens after it."""
+    org = Organization(id=uuid.uuid4(), name="acme.org")
+    member = SimpleNamespace(id=uuid.uuid4(), organization_id=org.id)
+    monkeypatch.setattr(onboarding_service, "is_founding_member", lambda *a: True)
+
+    with_chart = _SetupSession(org, chart_rows=[("chart-id",)])
+    assert onboarding_service.resume_setup_step(member, with_chart) == "orgName"
+
+    without_chart = _SetupSession(org)
+    assert onboarding_service.resume_setup_step(member, without_chart) is None
+
+
+class _JoinLinkSession:
+    def __init__(self, live=()):
+        self.live = list(live)
+        self.added = []
+        self.committed = False
+
+    def execute(self, _stmt):
+        rows = self.live
+        class _R:
+            def scalars(self_inner):
+                return rows
+        return _R()
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    def commit(self):
+        self.committed = True
+
+    def refresh(self, _obj):
+        pass
+
+
+@pytest.fixture
+def _setup_role(monkeypatch):
+    monkeypatch.setattr(onboarding_service, "_require_setup_role", lambda *a, **k: None)
+    monkeypatch.setattr(onboarding_service, "record_audit_entry", lambda **kwargs: None)
+
+
+def _actor():
+    return SimpleNamespace(id=uuid.uuid4())
+
+
+def test_creating_a_join_link_revokes_the_previous_one(_setup_role):
+    """One link, singular. A forgotten second link is exactly the leak the
+    lifetime and revoke exist to avoid."""
+    old = SimpleNamespace(revoked_at=None)
+    db = _JoinLinkSession([old])
+
+    link = onboarding_service.create_join_link(uuid.uuid4(), "7d", _actor(), db)
+
+    assert old.revoked_at is not None
+    assert link.expires_at is not None
+    assert db.committed
+
+
+def test_no_end_date_link_has_no_expiry(_setup_role):
+    link = onboarding_service.create_join_link(uuid.uuid4(), "forever", _actor(), _JoinLinkSession())
+    assert link.expires_at is None
+
+
+def test_unknown_lifetime_is_refused(_setup_role):
+    with pytest.raises(ValueError, match="unknown link lifetime"):
+        onboarding_service.create_join_link(uuid.uuid4(), "10y", _actor(), _JoinLinkSession())
+
+
+def test_revoking_kills_every_live_link(_setup_role):
+    live = [SimpleNamespace(revoked_at=None), SimpleNamespace(revoked_at=None)]
+    db = _JoinLinkSession(live)
+
+    assert onboarding_service.revoke_join_link(uuid.uuid4(), _actor(), db) == 2
+    assert all(l.revoked_at is not None for l in live)

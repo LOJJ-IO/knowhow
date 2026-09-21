@@ -4,10 +4,14 @@ status: active
 tags: []
 created: 2026-08-31
 updated: 2026-09-20
+updated: 2026-09-21
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-21 — A ResizeObserver on a container holding a third-party iframe will blink on every interaction inside the iframe
+`LoginModal`'s `ResizeObserver` re-measured its body whenever the Cal.com embed's iframe resized internally (date pick, time select, form focus). Each observation called `setHeights` → React re-render → the `.t-resize` CSS transition tweened the modal's height, producing a visible flash/"blink". The `.t-demo-booking` slot already had a fixed CSS height (538px) to prevent double-tween on mount, but the observer still fired on sub-pixel layout shifts from the iframe. Fix: track the last-set full height in a ref and skip `setHeights` when the new height differs by less than 2px. General rule: when a `ResizeObserver` feeds a CSS-transitioned dimension, always debounce or threshold the state update — a third-party iframe can resize itself on any user interaction, and each resize triggers a visible transition even if the height change is imperceptible.
 
 ## 2026-09-18 — Antigravity ignores Cursor rule paths unless you mirror them
 Knowhow’s durable agent instructions lived in `CLAUDE.md`, `.cursor/rules/`, and `.cursor/skills/`. Google Antigravity loads `~/.gemini/GEMINI.md` + `.agents/rules/` (and skills under `.agents/skills/`), so it looked “bad at instructions” while Cursor obeyed the same repo. Fix: short Always On rules in `.agents/rules/` (`trigger: always_on`) for invariants + second-brain, plus glob rules for `src/` / `backend/`. Keep those files in sync when invariants change — do not assume Antigravity reads `.cursor/`. MCP is a separate surface: workspace `.agents/mcp_config.json` (not Cursor’s `~/.cursor/mcp.json`); seed only servers that match invariants (GitHub + Context7 now; no Prisma / no Drive-into-`src/` / no DB until provisioned).
@@ -304,3 +308,11 @@ font, colour and line-height on anything portaled. See [[FEAT-landing-login-pane
 a second sentence; page titles use a pipe (`Terms of Use | Knohow`). Applies to placeholder copy
 too. Code comments and `console.error` strings were left alone as not user-facing. Recorded in
 [[0013-sign-in-is-to-an-organization]].
+
+## Dropdowns inside the login modal open in place, never floating (2026-09-21)
+`.t-login-modal` is `overflow: hidden` and its height is animated to the body's measured height by a
+ResizeObserver (`LoginModal`). An absolutely positioned menu is therefore **clipped**, and a portal would
+escape the tween that every other step rides on. `SetupDropdown` expands **in flow** instead: the list takes
+part in layout, the observer sees the body grow, and the modal tweens open like any other step change.
+Before converting it to an overlay, that `overflow: hidden` and the measured-height animation both have to
+go, and the "area bounce" goes with them.

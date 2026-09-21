@@ -45,8 +45,8 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 
 ## Account picker — Remove link icon (2026-09-21)
 Lucide `UserRoundX` before the picker's "Remove account(s)" link only (`gap-[4px]`, same
-size/color as the label, underline spans icon + text). Second-screen heading unchanged. See
-[[FEAT-landing-login-panel]].
+size/color as the label, underline spans icon + text). Second-screen heading unchanged. Remove
+screen lists linked personal emails as their own rows too. See [[FEAT-landing-login-panel]].
 
 ## Log In account picker built (2026-09-20)
 "Which account today?" — the accounts this browser has signed in with, shown instead of the plain
@@ -186,6 +186,231 @@ org, pick a team, enter the app. Security edge cases worked through and locked i
 Still needed before building: the pending-request state + approver UI +
 empty in-app state + link records + team-lead role + admin-proof ownership takeover + a stored onboarding
 state with a resume route don't exist yet.
+
+## ⏭ Next + a standing reminder (2026-09-21)
+
+**Reminder the user asked me to hold:** *once they have tested everything from the top, **reset the
+database**.* The reset is destructive and is the user's call to trigger — do not run it unprompted.
+
+```bash
+# Wipe and rebuild the dev database, then replay every migration.
+psql -d knohow -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
+cd backend && .venv/bin/alembic upgrade head
+```
+
+**Note that testing "from the top" needs the reset *first*.** The live org already has
+`setup_step = done`, two teams and a membership, so the setup flow will not reopen on sign-in until the
+row is cleared. A narrower reset that keeps the account:
+
+```bash
+psql -d knohow -c "UPDATE organizations SET setup_step=NULL, setup_completed_at=NULL, name=observed_domain;"
+psql -d knohow -c "DELETE FROM org_memberships; DELETE FROM teams; DELETE FROM join_links;"
+```
+
+**Still not built (the joiner's half of the link):**
+- Nothing validates `?join=<token>`: no expiry check, no revoked check, **no domain lock enforced**.
+- No "Which team are you in?" request screen for the person arriving, and no pending-**request** state
+  distinct from the existing pending-join.
+- No approver view (who joined, who is waiting, naming a lead on approval).
+- No done screen after setup, so finishing still drops onto an unchanged landing page.
+- Wrong-account / already-in-another-org / expired / turned-off screens: copy approved, none built.
+
+## Invite link built — three screens, one action each (2026-09-21)
+User: **"One action per screen"**, so the link is three screens, not one form.
+
+- **Offer** — "Ready to bring everyone in?" / "One link works for everyone at {domain}. They pick their
+  team, you approve." → **Create invite link**
+- **Lifetime** — "How long should the link work?" / "You can turn it off at any time." → pills
+  `24 hours · 7 days · 30 days · No end date` (**7 days pre-picked** so the button is never dead and nothing
+  is greyed) → **Continue**
+- **Ready** — "Your link is ready." / "Anyone with a {domain} account can use it. Everyone else is turned
+  away." + the URL in a read-only field → **Copy link**, which also finishes setup (nothing left to decide,
+  so the approved copy's separate "Done" would have been a second button).
+
+**Backend:** new `JoinLink` model + migration **`0015_join_links`** (applied to `knohow` and `knohow_test`),
+`create_join_link` / `revoke_join_link` / `join_link_url`, `POST`/`DELETE
+/organizations/{org_id}/join-link`. Deliberately **not** an `Invitation`: a nomination names one person and
+is consumed, this is multi-use and org-wide. **Issuing a new link revokes the old one** — the owner's model
+is "the link", singular, and a forgotten second link is the leak the lifetime exists to prevent. `inviteLink`
+is now a resumable `SETUP_STEPS` value. **107 backend tests** (4 new).
+
+**Verified over CDP**, all three screens: headings and body copy correct, `30 days` selected reached the
+backend as `"30d"`, and each screen showed exactly **one** button (the lifetime screen's pills are choices,
+not actions).
+
+**Not built — the joiner's side of this link.** Nothing yet validates `?join=<token>`, enforces the domain
+lock, or turns a team pick into a request. That is the next piece ([[0014-org-setup-and-join-link]]).
+
+## Teams + own-team rebuilt as pills (2026-09-21, user)
+User: *"i want the team names to be inside pills... put one team, enter as a pill, put another, enter as a
+pill... and then it asks you which one are you and you just click on the pill"*, plus **three things I got
+wrong**: the screen had several buttons (Add team / Remove / Continue) against the **one-action rule**,
+**Enter submitted the form and jumped to the next screen** instead of committing the team (so there was no
+way back), and **greyed-out disabled buttons were never asked for**.
+
+- **Teams screen is a tag field.** Type, **Enter commits a pill**, caret stays. Pills wrap in the field,
+  each with an ×, Backspace on an empty caret takes back the last. Enter **never** advances.
+- **Own-team screen is those pills, clickable.** Multi-select, selected = filled, `I'm not in any` is
+  exclusive either way round. `SetupDropdown` deleted — nothing else used it.
+- **One button per screen** (Continue), **never disabled, never greyed**.
+- Pill anatomy follows the user's own `tag-input` spec: chip owns height + max width
+  (`h-7 w-fit shrink-0 max-w-[min(70%,24ch)]`), only the label shrinks (`min-w-0 truncate`), the × is
+  `size-4 shrink-0`.
+- **Verified in a real browser over CDP**, not by reading the code: typed "Design", pressed Enter, got three
+  pills and stayed on the screen; Continue then showed the same pills selectable, two on, one button.
+
+## Own-team step is multi-select + the "nothing happens" question (2026-09-21)
+**"Nothing happens" was setup succeeding.** The DB proves it: teams `Finance` + `Computing` saved, a
+`member` membership for `rwopara@ualberta.ca` on **Computing**, `setup_step = done` at 17:00:01. Continue
+posted the membership, recorded completion and closed the sheet — onto an unchanged landing page, because
+**the signed-in / done screen still doesn't exist** (user's to design; it's been on the "to build" list
+since 2026-09-18). Nothing to fix in the flow; the gap is the missing screen.
+
+**Multi-select** (user: *"i could also be in more than one team"*): `SetupDropdown` now takes `multiple` +
+`values`, keeps the list open while ticking, marks chosen options with a check, and reads the chosen names
+on the trigger. `OwnTeamStep` posts one membership per team, and **"I'm not in any" is exclusive** with the
+teams either way round. Copy went plural: *"Which teams are you in?"* / *"Pick as many as apply."*
+
+**Latent bug fixed alongside:** `OwnTeamStep` only ever knew the teams handed to it by the previous screen,
+so **resuming setup at this step showed an empty dropdown**. It now fetches `/org-chart/{org_id}` when
+nothing was carried in.
+
+## Sheet positioning bug — the real one (fixed 2026-09-21)
+The landing **scrolls inside its own `overflow-hidden` container**, not on the document. The sign-in sheet
+was `absolute`, so it scrolled away with the content: with the container at `scrollTop: 639` the sheet sat
+at `top: -639` and its modal off-screen above, leaving a sliver of sign-in background that looked like a
+broken page. The body-level scroll lock was also locking nothing. Sheet is now `fixed`, and the lock
+applies to the container (`pageRef`) too. Verified live over CDP: sheet `top: 0`, modal centred at 259,
+"What's your organization called?" with `Ualberta` prefilled. Full write-up in [[Known-Issues]].
+
+## Sheet-on-load bug (found + fixed 2026-09-21)
+Clicking an account in the picker, signing in, and coming back showed the landing page with a band of the
+sign-in background and the Edmonton mark, no modal. Cause: `sheetAtTop` was only ever set by the sheet's
+`onTransitionEnd`, so a sheet **opened on load** (the setup resume) never raised and `LoginModal` stayed
+closed. Fixed with a fallback timer (`SHEET_SLIDE_MS = 992`). Written up in [[Known-Issues]].
+
+**Live DB state (2026-09-21):** one org `ualberta.ca` (never named — `setup_step` NULL, 1 org chart, **0
+teams**), one member `rwopara@ualberta.ca` (**approved**), 1 remembered account. So the resume fallback
+sends this account to the **org-naming** screen, prefilled `Ualberta`.
+
+## Two agents on one file — what it cost, and what to check (2026-09-21)
+A second agent worked in `src/components/brand/landing-hero.tsx` at the same time as this session and
+resolved the clashes as **merge conflicts, keeping both sides**. That produces old-then-new code stacked in
+place rather than replaced. Symptoms seen: a duplicated `onClick`, a redeclared `step` state, a duplicated
+`needs_org_setup` condition, and an orphaned `<li>` that finally broke the Turbopack parse.
+
+**The dangerous case is the one that still compiles.** The other agent's Cal.com blink fix was present but
+**dead**: the old unconditional `setHeights(...)` survived above the new threshold guard, so the observer
+re-rendered on every Cal interaction exactly as before. Nothing failed; the fix simply never ran.
+
+**That agent also committed** as `d605fc7` (15:56) — org naming + teams screens, plus `rename_organization`
+and `delete_team`, and it added **`lucide-react`** (not in the locked stack — user to decide). Its commit
+**dropped the blink fix entirely**: `lastFull` is absent from `d605fc7`.
+
+**Restored into the working tree afterwards** (all verified: tsc 0, eslint 0, `next build` 0, 103 backend
+tests):
+- `SetupDropdown` + `OwnTeamStep` ("Which team is yours?"), and `TeamsStep` now hands its list on.
+- Resume wiring: `recordSetupStep` at each advance, `Me.setup_step`, `OrgSetupForm` starting on the
+  reported step, and the sheet opening for `needs_org_setup || setup_step`.
+- The remove-accounts **tree** (parent org rows, nested linked addresses, connected trunk) and
+  `forgetRememberedAccounts(memberIds, emails)`.
+- The **Cal.com blink fix**, this time without the stale line above it.
+- The other agent's **picker refinements**, which its own commit also dropped: the `UserRoundX` icon on the
+  Remove link (`leading-none`, not `pb-px`), the label counting **`removableAccounts(...)`** rather than
+  organizations (they differ once addresses nest), tighter rows (`gap-0.5`, `px-2 py-1`, `leading-tight`),
+  and the OR divider at `mt-3`.
+
+**How the gap was found** (worth repeating, not eyeballing): compare top-level symbols between the two
+versions, then compare whitespace-normalised sorted line sets. The symbol sets matched while six real UI
+lines were still missing — a positional `diff` drowns them in noise because restored blocks land at
+different line numbers.
+
+**If this happens again:** `git log` first (the other agent may have committed), then grep for old/new pairs
+that compile — duplicate props, redeclared state, a stale statement above its replacement. `tsc` alone will
+not catch the last one.
+
+## "Resume, don't restart" built + two bugs it exposed (2026-09-21)
+User: *"i know the current log in hasnt completed all these new steps why is it taking me to the get
+started screen"*. Three separate causes, all fixed.
+
+**1. Setup completion was inferred, not recorded.** `needs_org_setup` = "no OrgChart row AND founding
+member", and the owner/Super-Admin questions **create** that row — so setup looked finished the moment the
+first question was answered, and `orgName` / `teams` / `ownTeam` were unreachable. Exactly the trap
+[[0014-org-setup-and-join-link]] flagged for teams ("setup completion is its own flag, not *has teams*"),
+hit one step earlier.
+- **Fix:** `organizations.setup_step` + `setup_completed_at` (migration **`0014_setup_progress`**, applied
+  to `knohow` and `knohow_test`). `record_setup_step()` / `resume_setup_step()` in the onboarding service,
+  `POST /onboarding/setup-step`, and `setup_step` on `/auth/me`. Frontend records each advance and starts
+  `OrgSetupForm` on the reported step; the sheet now opens for `needs_org_setup || setup_step`.
+- Only the **founding member** resumes; an unknown step is refused rather than stored.
+- **Legacy fallback:** an org with a chart but no recorded step resumes at `orgName` (nothing had finished
+  setup before the column existed, so it can't re-prompt anyone who was genuinely done). This is what makes
+  the user's existing local org pick up where it left off.
+
+**2. The founder is `auto_affiliated`, not approved.** A brand-new org's first member gets
+`MemberStanding.AUTO_AFFILIATED` (`app/onboarding/service.py`, `created_org` branch) — there is nobody
+approved to approve them yet. The routes added for naming and teams used `require_same_org`
+(approved-only), so **every one of them would have 403'd on the first real run**. New
+`require_same_org_for_setup` in `app/api/deps.py`: approved members pass as usual, and the founding member
+also passes **while setup is unfinished**, so it can't become a way for an auto-joined member to edit the
+chart afterwards. Applied to rename-org, create-team, delete-team and memberships.
+
+**3. Tree connectors were detached.** The remove screen drew one elbow per child with a flex `gap`, so the
+line broke between rows. Now one continuous trunk: spacing moved into each child's padding, children are a
+fixed 56px so the trunk meets each row at its middle (36px), non-last children get trunk + stub, the last
+turns the corner and stops.
+
+**103 backend tests pass** (5 new); tsc/eslint/build clean. Still **unverified in a browser**.
+
+## Remove accounts is a tree now, and hiding an address is its own thing (2026-09-21)
+**Bug found:** the remove screen listed each linked personal address as a flat row carrying the *member
+ids* of the orgs that surfaced it, so ticking `ronaldwop@gmail.com` forgot the whole organization row with
+it. Nothing was lost (the link survived, signing in re-added the row) but it removed far more than the
+person asked for.
+
+**Fix (user's design):** the screen is a **file tree** — one organization per row, the person's linked
+personal addresses **nested underneath** with an elbow connector. Ticking an organization ticks its whole
+branch; a child can be unticked on its own to keep it. Unticking a child does **not** rescue the row above
+it, because they are two different removals.
+
+**The two ticks mean different things, deliberately:**
+- An **organization** is *forgotten* on this browser (unchanged behaviour: `remembered_accounts` rows go,
+  the member/org/person/links are untouched, signing in re-adds it).
+- A **child address** has no row of its own — it lives in `person_emails` and rides on the org rows as a
+  `Personal (n)` chip. So removing it from the sign-in screen is a **hide, scoped to this device**, never an
+  unlink. Unlinking would follow the person to every browser, which is not what "remove it from this
+  screen" means ([[0011-device-remembered-accounts]], [[0012-identity-linking-one-person-many-accounts]]).
+
+- **Backend:** new `hidden_remembered_emails` table (migration **`0013_hidden_remembered_emails`**, applied
+  to both `knohow` and `knohow_test`), `HiddenRememberedEmail` model, `hide_emails()` in
+  `app/auth/remembered.py`, `list_remembered_orgs` filters hidden addresses out, `forget_device(None)` also
+  clears the device's hide list, and `DELETE /auth/remembered-accounts` takes `emails` alongside
+  `member_ids` (returns `{removed, hidden}`). A call naming **only** emails does not forget anything and
+  **keeps the device cookie**.
+- **Frontend:** `removableAccounts` returns a tree, `RemoveAccountsScreen` renders parent/child rows, and
+  `onRemoved` now reports `{memberIds, emails}` so the picker drops hidden addresses from the chips without
+  a reload.
+- **98 backend tests pass** (3 new/updated in `tests/test_remembered_accounts.py`); tsc/eslint/build clean.
+- **Not decided:** whether signing in with a hidden address again should un-hide it. Today it stays hidden
+  until the browser's accounts are removed entirely.
+
+## Founder's own team + custom dropdown (2026-09-21)
+Third screen of setup: **"Which team is yours?"** / "Pick the one you work in.", reading the teams the
+founder just added, plus **"I'm not in one"** as a real answer (a founder can sit above the teams). Picking
+a team POSTs `/organizations/{org_id}/memberships` with role `member` — being in a team isn't authority,
+that's settled by the owner question. Step order in `OrgSetupForm` is now owner questions → `verifyAdmin`
+→ `orgName` → `teams` → `ownTeam`.
+- **`SetupDropdown`** (user asked for a custom dropdown, not a native `<select>`): built from the setup
+  screens' own button, combobox/listbox roles, `aria-activedescendant`, arrow keys, Enter/Space, Escape,
+  click-outside, chevron that flips open.
+- **It opens in place, not floating.** `.t-login-modal` is `overflow: hidden` and animates to its measured
+  body height, so an absolutely positioned menu would be clipped. Expanding in flow grows the modal through
+  the same ResizeObserver tween as every other step. Worth knowing before anyone tries to "fix" it into an
+  overlay — see [[Lessons-Learned]].
+- `/auth/me`'s `id` is now on the frontend `Me` type (the membership POST needs the member id).
+- **Invented copy to review:** the dropdown's resting label **"Select a team"** — the approved set doesn't
+  name it. Marked PLACEHOLDER in the code.
+- tsc/eslint/next build clean. **Unverified in a browser.**
 
 ## Org naming + team creation screens built (2026-09-21)
 **The org was never named.** A Workspace org is created with `name` set to its hosted domain

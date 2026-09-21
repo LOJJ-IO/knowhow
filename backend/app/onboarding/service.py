@@ -13,6 +13,7 @@ from app.auth.login import LoginResult
 from app.auth.pkce import build_state_token, decode_state_token, derive_code_challenge, generate_code_verifier
 from app.config import get_settings
 from app.google.scopes import LOGIN_SCOPES
+from app.models.join_link import JoinLink
 from app.models.invitation import Invitation, InvitationKind
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
@@ -172,6 +173,83 @@ def create_org_chart(
     return OrgChartCreationResult(
         org_chart=org_chart, owner_invitation=owner_invitation, super_admin_invitation=super_admin_invitation
     )
+
+
+# What the lifetime pills on the "How long should the link work?" screen mean.
+# `None` is "No end date" — an explicit choice, never a default.
+JOIN_LINK_LIFETIMES: dict[str, int | None] = {
+    "24h": 1,
+    "7d": 7,
+    "30d": 30,
+    "forever": None,
+}
+
+
+def join_link_url(link: JoinLink) -> str:
+    return f"{get_settings().frontend_origin}/?join={link.token}"
+
+
+def create_join_link(org_id: uuid.UUID, lifetime: str, actor: OrgMember, db: Session) -> JoinLink:
+    """Mints the org's join link, replacing whatever was live before.
+
+    Issuing a new link **revokes the old one** rather than leaving two in
+    circulation: the owner's mental model is "the link", singular, and a
+    forgotten second link is exactly the leak this is supposed to avoid.
+    People who already joined are unaffected ([[0014-org-setup-and-join-link]])."""
+    if lifetime not in JOIN_LINK_LIFETIMES:
+        raise ValueError(f"unknown link lifetime: {lifetime}")
+    _require_setup_role(org_id, actor, db)
+
+    now = datetime.now(timezone.utc)
+    for live in db.execute(
+        select(JoinLink).where(JoinLink.organization_id == org_id, JoinLink.revoked_at.is_(None))
+    ).scalars():
+        live.revoked_at = now
+
+    days = JOIN_LINK_LIFETIMES[lifetime]
+    link = JoinLink(
+        id=uuid.uuid4(),
+        organization_id=org_id,
+        token=secrets.token_urlsafe(32),
+        created_by_member_id=actor.id,
+        expires_at=None if days is None else now + timedelta(days=days),
+    )
+    db.add(link)
+    db.commit()
+    db.refresh(link)
+
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="onboarding.join_link.created",
+        target_resource_id=str(link.id),
+        details={"lifetime": lifetime},
+        db=db,
+    )
+    return link
+
+
+def revoke_join_link(org_id: uuid.UUID, actor: OrgMember, db: Session) -> int:
+    """Kills the org's live link. People already in stay in."""
+    _require_setup_role(org_id, actor, db)
+    now = datetime.now(timezone.utc)
+    killed = 0
+    for live in db.execute(
+        select(JoinLink).where(JoinLink.organization_id == org_id, JoinLink.revoked_at.is_(None))
+    ).scalars():
+        live.revoked_at = now
+        killed += 1
+    db.commit()
+    if killed:
+        record_audit_entry(
+            org_id=org_id,
+            actor_user_id=actor.id,
+            action_type="onboarding.join_link.revoked",
+            target_resource_id=str(org_id),
+            details={"count": killed},
+            db=db,
+        )
+    return killed
 
 
 def invite_url(invitation: Invitation) -> str:
@@ -597,6 +675,50 @@ def create_domainless_org(pending_token: str, db: Session, name: str | None = No
 def is_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
     org_chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
     return org_chart is not None and org_chart.owner_member_id == member.id
+
+
+SETUP_DONE = "done"
+# The screens setup can stop on, in order. Anything else is refused rather
+# than stored, so a typo can't strand a founder on a step that doesn't exist.
+SETUP_STEPS = ("orgName", "teams", "ownTeam", "inviteLink", SETUP_DONE)
+
+
+def record_setup_step(org_id: uuid.UUID, step: str, db: Session) -> Organization:
+    """Remembers where the founder got to. Called as each setup screen is
+    finished, so the next sign-in resumes there ([[0014-org-setup-and-join-link]])."""
+    if step not in SETUP_STEPS:
+        raise ValueError(f"unknown setup step: {step}")
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise ValueError(f"no Organization with id={org_id}")
+    org.setup_step = step
+    if step == SETUP_DONE and org.setup_completed_at is None:
+        org.setup_completed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(org)
+    return org
+
+
+def resume_setup_step(member: OrgMember, db: Session) -> str | None:
+    """The step to put this person back on, or None when there's nothing to
+    resume. Only the founder runs setup, so only the founder can resume it;
+    everyone else gets None however far setup got."""
+    org = db.get(Organization, member.organization_id)
+    if org is None or org.setup_step == SETUP_DONE:
+        return None
+    if not is_founding_member(member.organization_id, member.id, db):
+        return None
+    if org.setup_step is not None:
+        return org.setup_step
+    # Orgs that answered the owner questions before setup progress was
+    # recorded: their chart exists, so `needs_org_setup` is already false,
+    # but they never saw the screens after it. Send them to the first one.
+    # Nothing had finished setup before this column existed, so this cannot
+    # re-prompt someone who was genuinely done.
+    has_chart = db.execute(
+        select(OrgChart.id).where(OrgChart.org_id == member.organization_id)
+    ).first()
+    return SETUP_STEPS[0] if has_chart else None
 
 
 def needs_org_setup(member: OrgMember, db: Session) -> bool:

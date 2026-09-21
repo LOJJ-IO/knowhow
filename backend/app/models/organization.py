@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, String
+from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -28,6 +28,15 @@ class Organization(Base):
     # Owner's opt-in: a later signup whose Google `hd` matches this org's
     # domain is approved on arrival instead of waiting for the owner.
     auto_accept_workspace_members: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Where the founder got to in setup, so signing in takes them back to the
+    # step they stopped on instead of the landing page (user, 2026-09-21).
+    # Null means setup hasn't started; "done" means it finished. Recorded
+    # rather than inferred: "has an org chart" and "has teams" both go true
+    # part-way through, which is how setup came to look finished when it
+    # wasn't ([[0014-org-setup-and-join-link]]).
+    setup_step: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    setup_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = created_at_col()
 

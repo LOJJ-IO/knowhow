@@ -18,7 +18,7 @@ from app.auth.identity import (
     start_link_account,
     start_link_account_for_pending_personal,
 )
-from app.auth.remembered import forget_device, list_remembered_orgs, remember_account
+from app.auth.remembered import forget_device, hide_emails, list_remembered_orgs, remember_account
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.google.directory import DirectoryLookupError
@@ -33,6 +33,7 @@ from app.onboarding.service import (
     accept_invitations_on_sign_in,
     is_owner,
     needs_org_setup,
+    resume_setup_step,
 )
 from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
 
@@ -267,6 +268,10 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "standing": member.standing.value,
         "is_owner": is_owner(member.organization_id, member, db),
         "needs_org_setup": needs_org_setup(member, db),
+        # Where setup stopped, if it did. `needs_org_setup` only covers the
+        # very first questions: it goes false as soon as an org chart row
+        # exists, which is part-way through setup, not the end of it.
+        "setup_step": resume_setup_step(member, db),
         "is_super_admin": member.super_admin_verified_at is not None,
     }
 
@@ -304,9 +309,15 @@ def remembered_accounts(
 
 
 class ForgetAccountsRequest(BaseModel):
-    """Which rows to forget. `member_ids` omitted means all of them."""
+    """Which rows to forget. `member_ids` omitted **and** no `emails` means
+    all of them.
+
+    `emails` are linked personal addresses to stop showing on this browser.
+    They have no row of their own, so removing one from the sign-in screen is
+    a hide, never an unlink (user, 2026-09-21)."""
 
     member_ids: list[uuid.UUID] | None = None
+    emails: list[str] | None = None
 
 
 @router.delete("/remembered-accounts")
@@ -320,17 +331,28 @@ def remove_remembered_accounts(
     browser, or all of them when none are named. Nothing about the members,
     their organizations or their linked identities changes."""
     member_ids = payload.member_ids if payload else None
+    emails = payload.emails if payload else None
+    # "Hide these addresses" on its own is not "forget everything": only a
+    # call naming neither means all rows.
+    forget_all = member_ids is None and not emails
     removed = 0
+    hidden = 0
     if knohow_device:
         try:
-            removed = forget_device(uuid.UUID(knohow_device), db, member_ids)
+            device_id = uuid.UUID(knohow_device)
         except ValueError:
-            removed = 0
+            device_id = None
+        if device_id is not None:
+            if emails:
+                hidden = hide_emails(device_id, emails, db)
+            if member_ids is not None or forget_all:
+                removed = forget_device(device_id, db, member_ids)
     # Only drop the device itself when nothing is left to remember; a partial
-    # removal must keep the cookie or the remaining rows become unreachable.
-    if member_ids is None or not _device_has_rows(knohow_device, db):
+    # removal must keep the cookie or the remaining rows become unreachable —
+    # and a hide always keeps it, since the rows it applies to are still there.
+    if forget_all or (not emails and not _device_has_rows(knohow_device, db)):
         response.delete_cookie(DEVICE_COOKIE)
-    return {"removed": removed}
+    return {"removed": removed, "hidden": hidden}
 
 
 def _device_has_rows(device_cookie: str | None, db: Session) -> bool:

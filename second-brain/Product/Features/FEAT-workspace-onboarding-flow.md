@@ -296,14 +296,17 @@ case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow*
 - Pill: Continue
 
 ### Founder: building the teams
-**Teams**
+**Teams** (rebuilt as a tag field 2026-09-21, user)
 - H: What teams are in {Org}? (the name given on the screen before)
 - Sub: Add the ones that exist today. You can change them later.
-- Field placeholder: Team name
-- Add control: Add team
-- Row control: Remove
-- Save hint (quiet, after each add): Saved
-- Pill: Continue (appears once there is one team)
+- **A tag field, not a form.** Type a name, **Enter commits it as a pill**, the caret stays for the next
+  one. Pills wrap in the field; each carries an × ; Backspace on an empty caret takes back the last one.
+- **One button on the screen: Continue.** No Add button, no Remove links, and **nothing greyed out** —
+  Continue is always the solid pill. The previous version let Enter submit the form and jump to the next
+  screen, which is exactly what the one-action rule exists to prevent.
+- Pill anatomy (user's spec): chip is `h-7 w-fit shrink-0 max-w-[min(70%,24ch)]`, label is the only part
+  allowed to shrink (`min-w-0 truncate`), the × is `size-4 shrink-0` and never compresses.
+- The dropped save hint ("Saved") is no longer needed: a pill appearing *is* the confirmation.
 
 **Workspace groups found** (only when delegation makes the import available)
 - H: We found {n} groups in your Google Workspace.
@@ -311,11 +314,15 @@ case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow*
 - Pill: Use these
 - Secondary: I'll type them myself
 
-**Founder's own team**
-- H: Which team is yours?
-- Sub: Pick the one you work in.
-- Extra option: I'm not in one
-- Pill: Continue
+**Founder's own teams** (multi-select from 2026-09-21: user, *"i could also be in more than one team"*)
+- H: Which teams are you in?
+- Sub: Pick as many as apply.
+- **The pills from the screen before, now clickable.** Selected = filled `#1c1917`, unselected = hairline.
+  No dropdown (`SetupDropdown` was removed — nothing else used it).
+- Extra option: **I'm not in any** — exclusive with the teams, either way round
+- Pill: Continue → one membership POST per chosen team
+- The list **fetches the chart itself** when nothing was carried in, so resuming setup at this step doesn't
+  show an empty dropdown
 
 ### Founder: the invite link
 **Before creating it**

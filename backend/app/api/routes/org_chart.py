@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_approved_member, get_db, require_same_org
+from app.api.deps import get_approved_member, get_db, require_same_org, require_same_org_for_setup
 from app.models.org_member import OrgMember
 from app.models.org_membership import OrgRole
 from app.org_chart.service import (
@@ -38,7 +38,7 @@ def rename_organization_route(
     org_id: uuid.UUID,
     body: RenameOrganizationRequest,
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(require_same_org),
+    member: OrgMember = Depends(require_same_org_for_setup),
 ) -> dict:
     """Setup's first question: what the organization is actually called."""
     org = rename_organization(org_id, body.name, member.id, db)
@@ -55,7 +55,7 @@ def create_team_route(
     org_id: uuid.UUID,
     body: CreateTeamRequest,
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(require_same_org),
+    member: OrgMember = Depends(require_same_org_for_setup),
 ) -> dict:
     team = create_team(org_id, body.name, body.parent_team_id, member.id, db)
     return {"id": str(team.id), "name": team.name, "parent_team_id": str(team.parent_team_id) if team.parent_team_id else None}
@@ -91,7 +91,7 @@ def delete_team_route(
     org_id: uuid.UUID,
     team_id: uuid.UUID,
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(require_same_org),
+    member: OrgMember = Depends(require_same_org_for_setup),
 ) -> dict:
     """Undo for a team typed by mistake while setting up. Refuses once the team
     has people or child teams (see `delete_team`)."""
@@ -126,7 +126,7 @@ def upsert_membership_route(
     org_id: uuid.UUID,
     body: UpsertMembershipRequest,
     db: Session = Depends(get_db),
-    member: OrgMember = Depends(require_same_org),
+    member: OrgMember = Depends(require_same_org_for_setup),
 ) -> dict:
     membership = upsert_membership(org_id, body.team_id, body.member_id, body.role, db, actor_member_id=member.id)
     return {

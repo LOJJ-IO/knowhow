@@ -57,6 +57,37 @@ def require_same_org_any_standing(
     return member
 
 
+def require_same_org_for_setup(
+    org_id: uuid.UUID, member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)
+) -> OrgMember:
+    """The org-chart routes setup itself drives (naming the org, adding and
+    removing teams, the founder's own membership).
+
+    Approved members pass as usual. The **founding member also passes while
+    setup is unfinished**, because the founder of a brand-new org starts out
+    `auto_affiliated` — there is nobody approved to approve them yet, so
+    requiring standing here would lock them out of their own setup. Once
+    setup is done they need standing like everyone else, so this can't become
+    a way for an auto-joined member to edit the chart."""
+    if member.organization_id != org_id:
+        raise CrossOrgAccessDenied(f"member {member.id} does not belong to organization {org_id}")
+    if member.standing == MemberStanding.APPROVED:
+        return member
+
+    # Imported here: the onboarding service pulls in a good deal of the app,
+    # and deps is imported by every route module.
+    from app.models.organization import Organization
+    from app.onboarding.service import SETUP_DONE, is_founding_member
+
+    org = db.get(Organization, org_id)
+    setup_finished = org is not None and org.setup_step == SETUP_DONE
+    if not setup_finished and is_founding_member(org_id, member.id, db):
+        return member
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN, "membership not yet approved by the organization's owner"
+    )
+
+
 def require_same_org(org_id: uuid.UUID, member: OrgMember = Depends(get_approved_member)) -> OrgMember:
     """Route-level guard mirroring the boundary enforced inside the service
     functions themselves (get_drive_client_for_user, revoke_and_offboard,

@@ -129,8 +129,12 @@ own access) is where the security edge cases live. This ADR records the answers 
 - Revocation-on-removal depends on delegation being provisioned; until then it is mocked in `src/` per
   [[0001-mocked-data-first-prototype]] and only `backend/` can do the real Drive calls.
 - Needs a **team lead** role on team membership, set from the approval screen.
-- Needs a stored **onboarding state per person** and a resume route, replacing the current bare redirect to
-  `frontend_origin`.
+- ~~Needs a stored **onboarding state per person** and a resume route~~ — **built 2026-09-21** for setup:
+  `organizations.setup_step` / `setup_completed_at`, `POST /onboarding/setup-step`, `setup_step` on
+  `/auth/me`. The bare redirect to `frontend_origin` in `signup_redirect` is unchanged; the frontend reads
+  `/auth/me` on load and reopens the sheet, which is what makes resuming work.
+- Setup's own routes need `require_same_org_for_setup`, not `require_same_org`: the founder of a new org is
+  `auto_affiliated` until somebody approves them, and there is nobody to do it yet.
 - Needs an **ownership takeover** path driven by admin proof, on top of the existing proof flow.
 - The Workspace-groups import must **degrade to typing** when delegation isn't approved, and must not read
   the directory before the org has agreed to delegation.

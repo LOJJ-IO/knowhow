@@ -103,7 +103,7 @@ def test_remove_all_forgets_the_device_and_clears_the_cookie(monkeypatch):
         app.dependency_overrides.clear()
 
     assert seen == [(uuid.UUID(DEVICE), None)]
-    assert response.json() == {"removed": 2}
+    assert response.json() == {"removed": 2, "hidden": 0}
     assert 'knohow_device=""' in response.headers["set-cookie"]
 
 
@@ -135,7 +135,7 @@ def test_removing_some_rows_keeps_the_device_cookie(monkeypatch):
     finally:
         app.dependency_overrides.clear()
 
-    assert response.json() == {"removed": 1}
+    assert response.json() == {"removed": 1, "hidden": 0}
     assert 'knohow_device=""' not in response.headers.get("set-cookie", "")
 
 
@@ -212,3 +212,69 @@ def test_email_hint_pre_selects_the_account_at_google():
 
 def test_no_email_hint_leaves_the_chooser_alone():
     assert _login_hint(onboarding_service.start_signup().authorization_url) is None
+
+
+def test_hiding_an_address_keeps_the_rows_and_the_device_cookie(monkeypatch):
+    """Removing a linked personal address from the sign-in screen is a hide,
+    not a removal: it must not forget any account, and it must not drop the
+    device cookie that the remaining rows depend on (user, 2026-09-21)."""
+    forgotten: list[tuple] = []
+    hidden: list[tuple] = []
+    monkeypatch.setattr(
+        auth_routes,
+        "forget_device",
+        lambda device_id, db, member_ids=None: forgotten.append((device_id, member_ids)) or 0,
+    )
+    monkeypatch.setattr(
+        auth_routes,
+        "hide_emails",
+        lambda device_id, emails, db: hidden.append((device_id, emails)) or len(emails),
+    )
+    try:
+        client = _client()
+        client.cookies.set("knohow_device", DEVICE)
+        response = client.request(
+            "DELETE",
+            "/auth/remembered-accounts",
+            json={"emails": ["someone@gmail.com"]},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert forgotten == []
+    assert hidden == [(uuid.UUID(DEVICE), ["someone@gmail.com"])]
+    assert response.json() == {"removed": 0, "hidden": 1}
+    assert "knohow_device" not in response.headers.get("set-cookie", "")
+
+
+def test_removing_a_row_and_hiding_an_address_in_one_call(monkeypatch):
+    """The tree lets someone tick an organization and one loose address at
+    once; both halves have to run."""
+    member_id = uuid.uuid4()
+    forgotten: list[tuple] = []
+    hidden: list[tuple] = []
+    monkeypatch.setattr(
+        auth_routes,
+        "forget_device",
+        lambda device_id, db, member_ids=None: forgotten.append((device_id, member_ids)) or 1,
+    )
+    monkeypatch.setattr(
+        auth_routes,
+        "hide_emails",
+        lambda device_id, emails, db: hidden.append((device_id, emails)) or len(emails),
+    )
+    monkeypatch.setattr(auth_routes, "_device_has_rows", lambda cookie, db: True)
+    try:
+        client = _client()
+        client.cookies.set("knohow_device", DEVICE)
+        response = client.request(
+            "DELETE",
+            "/auth/remembered-accounts",
+            json={"member_ids": [str(member_id)], "emails": ["someone@gmail.com"]},
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert forgotten == [(uuid.UUID(DEVICE), [member_id])]
+    assert hidden == [(uuid.UUID(DEVICE), ["someone@gmail.com"])]
+    assert response.json() == {"removed": 1, "hidden": 1}
