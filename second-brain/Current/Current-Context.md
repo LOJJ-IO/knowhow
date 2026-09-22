@@ -94,6 +94,29 @@ but without its white pill (user dropped it). Descenders were being clipped by `
 other app route serves; `next build` lists the route and the file is correct, so it is stale dev state.
 Restart `next dev` if it shows up.
 
+**Dashboard + org chart graph (2026-09-21):** the user reported that onboarding work wasn't reflected
+in the app, then asked that **every onboarding function seed the dashboard**. Done —
+[[0018-dashboard-reflects-onboarding]]. New backend read `GET /organizations/{org_id}/overview`
+(`org_overview`, plus `list_members`) assembles every answer setup collects in one round trip; new
+`/dashboard` screen (now `APP_HOME`, first nav row) shows the org, setup state, owner, Super Admin
+confirmation, teams with their generated icons, everyone including people waiting for approval, linked
+accounts counted as *people* not accounts, join link state and open invitations. `tests/test_org_overview.py`
+covers it (3 tests); backend suite 112 passing. `/org-chart` is now a **graph** — owner on top, teams
+spread beneath on a dotted draggable canvas, from a flowchart component the user supplied
+(`src/components/app/flow-canvas.tsx`, generic).
+
+**Dialogs (2026-09-21):** Settings is a **dialog**, not a route — [[0017-dialogs-over-settings-screens]],
+which also records the dialog taxonomy borrowed from Sage_v1 (one shell; `size` sm/lg/xl; `kind`
+form/confirm; scale+fade entrance off Base UI's data-attributes; always-available safe exit). It writes
+the two settings that actually have endpoints (org name, auto-accept Workspace accounts), both
+owner-only in the backend, and shows the join link read-only.
+
+**Top band + sidebar foot (2026-09-21):** topbar matches the reference — panel toggle, page name, then
+search, alerts, New, and the person's generated avatar. The reference's grid icon was left out per the
+user. **Alerts and New are not wired to anything yet** (no notifications; nothing to create until
+documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot has Help (a route) and
+Settings (the dialog).
+
 **Next:** user picks which screen to build first.
 
 ## Account picker — Remove link icon (2026-09-21)

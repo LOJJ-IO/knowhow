@@ -54,6 +54,10 @@ export function FlowCanvas({
   const [offsets, setOffsets] = useState<
     Record<string, { dx: number; dy: number }>
   >({});
+  /** Which card is on top. State rather than the drag ref, because render
+   *  can't read a ref — the original this was adapted from did, which React
+   *  now flags. */
+  const [lifted, setLifted] = useState<string | null>(null);
   const drag = useRef<{
     id: string;
     startX: number;
@@ -145,6 +149,7 @@ export function FlowCanvas({
         baseDy: off?.dy ?? 0,
         moved: false,
       };
+      setLifted(node.id);
       (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
     };
 
@@ -173,6 +178,7 @@ export function FlowCanvas({
   const onPointerUp = (node: FlowNode) => () => {
     const d = drag.current;
     if (d?.id !== node.id) return;
+    setLifted(null);
     // Let the click handler see that this was a drag before clearing it.
     if (d.moved) setTimeout(() => (drag.current = null), 0);
     else drag.current = null;
@@ -232,7 +238,7 @@ export function FlowCanvas({
               left: cx,
               top,
               width: w,
-              zIndex: drag.current?.id === node.id ? 2 : 1,
+              zIndex: lifted === node.id ? 2 : 1,
             }}
           >
             {renderNode(node, { selected: active })}

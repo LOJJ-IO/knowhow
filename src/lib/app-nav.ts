@@ -70,21 +70,19 @@ export const APP_SEARCH: AppNavItem = {
   purpose: "Find any document in the organization.",
 };
 
-/** The two rows at the foot of the sidebar. Kept out of `APP_NAV` because
- *  they aren't features of the product — they sit under the sections, quieter,
- *  the way Elera's do (user 2026-09-21). */
+/** The rows at the foot of the sidebar. Kept out of `APP_NAV` because they
+ *  aren't features of the product — they sit under the sections, quieter, the
+ *  way Elera's do (user 2026-09-21).
+ *
+ *  Settings is **not** here: it opens as a dialog over whatever you were
+ *  looking at rather than being a place you navigate to, so it has no route.
+ *  See `settings-dialog.tsx`. */
 export const APP_UTILITY: AppNavItem[] = [
   {
     label: "Help",
     href: "/help",
     section: "Organization",
     purpose: "Answers, and a way to reach us.",
-  },
-  {
-    label: "Settings",
-    href: "/settings",
-    section: "Organization",
-    purpose: "How Knohow behaves for your organization.",
   },
 ];
 

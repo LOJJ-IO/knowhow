@@ -14,5 +14,4 @@ export const NAV_ICONS: Record<string, AppIconName> = {
   "/offboarding": "person_remove",
   "/search": "search",
   "/help": "help",
-  "/settings": "settings",
 };

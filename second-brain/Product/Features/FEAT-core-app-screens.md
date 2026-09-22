@@ -140,6 +140,16 @@ top-level paths and the landing at `/` is untouched:
   cards with their generated icon and member count, plus loading, empty and error states.
 - The sidebar has a **toggle** (Sage_v1's behaviour, icon flips with state, tooltip; no white pill).
 
+### Dashboard, org chart graph, dialogs (2026-09-21)
+- **`/dashboard` is the app's home** and reflects every onboarding answer —
+  [[0018-dashboard-reflects-onboarding]] has the full mapping of question → table → what shows.
+- **`/org-chart` is a graph**: owner at the top, teams spread beneath, dotted canvas, draggable cards,
+  measured bezier connectors (`flow-canvas.tsx`, generic over rows/widths/edges).
+- **Settings is a dialog**, not a route — [[0017-dialogs-over-settings-screens]] records the dialog
+  taxonomy (shell, `size`, `kind`, entrance, safe exit).
+- **Open question:** the topbar's **Alerts** and **New** are drawn but not wired. Knohow has no
+  notifications, and there is nothing to create until documents exist. What should each do?
+
 ### Still to do
 - Enforce the `organizationId` requirement on every data-access function as real reads appear.
 - The six screens other than `/org-chart` are still empty states: there is no data behind them yet.

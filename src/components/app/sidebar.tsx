@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
@@ -9,6 +10,7 @@ import { AppIcon } from "@/components/app/icon";
 import { NAV_ICONS } from "@/components/app/nav-icons";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { useSession } from "@/components/app/session";
+import { SettingsDialog } from "@/components/app/settings-dialog";
 import { APP_NAV, APP_SECTIONS, APP_UTILITY } from "@/lib/app-nav";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,7 @@ import { cn } from "@/lib/utils";
 export function Sidebar() {
   const pathname = usePathname();
   const { chrome } = useSession();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   return (
     <nav
@@ -109,7 +112,20 @@ export function Sidebar() {
             </li>
           );
         })}
+        <li>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className={cn(
+              "flex h-[var(--app-row-h)] w-full cursor-pointer items-center gap-3 rounded-full px-3.5 text-left text-[1.0625rem] text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)]",
+            )}
+          >
+            <AppIcon name="settings" size={22} />
+            <span className="truncate">Settings</span>
+          </button>
+        </li>
       </ul>
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       {/* The person, with their generated gradient avatar — seeded from their
           address, so it is the same avatar everywhere. The organization's name
