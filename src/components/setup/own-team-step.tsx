@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { SetupAction, SetupBody, SetupError, SetupHeading } from "./shell";
 import type { SetupTeam } from "./types";
 import { ChoicePill } from "@/components/ui/choice-pill";
+import { TeamIcon } from "@/components/identity/team-icon";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
 const NONE = "none";
@@ -108,6 +109,7 @@ export function OwnTeamStep({
           <ChoicePill
             key={team.id}
             label={team.name}
+            leading={<TeamIcon name={team.name} size={24} />}
             selected={selected.includes(team.id)}
             onClick={() => toggle(team.id)}
           />

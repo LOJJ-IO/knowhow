@@ -7,8 +7,9 @@ import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
 import { AppIcon } from "@/components/app/icon";
 import { NAV_ICONS } from "@/components/app/nav-icons";
+import { PersonAvatar } from "@/components/identity/person-avatar";
+import { useSession } from "@/components/app/session";
 import { APP_NAV, APP_SECTIONS } from "@/lib/app-nav";
-import type { OrganizationChrome } from "@/lib/organization";
 import { cn } from "@/lib/utils";
 
 /** The app's one navigation surface: the org it belongs to, the screens
@@ -21,8 +22,9 @@ import { cn } from "@/lib/utils";
  *
  *  Client-side only because it needs the current route; everything it renders
  *  comes in as props or from `APP_NAV`. */
-export function Sidebar({ chrome }: { chrome: OrganizationChrome }) {
+export function Sidebar() {
   const pathname = usePathname();
+  const { chrome } = useSession();
 
   return (
     <nav
@@ -81,13 +83,23 @@ export function Sidebar({ chrome }: { chrome: OrganizationChrome }) {
         })}
       </div>
 
-      <div className={`${satoshi.className} px-5 py-4`}>
-        <p className="m-0 truncate text-[0.9375rem] font-medium text-[#1c1917]">
-          {chrome.viewer.name}
-        </p>
-        <p className="m-0 truncate text-[0.8125rem] text-[var(--app-dim)]">
-          {chrome.viewer.email}
-        </p>
+      {/* The person, with their generated gradient avatar — seeded from their
+          address, so it is the same avatar everywhere. The organization's name
+          sits under it: the lockup above is the product, this is the tenant. */}
+      <div className={`${satoshi.className} flex items-center gap-2.5 px-4 py-4`}>
+        <PersonAvatar
+          identity={chrome.viewer.email}
+          label={chrome.viewer.name}
+          size={32}
+        />
+        <div className="min-w-0">
+          <p className="m-0 truncate text-[0.875rem] font-medium text-[#1c1917]">
+            {chrome.viewer.name}
+          </p>
+          <p className="m-0 truncate text-[0.75rem] text-[var(--app-dim)]">
+            {chrome.name}
+          </p>
+        </div>
       </div>
     </nav>
   );

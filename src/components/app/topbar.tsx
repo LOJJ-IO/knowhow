@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { AppIcon } from "@/components/app/icon";
+import { PanelToggle } from "@/components/app/panel-toggle";
+import { TooltipProvider } from "@/components/brand/tooltip";
 import { APP_NAV, APP_SEARCH } from "@/lib/app-nav";
 
 /** The row above every screen: the sidebar toggle, which screen you are on,
@@ -29,15 +31,9 @@ export function Topbar({
 
   return (
     <header className="flex h-16 shrink-0 items-center gap-5 px-5">
-      <button
-        type="button"
-        onClick={onToggleSidebar}
-        aria-pressed={sidebarOpen}
-        aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-        className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
-      >
-        <AppIcon name="left_panel_close" size={22} />
-      </button>
+      <TooltipProvider delay={0}>
+        <PanelToggle open={sidebarOpen} onToggle={onToggleSidebar} />
+      </TooltipProvider>
       <h1
         className={`${sohne.className} m-0 min-w-0 truncate text-[1.5rem] leading-none tracking-tight text-[#1c1917]`}
       >

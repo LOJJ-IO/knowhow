@@ -30,6 +30,7 @@ export const APP_ICONS = {
   person_remove: 0xef66,
   search: 0xef7a,
   left_panel_close: 0xf717,
+  left_panel_open: 0xf716,
 } as const;
 
 export type AppIconName = keyof typeof APP_ICONS;

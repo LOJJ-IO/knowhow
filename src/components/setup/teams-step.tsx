@@ -12,6 +12,7 @@ import {
 } from "./shell";
 import type { SetupTeam } from "./types";
 import { DragStepper } from "@/components/ui/drag-stepper";
+import { TeamIcon } from "@/components/identity/team-icon";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
 /** How many teams, then what they are called — two screens, one decision
@@ -142,32 +143,45 @@ export function TeamsStep({
     <div>
       <SetupHeading>What are they called?</SetupHeading>
       <SetupBody>Name each one. You can change them later.</SetupBody>
+      {/* Each slot carries the team's generated icon, seeded from the name as
+          it is typed: the identity appears with the team rather than being
+          assigned later, and it is the same icon the app will show. Nothing
+          is read out of the name — it is only a seed. */}
       <div ref={slotsRef} className="mt-6 flex flex-col gap-2">
         {names.map((name, i) => (
-          <SetupField
-            key={i}
-            aria-label={`Team ${i + 1}`}
-            value={name}
-            onChange={(e) => {
-              setError("");
-              clearSetupFieldError(e.currentTarget);
-              setNames((current) => {
-                const next = [...current];
-                next[i] = e.target.value;
-                return next;
-              });
-            }}
-            onBlur={() => void commit(i)}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              // Commits this slot and moves to the next. Never advances the
-              // screen — that is Continue's job, and only Continue's.
-              e.preventDefault();
-              void commit(i);
-              const inputs = slotsRef.current?.querySelectorAll("input");
-              (inputs?.[i + 1] as HTMLInputElement | undefined)?.focus();
-            }}
-          />
+          <div key={i} className="flex items-center gap-2.5">
+            {name.trim() ? (
+              <TeamIcon name={name} size={36} />
+            ) : (
+              <span
+                aria-hidden
+                className="size-9 shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+              />
+            )}
+            <SetupField
+              aria-label={`Team ${i + 1}`}
+              value={name}
+              onChange={(e) => {
+                setError("");
+                clearSetupFieldError(e.currentTarget);
+                setNames((current) => {
+                  const next = [...current];
+                  next[i] = e.target.value;
+                  return next;
+                });
+              }}
+              onBlur={() => void commit(i)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                // Commits this slot and moves to the next. Never advances the
+                // screen — that is Continue's job, and only Continue's.
+                e.preventDefault();
+                void commit(i);
+                const inputs = slotsRef.current?.querySelectorAll("input");
+                (inputs?.[i + 1] as HTMLInputElement | undefined)?.focus();
+              }}
+            />
+          </div>
         ))}
       </div>
       <SetupError>{error}</SetupError>

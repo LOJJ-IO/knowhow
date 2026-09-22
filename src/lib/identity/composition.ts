@@ -126,6 +126,13 @@ export function teamComposition(name: string): Composition {
     };
   });
 
+  // Every composition needs mass. A seed that happens to pick a stroked form
+  // for all of its shapes reads as a sketch rather than an icon, so the
+  // dominant one is promoted to a filled form. Deterministic: same seed, same
+  // promotion.
+  if (!shapes.some((shape) => FILLED.includes(shape.kind)))
+    shapes[0] = { ...shapes[0], kind: rng.one(FILLED) };
+
   return { seed, ground, shapes };
 }
 
