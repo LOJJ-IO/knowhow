@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-20
+updated: 2026-09-21
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
@@ -339,8 +339,9 @@ case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow*
 **Link ready**
 - H: Your link is ready.
 - Sub: Anyone with a {domain} account can use it. Everyone else is turned away.
-- Pill: Copy link
-- Secondary: Done
+- Pill: **Share** (Web Share API when available, clipboard fallback) — Link → Send icon morph on hover; finishing setup still happens on successful share/copy
+- Link URL: `/join/{token}` with Open Graph title, description, and generated preview image for Discord/Slack/iMessage unfurls
+- Secondary: Done (not built — share/copy is the finish action today)
 
 ### Joiner: arriving on the link
 **Sign in**

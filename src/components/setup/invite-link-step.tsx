@@ -8,6 +8,7 @@ import {
   SetupField,
   SetupHeading,
 } from "./shell";
+import { SetupShareAction } from "./setup-share-action";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
@@ -34,7 +35,6 @@ export function InviteLinkStep({
   // The owner still chooses.
   const [lifetime, setLifetime] = useState("7d");
   const [url, setUrl] = useState("");
-  const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const domain = me.organization_domain;
@@ -124,16 +124,16 @@ export function InviteLinkStep({
         />
       </div>
       <SetupError>{error}</SetupError>
-      {/* Copying is this screen's one action, and it's also what finishes
+      {/* Copy is this screen's one action, and it's also what finishes
           setup — there is nothing left to decide after it. */}
-      <SetupAction
-        label={copied ? "Copied" : "Copy link"}
-        onClick={() => {
-          void navigator.clipboard
-            ?.writeText(url)
-            .then(() => setCopied(true))
-            .catch(() => setCopied(true))
-            .finally(() => window.setTimeout(onDone, 600));
+      <SetupShareAction
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(url);
+          } catch {
+            /* still show Copied — the URL is in the field to select */
+          }
+          window.setTimeout(onDone, 600);
         }}
       />
     </div>

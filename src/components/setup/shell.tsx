@@ -48,8 +48,8 @@ export function SetupError({ children }: { children?: string }) {
   );
 }
 
-/** The screen's one action. Never disabled, never greyed: if pressing it
- *  can't do anything yet, the screen shouldn't be offering it. */
+/** The screen's one action. Never disabled, never greyed: incomplete work is
+ *  handled like Book a Demo — Continue stays black, fields shake/red on click. */
 export function SetupAction({
   label,
   onClick,
@@ -70,9 +70,9 @@ export function SetupAction({
   );
 }
 
-/** A stack of answer buttons — the Yes / No shape. */
+/** A stack of answer buttons — the Yes / No shape. Press scale matches Continue. */
 export const SETUP_CHOICE_CLASS =
-  "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]";
+  "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-95";
 
 export function SetupChoices({ children }: { children: ReactNode }) {
   return (
@@ -103,4 +103,24 @@ export function SetupField(
       />
     </div>
   );
+}
+
+/** Book-a-Demo-style field error: red border + shake. Restart by calling again. */
+export function shakeSetupField(input: HTMLInputElement | null) {
+  const wrap = input?.closest(".t-input-wrap");
+  if (!input || !(wrap instanceof HTMLElement)) return;
+  wrap.classList.remove("is-error", "is-shaking");
+  input.classList.remove("is-error", "is-shaking");
+  void wrap.offsetWidth;
+  wrap.classList.add("is-error", "is-shaking");
+  input.classList.add("is-error", "is-shaking");
+  input.setAttribute("aria-invalid", "true");
+}
+
+export function clearSetupFieldError(input: HTMLInputElement | null) {
+  const wrap = input?.closest(".t-input-wrap");
+  if (!input || !(wrap instanceof HTMLElement)) return;
+  wrap.classList.remove("is-error", "is-shaking");
+  input.classList.remove("is-error", "is-shaking");
+  input.removeAttribute("aria-invalid");
 }

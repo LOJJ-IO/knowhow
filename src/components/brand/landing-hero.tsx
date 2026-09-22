@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
@@ -43,6 +44,11 @@ import {
   readInviteToken,
   type RememberedOrg,
 } from "@/lib/remembered-accounts";
+import { APP_HOME } from "@/lib/app-nav";
+import {
+  readJoinToken,
+  type JoinLinkPreview,
+} from "@/lib/join-link";
 import { LoginSky } from "@/components/login/login-sky";
 import {
   LoginModal,
@@ -217,7 +223,13 @@ function useSubheadWave(ref: React.RefObject<HTMLElement | null>) {
   );
 }
 
-function LandingHero() {
+function LandingHero({
+  joinToken: joinTokenProp,
+  joinPreview: joinPreviewProp = null,
+}: {
+  joinToken?: string;
+  joinPreview?: JoinLinkPreview | null;
+} = {}) {
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
   /** The slide-up sheet (Log In / Book a Demo) is open. */
@@ -230,10 +242,17 @@ function LandingHero() {
   const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
   /** Who's signed in (backend `/auth/me`), once known. */
   const [me, setMe] = useState<Me | null>(null);
+  const router = useRouter();
   /** Accounts this browser has used before. Fetched on mount, not on open,
    *  so the modal sizes once (the Cal embed taught us that — see
    *  FEAT-landing-book-a-demo). */
   const [rememberedOrgs, setRememberedOrgs] = useState<RememberedOrg[]>([]);
+  const [joinToken] = useState<string | null>(
+    () => joinTokenProp ?? readJoinToken(),
+  );
+  const [joinPreview, setJoinPreview] = useState<JoinLinkPreview | null>(
+    joinPreviewProp,
+  );
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** The landing's own scroll container (the page doesn't scroll on <body>). */
@@ -307,28 +326,64 @@ function LandingHero() {
   }, []);
 
   useEffect(() => {
+    if (!joinToken || joinPreviewProp) return;
+    let cancelled = false;
+    void fetch(
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/join-links/${encodeURIComponent(joinToken)}`,
+      { credentials: "omit" },
+    )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((preview) => {
+        if (!cancelled && preview) setJoinPreview(preview as JoinLinkPreview);
+      })
+      .catch(() => {
+        // Generic join copy is fine when the preview can't load.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [joinToken, joinPreviewProp]);
+
+  // joinToken comes from the useState initializer — mount-stable, never updates.
+  // `router` is stable too; this effect is a mount-only sign-in check either way.
+  useEffect(() => {
     let cancelled = false;
     void fetchMe().then((result) => {
       if (cancelled) return;
       if (result) setMe(result);
       const returned = readSignInResult();
       if (returned) clearSignInResultFromUrl();
-      // `needs_org_setup` only covers the first questions — it goes false as
-      // soon as an org chart row exists, part-way through setup. `setup_step`
-      // covers the rest, so an unfinished setup reopens where it stopped
-      // instead of dropping them on the landing page (user, 2026-09-21).
-      if (result?.needs_org_setup || result?.setup_step) {
-        setSheetKind("setup");
-        setSheetOpen(true);
-      } else if (returned) {
+      // Admin-proof / signup results must win over resume. After "Yes I'm a
+      // Super Admin", the chart already exists so `setup_step` falls back to
+      // orgName — that used to reopen setup and hide "Google didn't confirm".
+      if (returned) {
         setSignInResult(returned);
         setSheetKind("result");
+        setSheetOpen(true);
+      } else if (
+        result?.needs_org_setup ||
+        (result?.setup_step && result.setup_step !== "done")
+      ) {
+        // `needs_org_setup` only covers the first questions — it goes false as
+        // soon as an org chart row exists. `setup_step` covers the rest, but
+        // "done" is a finished marker, not a screen to resume: resuming it
+        // opened the sheet on `OrgSetupForm`'s empty "done" branch.
+        setSheetKind("setup");
+        setSheetOpen(true);
+      } else if (joinToken) {
+        // Arrived from the org's join link: open Log In on the join screen.
+        setSheetKind("login");
         setSheetOpen(true);
       } else if (readInviteToken()) {
         // Arrived from an invite link: open Log In so they can sign in as
         // the invited account.
         setSheetKind("login");
         setSheetOpen(true);
+      } else if (result) {
+        // Signed in with setup finished — the landing has nothing left to ask,
+        // so this is the app. Last branch on purpose: a join or invite link
+        // still gets its own screen first.
+        router.replace(APP_HOME);
       }
     });
 
@@ -806,34 +861,48 @@ function LandingHero() {
                 <h2
                   className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
                 >
-                  Log in or sign up in seconds
+                  {joinToken && joinPreview
+                    ? joinPreview.valid
+                      ? joinPreview.title
+                      : "This link has expired"
+                    : joinToken
+                      ? "Join on Knohow"
+                      : "Log in or sign up in seconds"}
                 </h2>
                 <p
                   className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
                 >
-                  Use your Google account to continue with Knohow.
+                  {joinToken && joinPreview
+                    ? joinPreview.description
+                    : joinToken
+                      ? "Sign in with Google to join your team."
+                      : "Use your Google account to continue with Knohow."}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => continueWithGoogle(readInviteToken())}
-                  className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
-                >
-                  <GoogleG className="absolute left-[13px] size-5" />
-                  Continue with Google
-                </button>
-                <p
-                  className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
-                >
-                  By continuing, you agree to Knohow&rsquo;s{" "}
-                  <span className="font-bold">
-                    <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
-                  </span>
-                  . Read our{" "}
-                  <span className="font-bold">
-                    <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
-                  </span>
-                  .
-                </p>
+                {joinToken && joinPreview && !joinPreview.valid ? null : (
+                  <button
+                    type="button"
+                    onClick={() => continueWithGoogle(readInviteToken())}
+                    className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
+                  >
+                    <GoogleG className="absolute left-[13px] size-5" />
+                    Continue with Google
+                  </button>
+                )}
+                {!(joinToken && joinPreview && !joinPreview.valid) ? (
+                  <p
+                    className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+                  >
+                    By continuing, you agree to Knohow&rsquo;s{" "}
+                    <span className="font-bold">
+                      <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
+                    </span>
+                    . Read our{" "}
+                    <span className="font-bold">
+                      <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
+                    </span>
+                    .
+                  </p>
+                ) : null}
               </>
             ) : sheetKind === "setup" && me ? (
               <OrgSetupForm
@@ -841,12 +910,19 @@ function LandingHero() {
                 onDone={() => {
                   setSheetAtTop(false);
                   setSheetOpen(false);
+                  router.push(APP_HOME);
                 }}
               />
             ) : sheetKind === "result" && signInResult ? (
               <SignInResultPanel
                 result={signInResult}
                 onDone={() => {
+                  // Mid-setup admin check: after the result, keep going.
+                  if (me?.needs_org_setup || me?.setup_step) {
+                    setSignInResult(null);
+                    setSheetKind("setup");
+                    return;
+                  }
                   setSheetAtTop(false);
                   setSheetOpen(false);
                 }}

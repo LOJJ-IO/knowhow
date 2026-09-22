@@ -24,6 +24,27 @@ html {
   --foreground: #1c1917;
 }
 
+/* Signed-in app chrome. The quiet neutral set the app shell is built from:
+   one hairline, one fill for resting surfaces, one for the active nav row,
+   and one dimmed text colour. Screens compose these instead of picking
+   greys of their own. */
+:root {
+  /* Sidebar sized off the X reference (user 2026-09-21), then cut at the
+     user's request the same day: 17.5rem → 14rem (−20%) → 12.6rem (−10%) →
+     11.34rem (−10% again) → 13rem, because the 2.5rem lockup filled that
+     column edge to edge and the band read as crowded. Rows stay tall enough
+     to read as destinations rather than list items. */
+  --app-sidebar-w: 13rem;
+  --app-row-h: 3rem;
+  /* The app's ground, a shade under the landing's #f9f8f6 so the white panels
+     on it read as panels (Elera's relationship between the two). */
+  --app-ground: #f4f2ee;
+  --app-border: #e7e5e1;
+  --app-muted: #f2f0ec;
+  --app-active: #eae7e1;
+  --app-dim: #78716c;
+}
+
 @layer base {
   body {
     @apply bg-background font-sans text-foreground;

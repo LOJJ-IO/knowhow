@@ -7,6 +7,8 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
+  clearSetupFieldError,
+  shakeSetupField,
 } from "./shell";
 import type { SetupTeam } from "./types";
 import { DragStepper } from "@/components/ui/drag-stepper";
@@ -80,10 +82,12 @@ export function TeamsStep({
 
   /** Commits one slot. Renames what's already there rather than making a
    *  second team, so editing a slot can't quietly duplicate it. */
-  async function commit(index: number) {
+  /** Returns the committed team so callers can finish without calling
+   *  onDone inside a setState updater (that re-entered React during render). */
+  async function commit(index: number): Promise<SetupTeam | null> {
     const name = (names[index] ?? "").trim();
     const existing = saved[index];
-    if (!name || existing?.name === name) return;
+    if (!name || existing?.name === name) return existing ?? null;
     setError("");
     try {
       const res = existing
@@ -102,13 +106,16 @@ export function TeamsStep({
           });
       if (!res.ok) throw new Error(await backendError(res));
       const team = await res.json();
+      const savedTeam: SetupTeam = { id: team.id, name: team.name };
       setSaved((current) => {
         const next = [...current];
-        next[index] = { id: team.id, name: team.name };
+        next[index] = savedTeam;
         return next;
       });
+      return savedTeam;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      return null;
     }
   }
 
@@ -143,6 +150,7 @@ export function TeamsStep({
             value={name}
             onChange={(e) => {
               setError("");
+              clearSetupFieldError(e.currentTarget);
               setNames((current) => {
                 const next = [...current];
                 next[i] = e.target.value;
@@ -167,11 +175,23 @@ export function TeamsStep({
         label="Continue"
         onClick={() => {
           void (async () => {
-            for (let i = 0; i < names.length; i += 1) await commit(i);
-            setSaved((current) => {
-              onDone(current.filter((t): t is SetupTeam => t !== null));
-              return current;
-            });
+            const inputs = slotsRef.current?.querySelectorAll("input");
+            let incomplete = false;
+            for (let i = 0; i < names.length; i += 1) {
+              if ((names[i] ?? "").trim()) continue;
+              shakeSetupField(inputs?.[i] as HTMLInputElement | undefined ?? null);
+              incomplete = true;
+            }
+            if (incomplete) {
+              setError("Name every team.");
+              return;
+            }
+            const next: (SetupTeam | null)[] = [...saved];
+            for (let i = 0; i < names.length; i += 1) {
+              const team = await commit(i);
+              if (team) next[i] = team;
+            }
+            onDone(next.filter((t): t is SetupTeam => t !== null));
           })();
         }}
       />

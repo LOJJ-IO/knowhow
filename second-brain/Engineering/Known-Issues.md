@@ -3,7 +3,7 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-20
+updated: 2026-09-21
 related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
@@ -15,6 +15,8 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-pur
 ```
 
 ## Recently resolved
+- **[frontend / org setup — admin-proof result hidden]** After Super Admin "Yes", Google returned `?admin_proof=not_verified` (Directory 403) but the landing opened setup resume first (`setup_step` / chart-exists → `orgName`), so "Google didn't confirm you as a Super Admin" never showed. Fix: sign-in results win over setup resume; dismiss continues setup. (resolved 2026-09-21)
+- **[frontend / org setup — TeamsStep Continue]** Clicking Continue on the team-names screen threw React's "Cannot update a component (`OrgSetupForm`) while rendering a different component (`TeamsStep`)" because `onDone` (parent `setTeams` + `setStep`) ran inside a `setSaved` updater. Fixed: `commit()` returns the saved team; Continue builds the list after the loop and calls `onDone` outside any state updater. (resolved 2026-09-21)
 - **[backend / onboarding — non-atomic signup]** `bootstrap_organization` committed the org before adding its member, leaving memberless orgs on failure. Removed 2026-09-18; `join_or_create_domain_org` / `create_domainless_org` save org + first member in one transaction. (resolved 2026-09-18)
 - **[backend / DB — enum columns]** First real sign-up (2026-09-18) failed with a 500: `invalid input value for enum auth_type: "DOMAIN_DELEGATED"`. All 10 SQLAlchemy `Enum(...)` columns stored member **names** (uppercase) while the Alembic migrations created the Postgres types from member **values** (lowercase), so every insert touching an enum would fail. Fixed with `app/models/base.py::value_enum` (`values_callable`) on all 10; verified against the live DB types (0 mismatches); regression test `backend/tests/test_model_enums.py`. Never caught before because the tests never hit a real database. (resolved 2026-09-18)
 - **[security / credentials]** `knohow-staging` service-account key `84dbed86…` was printed into an agent chat on 2026-09-18 (line-based `.env` redaction missed multi-line JSON). User rotated it the same day: new key `95d725a7…`. Deleting the old key in GCP is the user's step — not verifiable from here. (resolved 2026-09-18) — [[Lessons-Learned]]
@@ -99,3 +101,22 @@ never fires; a real slide still wins first and clears it.
 
 **Lesson:** any state that only ever advances from a transition/animation event is unreachable when the
 element mounts in its final state. Worth checking every `onTransitionEnd` / `onAnimationEnd` that gates UI.
+
+## Fixed: signing in from the account picker dropped you back on the landing (2026-09-21)
+**Symptom (user):** clicked a remembered account in the Log In picker, never visibly went to Google,
+and ended up back on the landing's Get Started. Nothing appeared to happen.
+
+**What was actually happening:** the click worked. `continueWithGoogle(null, row.email)` redirects to
+`/onboarding/signup?email=…`, the backend 302s to Google with `login_hint`, and with an existing Google
+session that round trip is invisible. Back on the landing, `fetchMe()` returned a truthy `setup_step`
+and the mount effect opened the **setup sheet** — and when that step was `"done"`, `OrgSetupForm`'s
+last branch is `return null`, so the sheet was empty. A signed-in member simply had no destination.
+
+**Fix:** `setup_step === "done"` no longer counts as a step to resume, and a signed-in member with
+setup finished is sent to `APP_HOME` (`/workspace`, in [[FEAT-core-app-screens]]). Finishing setup now
+pushes there too instead of closing the sheet onto the landing. The redirect is the **last** branch, so
+join and invite links still get their own screen first.
+
+**Not a factor, though it looks like one:** in the picker only the inner button (avatar + names) is a
+hit target — the Org/Personal chips and the padding around them are inert, and the row has no hover
+state. Left as-is; the user confirmed the click did fire.

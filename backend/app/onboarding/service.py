@@ -186,7 +186,43 @@ JOIN_LINK_LIFETIMES: dict[str, int | None] = {
 
 
 def join_link_url(link: JoinLink) -> str:
-    return f"{get_settings().frontend_origin}/?join={link.token}"
+    return f"{get_settings().frontend_origin}/join/{link.token}"
+
+
+def resolve_join_link_preview(token: str, db: Session) -> dict:
+    """Public metadata for a join link — used by the frontend's Open Graph
+    tags and the sign-in screen when someone arrives on the link. Deliberately
+    exposes only the org name and domain, never member data."""
+    link = db.execute(select(JoinLink).where(JoinLink.token == token)).scalar_one_or_none()
+    if link is None:
+        raise ValueError("join link not found")
+
+    org = db.get(Organization, link.organization_id)
+    if org is None:
+        raise ValueError("join link not found")
+
+    now = datetime.now(timezone.utc)
+    valid = link.revoked_at is None and (link.expires_at is None or link.expires_at > now)
+    domain = org.observed_domain or org.verified_domain
+
+    if valid:
+        title = f"Join {org.name} on Knohow"
+        description = (
+            f"Sign in with your {domain} account to get started."
+            if domain
+            else f"Use this link to join {org.name} on Knohow."
+        )
+    else:
+        title = "This invite link has expired"
+        description = "Ask whoever sent it for a new one."
+
+    return {
+        "organization_name": org.name,
+        "organization_domain": domain,
+        "valid": valid,
+        "title": title,
+        "description": description,
+    }
 
 
 def create_join_link(org_id: uuid.UUID, lifetime: str, actor: OrgMember, db: Session) -> JoinLink:

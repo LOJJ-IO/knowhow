@@ -31,6 +31,7 @@ from app.onboarding.service import (
     is_founding_member,
     create_join_link,
     join_link_url,
+    resolve_join_link_preview,
     revoke_join_link,
     record_setup_step,
     start_signup,
@@ -81,6 +82,16 @@ class JoinLinkRequest(BaseModel):
     24h / 7d / 30d / forever."""
 
     lifetime: str
+
+
+@router.get("/join-links/{token}")
+def join_link_preview_route(token: str, db: Session = Depends(get_db)) -> dict:
+    """Public preview for a join link — Open Graph tags and the joiner's
+    sign-in screen. No auth; only org name and domain are returned."""
+    try:
+        return resolve_join_link_preview(token, db)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
 
 @router.post("/organizations/{org_id}/join-link")

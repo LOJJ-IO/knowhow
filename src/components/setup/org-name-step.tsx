@@ -7,6 +7,8 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
+  clearSetupFieldError,
+  shakeSetupField,
 } from "./shell";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
@@ -54,7 +56,13 @@ export function OrgNameStep({
 
   async function submit() {
     const trimmed = name.trim();
-    if (!trimmed || submitting) return;
+    if (submitting) return;
+    if (!trimmed) {
+      shakeSetupField(inputRef.current);
+      setError("Enter an organization name.");
+      return;
+    }
+    clearSetupFieldError(inputRef.current);
     setSubmitting(true);
     setError("");
     try {
@@ -84,6 +92,7 @@ export function OrgNameStep({
           value={name}
           onChange={(e) => {
             setName(e.target.value);
+            clearSetupFieldError(inputRef.current);
             setError("");
           }}
           onKeyDown={(e) => {

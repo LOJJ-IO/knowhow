@@ -293,3 +293,35 @@ def test_revoking_kills_every_live_link(_setup_role):
 
     assert onboarding_service.revoke_join_link(uuid.uuid4(), _actor(), db) == 2
     assert all(l.revoked_at is not None for l in live)
+
+
+def test_join_link_url_uses_the_join_route(_setup_role):
+    link = SimpleNamespace(token="abc123")
+    assert onboarding_service.join_link_url(link) == "http://localhost:3000/join/abc123"
+
+
+def test_resolve_join_link_preview(_setup_role):
+    org = SimpleNamespace(
+        name="Acme",
+        observed_domain="acme.org",
+        verified_domain=None,
+    )
+    link = SimpleNamespace(
+        organization_id=uuid.uuid4(),
+        revoked_at=None,
+        expires_at=None,
+    )
+
+    class _PreviewSession:
+        def execute(self, _stmt):
+            return SimpleNamespace(scalar_one_or_none=lambda: link)
+
+        def get(self, _model, _org_id):
+            return org
+
+    preview = onboarding_service.resolve_join_link_preview("tok", _PreviewSession())
+
+    assert preview["organization_name"] == "Acme"
+    assert preview["organization_domain"] == "acme.org"
+    assert preview["valid"] is True
+    assert preview["title"] == "Join Acme on Knohow"

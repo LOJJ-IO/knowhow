@@ -10,12 +10,16 @@ export type Me = {
   organization_name: string;
   organization_domain: string | null;
   email: string;
+  /** The person's name as Google gave it. Null when Google didn't. */
+  display_name: string | null;
   standing: "approved" | "auto_affiliated";
   is_owner: boolean;
   needs_org_setup: boolean;
   /** Where setup stopped, if it did. Null when there's nothing to resume. */
   setup_step: string | null;
   is_super_admin: boolean;
+  /** Google already answered the Super Admin check (yes or no). */
+  admin_proof_attempted: boolean;
 };
 
 /** Calls the backend with its session cookies (they live on its origin). */

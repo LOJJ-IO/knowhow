@@ -165,6 +165,7 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Product/Features/FEAT-core-app-screens.md",
     "Architecture/Decisions/0005-layered-file-classification-no-llm-first.md",
     "Architecture/Decisions/0014-org-setup-and-join-link.md",
     "Architecture/Decisions/0013-sign-in-is-to-an-organization.md",

@@ -9,6 +9,8 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
+  clearSetupFieldError,
+  shakeSetupField,
 } from "./shell";
 import { OrgNameStep } from "./org-name-step";
 import { TeamsStep } from "./teams-step";
@@ -149,6 +151,18 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
       </div>
     );
 
+  function validateOwnerEmail() {
+    const input = ownerEmailRef.current;
+    if (!input?.checkValidity()) {
+      shakeSetupField(input);
+      setError(input?.validationMessage || "Enter a work email.");
+      return false;
+    }
+    clearSetupFieldError(input);
+    setError("");
+    return true;
+  }
+
   if (step === "ownerEmail")
     return (
       <div>
@@ -162,17 +176,13 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
             value={ownerEmail}
             onChange={(e) => {
               setOwnerEmail(e.target.value);
+              clearSetupFieldError(ownerEmailRef.current);
               setError("");
             }}
             onKeyDown={(e) => {
               if (e.key !== "Enter") return;
               e.preventDefault();
-              const input = ownerEmailRef.current;
-              if (!input?.checkValidity()) {
-                setError(input?.validationMessage ?? "");
-                return;
-              }
-              setStep("superAdmin");
+              if (validateOwnerEmail()) setStep("superAdmin");
             }}
           />
         </div>
@@ -180,13 +190,7 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
         <SetupAction
           label="Continue"
           onClick={() => {
-            const input = ownerEmailRef.current;
-            if (!input?.checkValidity()) {
-              setError(input?.validationMessage ?? "");
-              return;
-            }
-            setError("");
-            setStep("superAdmin");
+            if (validateOwnerEmail()) setStep("superAdmin");
           }}
         />
       </div>
@@ -264,7 +268,7 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
           // Setup is finished at the link; the Google check that follows is
           // an offer, not a step, so closing on it must not reopen setup.
           void recordSetupStep("done");
-          if (me.is_super_admin) onDone();
+          if (me.is_super_admin || me.admin_proof_attempted) onDone();
           else setStep("adminCheck");
         }}
       />

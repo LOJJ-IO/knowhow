@@ -5,6 +5,7 @@ tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-21
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
 ---
 
 # Current Context
@@ -42,6 +43,36 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Personal-account screen** (backend ready 2026-09-18) — no `hd` + no invite → ask "Does your company use Google Workspace?" (yes → sign in with work account; no → domainless org); via invite → sponsored join ([[FEAT-workspace-onboarding-flow]] → "Personal account at sign-in").
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
+
+## Signed-in app shell built (2026-09-21)
+The first logged-in UI exists: route group **`src/app/(app)/`** with a persistent sidebar and one route
+per landing-deck feature — `/workspace`, `/oversight`, `/ownership`, `/sharing`, `/org-chart`,
+`/offboarding`, `/search`. Decisions the user made by picking: **sidebar + 7 routes** (ElevenLabs /
+banking references), **quiet neutral** look (not the soft-card Elera/Hamed look), **mocked fixtures in
+`src/`**, and **shell + nav only this pass, then screen by screen**. Empty states follow the **Sage_v1
+pattern** at the user's request — one canonical `EmptyState` (icon disc, title, one line, optional
+single action) — rebuilt Knohow-native, no Sage code/deps/tokens, so invariant 5 holds. New app-chrome
+tokens in `globals.css` (`--app-sidebar-w`, `--app-border`, `--app-muted`, `--app-active`, `--app-dim`).
+All screen copy is **draft** (written from each feature's Goal line); the user owns final copy.
+`next build` prerenders all 7, eslint clean, **not yet opened in a browser**. Nothing links into it yet:
+after `setup_step = done` the founder still lands on the landing page. Full detail in
+[[FEAT-core-app-screens]]; the RSC gotcha it cost is in [[Lessons-Learned]].
+
+**Wired in (2026-09-21, after the user reported clicking an account did nothing):** the landing now
+sends a signed-in member whose setup is finished to `APP_HOME` (`/workspace`, `src/lib/app-nav.ts`), and
+`setup_step === "done"` no longer reopens the setup sheet on its empty branch. Root cause and the full
+chain in [[Known-Issues]]. `/workspace` as the post-setup home is still an **assumption** the user
+hasn't confirmed.
+
+**Shell restyled (2026-09-21):** sidebar sized off the **X** reference then cut twice at the user's request
+(17.5rem → 14rem → 12.6rem → **11.34rem**, 3rem rows, 22px icons; brand row is the landing's full lockup at
+1.92rem), layout and type off **Elera** (shared ground with no divider, `--app-ground: #f4f2ee`,
+sentence-case section labels, pill active row, page name in a new `Topbar` with search moved there from
+the sidebar). Icons are now **Google Material Symbols**, self-hosted and **subsetted to the 7 in use**
+(2KB) and addressed by codepoint — details and the re-fetch caveat in [[FEAT-core-app-screens]].
+Still not opened in a browser.
+
+**Next:** user picks which screen to build first.
 
 ## Account picker — Remove link icon (2026-09-21)
 Lucide `UserRoundX` before the picker's "Remove account(s)" link only (`gap-[4px]`, same
@@ -323,7 +354,10 @@ User: **"One action per screen"**, so the link is three screens, not one form.
   `24 hours · 7 days · 30 days · No end date` (**7 days pre-picked** so the button is never dead and nothing
   is greyed) → **Continue**
 - **Ready** — "Your link is ready." / "Anyone with a {domain} account can use it. Everyone else is turned
-  away." + the URL in a read-only field → **Copy link**, which also finishes setup (nothing left to decide,
+  away." + the URL in a read-only field → **Copy** (clipboard only; Copy → Check morph on click),
+  which also finishes setup. Join URLs are **`/join/{token}`** with server-rendered Open Graph title,
+  description, and a generated preview image for unfurls in Discord/Slack/iMessage. Public
+  `GET /join-links/{token}` feeds both. Legacy `/?join=` redirects to `/join/`.
   so the approved copy's separate "Done" would have been a second button).
 
 **Backend:** new `JoinLink` model + migration **`0015_join_links`** (applied to `knohow` and `knohow_test`),
@@ -337,8 +371,10 @@ is now a resumable `SETUP_STEPS` value. **107 backend tests** (4 new).
 backend as `"30d"`, and each screen showed exactly **one** button (the lifetime screen's pills are choices,
 not actions).
 
-**Not built — the joiner's side of this link.** Nothing yet validates `?join=<token>`, enforces the domain
-lock, or turns a team pick into a request. That is the next piece ([[0014-org-setup-and-join-link]]).
+**Join arrival + unfurls built (2026-09-21):** `/join/{token}` opens the Log In sheet with org-specific
+copy from `GET /join-links/{token}`; Open Graph image/title/description for paste previews. **Still not
+built:** signup carrying the join token, domain lock enforcement, team pick → request. Next piece
+([[0014-org-setup-and-join-link]]).
 
 ## Teams + own-team rebuilt as pills (2026-09-21, user)
 User: *"i want the team names to be inside pills... put one team, enter as a pill, put another, enter as a
@@ -460,6 +496,17 @@ fixed 56px so the trunk meets each row at its middle (36px), non-last children g
 turns the corner and stops.
 
 **103 backend tests pass** (5 new); tsc/eslint/build clean. Still **unverified in a browser**.
+
+**TeamsStep Continue console error fixed (2026-09-21):** `onDone` had been invoked inside a `setSaved`
+updater, which updated `OrgSetupForm` during `TeamsStep`'s render. Continue now accumulates committed teams
+after the loop and calls `onDone` outside any state updater.
+
+**Setup back removed (2026-09-21):** Outside-modal Back + history wiring was tried, then fully
+reverted after layout/jump regressions. Setup screens stay forward-only again.
+
+**Setup press + field shake kept (2026-09-21):** Choice buttons / pills use `active:scale-95`
+(same as Continue). Empty/invalid fields shake + red on Continue like Book a Demo — owner email,
+org name, team names. Continue stays black (never greyed).
 
 ## Remove accounts is a tree now, and hiding an address is its own thing (2026-09-21)
 **Bug found:** the remove screen listed each linked personal address as a flat row carrying the *member

@@ -3,7 +3,6 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-20
 updated: 2026-09-21
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
@@ -349,3 +348,33 @@ Two habits from it:
 - **A dynamic import defers nothing if the component still renders.** The modal here was always mounted, so
   its contents loaded on every visit regardless of `next/dynamic`. Gate on the open state, then verify the
   chunk is absent from the initial request list rather than trusting the API.
+
+## Rich link previews need a server route, not client metadata (2026-09-21)
+Discord/Slack/iMessage crawlers fetch the pasted URL and read **HTML meta tags** — they do not run
+React. A join link at `/?join=` on a client-only landing page unfurls as a bare URL. Fix: canonical
+`/join/{token}` with `generateMetadata` + `opengraph-image.tsx` (dynamic `ImageResponse`), backed by a
+**public** backend preview endpoint. Invite ready screen uses Copy → Check (clipboard); unfurls still
+need the server route.
+
+## Never call a parent callback inside a setState updater (2026-09-21)
+`TeamsStep`'s Continue handler called `onDone(...)` inside `setSaved((current) => { ... })` so it could read
+the latest saved array. React may invoke updaters during render; `onDone` immediately called `setTeams` /
+`setStep` on `OrgSetupForm`, triggering the "Cannot update a component while rendering a different
+component" error. Fix: return values from async work (`commit()` → `SetupTeam | null`), accumulate locally,
+then call `onDone` after the loop — state updaters stay pure.
+
+## Ask before changing layout; revert aggressively when told (2026-09-21)
+Setup Back + modal height/width tweaks shipped together with misread "circle" feedback (options width,
+not the Back control). User asked to revert everything except Back, then Back too. Rule: when a UI ask
+is ambiguous, ask one clarifying question before changing layout; when they say undo, strip the feature
+fully rather than leaving half-wired state.
+
+## A `"use client"` icon map can't be indexed from a Server Component (2026-09-21)
+`src/components/app/nav-icons.tsx` exported `NAV_ICONS: Record<string, LucideIcon>` from a
+`"use client"` module. Server screens doing `NAV_ICONS[href]` got `undefined` for some keys and the
+build died on prerender: *"Element type is invalid … but got: undefined"* (first failing route was
+`/org-chart`, which is misleading — the route was innocent). Every export of a client module becomes a
+client **reference**, not the value, so property access on a plain object export is not reliable across
+the boundary. Fix: drop `"use client"` — lucide icons render fine in RSC, and a client component can
+still import the same module. Rule: config objects read by both server and client must not live in a
+client module.

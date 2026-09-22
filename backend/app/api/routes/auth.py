@@ -3,6 +3,7 @@ import uuid
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_member, get_db
@@ -23,6 +24,7 @@ from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.google.directory import DirectoryLookupError
 from app.logging_config import get_logger
+from app.models.audit_log import AuditLogEntry
 from app.models.org_member import OrgMember
 from app.onboarding.admin_proof import ADMIN_PROOF_STATE_PURPOSE, complete_admin_proof, start_admin_proof
 from app.onboarding.service import (
@@ -254,6 +256,24 @@ def logout(response: Response) -> dict:
 
 @router.get("/me")
 def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)) -> dict:
+    # Said "Yes" and Google already answered (verified or not) — setup must
+    # not offer the check again at the end.
+    admin_proof_attempted = member.super_admin_verified_at is not None or (
+        db.execute(
+            select(AuditLogEntry.id)
+            .where(
+                AuditLogEntry.actor_user_id == member.id,
+                AuditLogEntry.action_type.in_(
+                    (
+                        "onboarding.super_admin_not_proven",
+                        "onboarding.super_admin_verified",
+                    )
+                ),
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
     return {
         "id": str(member.id),
         "organization_id": str(member.organization_id),
@@ -273,6 +293,7 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         # exists, which is part-way through setup, not the end of it.
         "setup_step": resume_setup_step(member, db),
         "is_super_admin": member.super_admin_verified_at is not None,
+        "admin_proof_attempted": admin_proof_attempted,
     }
 
 
