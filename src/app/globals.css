@@ -43,6 +43,8 @@ html {
   --app-muted: #f2f0ec;
   --app-active: #eae7e1;
   --app-dim: #78716c;
+  /* The dotted editor canvas, and the connectors drawn on it. */
+  --app-dot: #d6d1c9;
 }
 
 @layer base {

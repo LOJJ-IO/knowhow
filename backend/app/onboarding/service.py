@@ -17,7 +17,9 @@ from app.models.join_link import JoinLink
 from app.models.invitation import Invitation, InvitationKind
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
+from app.models.org_membership import OrgMembership
 from app.models.organization import Organization
+from app.models.team import Team
 from app.security.jwt import issue_access_token, issue_refresh_token
 
 # Common personal-email providers, used only as a heuristic default for a
@@ -833,6 +835,111 @@ def list_members(org_id: uuid.UUID, db: Session) -> list[OrgMember]:
             select(OrgMember).where(OrgMember.organization_id == org_id).order_by(OrgMember.created_at)
         ).scalars()
     )
+
+
+def org_overview(org_id: uuid.UUID, db: Session) -> dict:
+    """Everything onboarding produced, in one read, for the app's dashboard.
+
+    Onboarding asks a long series of questions and each answer lands in a
+    different table. A dashboard that reflected only one of them would tell a
+    founder almost nothing, so this assembles all of them:
+
+    - the organization's name and the domain it was observed on, plus whether
+      setup actually finished (`setup_step` / `setup_completed_at`)
+    - who owns it, and any nominated Super Admin who hasn't signed in yet
+    - whether Google confirmed a Super Admin (`super_admin_verified_at`)
+    - the teams that were named, with their leads and members
+    - every member, their standing, and the teams they said they were in
+    - linked accounts: `person_id` is shared by one human's several addresses
+    - whether the join link is live, and how many invitations are outstanding
+    - how many people are waiting for the owner to approve them
+
+    One round trip on purpose: the dashboard is the first thing rendered after
+    sign-in, and five parallel requests to build it is five ways to half-render.
+
+    Readable by any member of the org (the route scopes it with
+    `require_same_org`). Approving people stays owner-only — that lives in
+    list_pending_members, which is a queue of decisions, not a summary."""
+    org = db.get(Organization, org_id)
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
+    teams = list(db.execute(select(Team).where(Team.org_id == org_id).order_by(Team.created_at)).scalars())
+    memberships = list(db.execute(select(OrgMembership).where(OrgMembership.org_id == org_id)).scalars())
+    members = list_members(org_id, db)
+
+    team_member_ids: dict[str, list[str]] = {}
+    member_team_ids: dict[str, list[str]] = {}
+    member_org_roles: dict[str, list[str]] = {}
+    for m in memberships:
+        member_key = str(m.user_id)
+        if m.team_id is None:
+            member_org_roles.setdefault(member_key, []).append(m.role.value)
+            continue
+        team_member_ids.setdefault(str(m.team_id), []).append(member_key)
+        member_team_ids.setdefault(member_key, []).append(str(m.team_id))
+
+    now = datetime.now(timezone.utc)
+    live_link = db.execute(
+        select(JoinLink)
+        .where(JoinLink.organization_id == org_id, JoinLink.revoked_at.is_(None))
+        .order_by(JoinLink.created_at.desc())
+    ).scalars().first()
+    link_is_live = live_link is not None and (live_link.expires_at is None or live_link.expires_at > now)
+
+    open_invitations = db.execute(
+        select(func.count(Invitation.id)).where(
+            Invitation.organization_id == org_id,
+            Invitation.consumed_at.is_(None),
+            Invitation.expires_at > now,
+        )
+    ).scalar_one()
+
+    return {
+        "organization": {
+            "id": str(org_id),
+            "name": org.name,
+            "observed_domain": org.observed_domain,
+            "verified_domain": org.verified_domain,
+            "auto_accept_workspace_members": org.auto_accept_workspace_members,
+            "setup_step": org.setup_step,
+            "setup_completed_at": org.setup_completed_at.isoformat() if org.setup_completed_at else None,
+        },
+        "owner_member_id": str(chart.owner_member_id) if chart and chart.owner_member_id else None,
+        "nominated_super_admin_email": chart.nominated_super_admin_email if chart else None,
+        "teams": [
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "team_leader_id": str(t.team_leader_id) if t.team_leader_id else None,
+                "parent_team_id": str(t.parent_team_id) if t.parent_team_id else None,
+                "auto_own_enabled": t.auto_own_enabled,
+                "member_ids": team_member_ids.get(str(t.id), []),
+            }
+            for t in teams
+        ],
+        "members": [
+            {
+                "id": str(m.id),
+                "email": m.email,
+                "display_name": m.display_name,
+                "auth_type": m.auth_type.value,
+                "standing": m.standing.value,
+                # One human's several addresses share a person_id, which is how
+                # "add another account" in onboarding shows up here.
+                "person_id": str(m.person_id) if m.person_id else None,
+                "is_super_admin": m.super_admin_verified_at is not None,
+                "team_ids": member_team_ids.get(str(m.id), []),
+                "org_wide_roles": member_org_roles.get(str(m.id), []),
+                "joined_at": m.created_at.isoformat(),
+            }
+            for m in members
+        ],
+        "join_link": {
+            "active": link_is_live,
+            "created_at": live_link.created_at.isoformat() if live_link and link_is_live else None,
+        },
+        "open_invitations": open_invitations,
+        "pending_members": sum(1 for m in members if m.standing == MemberStanding.AUTO_AFFILIATED),
+    }
 
 
 def set_auto_accept_workspace_members(org_id: uuid.UUID, requester: OrgMember, enabled: bool, db: Session) -> Organization:

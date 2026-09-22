@@ -7,16 +7,22 @@ import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { AppIcon } from "@/components/app/icon";
 import { PanelToggle } from "@/components/app/panel-toggle";
+import { useSession } from "@/components/app/session";
+import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TooltipProvider } from "@/components/brand/tooltip";
-import { APP_NAV, APP_SEARCH } from "@/lib/app-nav";
+import { APP_NAV, APP_SEARCH, APP_UTILITY } from "@/lib/app-nav";
 
-/** The row above every screen: the sidebar toggle, which screen you are on,
- *  and the way into search.
+/** The row above every screen, laid out off the reference (user 2026-09-21):
+ *  panel toggle, the screen's name, then — pushed right — search, alerts, the
+ *  New action and the person.
  *
- *  Elera's band (user 2026-09-21) reads logo · toggle · page name, evenly
- *  spaced. The toggle sits at the head of this row rather than inside the
- *  sidebar, which puts it exactly between the lockup and the title and keeps
- *  it reachable when the sidebar is hidden. */
+ *  The reference's grid icon between search and the bell was left out at the
+ *  user's request.
+ *
+ *  Two of these are **not wired to anything yet**: alerts (Knohow has no
+ *  notifications) and New (nothing to create until documents exist). They are
+ *  here because the band was asked for; what they do is still an open
+ *  question, recorded in FEAT-core-app-screens. */
 export function Topbar({
   sidebarOpen,
   onToggleSidebar,
@@ -25,7 +31,8 @@ export function Topbar({
   onToggleSidebar: () => void;
 }) {
   const pathname = usePathname();
-  const current = [...APP_NAV, APP_SEARCH].find(
+  const { chrome } = useSession();
+  const current = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
     (item) => item.href === pathname,
   );
 
@@ -39,17 +46,41 @@ export function Topbar({
       >
         {current?.label ?? ""}
       </h1>
-      <Link
-        href={APP_SEARCH.href}
-        aria-current={pathname === APP_SEARCH.href ? "page" : undefined}
-        className={`${satoshi.className} ml-auto flex h-10 w-[18rem] shrink-0 items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-3.5 text-[0.9375rem] text-[var(--app-dim)] transition-colors hover:border-[#d9d9de]`}
-      >
-        <AppIcon name="search" size={19} />
-        <span className="truncate">Search</span>
-        <kbd className="ml-auto shrink-0 rounded-[6px] bg-[var(--app-muted)] px-1.5 py-0.5 font-sans text-[0.75rem] text-[var(--app-dim)]">
-          ⌘K
-        </kbd>
-      </Link>
+
+      <div className="ml-auto flex shrink-0 items-center gap-2.5">
+        <Link
+          href={APP_SEARCH.href}
+          aria-current={pathname === APP_SEARCH.href ? "page" : undefined}
+          className={`${satoshi.className} flex h-10 w-[15rem] items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 text-[0.9375rem] text-[var(--app-dim)] transition-colors hover:border-[#d9d9de]`}
+        >
+          <span className="truncate">Search</span>
+          <kbd className="ml-auto shrink-0 font-sans text-[0.8125rem] text-[var(--app-dim)]">
+            ⌘K
+          </kbd>
+        </Link>
+
+        <button
+          type="button"
+          aria-label="Alerts"
+          className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-[var(--app-muted)] text-[#44403c] transition-colors hover:bg-[var(--app-active)]"
+        >
+          <AppIcon name="notifications" size={20} />
+        </button>
+
+        <button
+          type="button"
+          className={`${satoshi.className} flex h-10 cursor-pointer items-center gap-1.5 rounded-full bg-[#1c1917] pr-4 pl-3 text-[0.9375rem] font-medium text-white transition-transform duration-150 active:scale-95`}
+        >
+          <AppIcon name="add" size={19} />
+          New
+        </button>
+
+        <PersonAvatar
+          identity={chrome.viewer.email}
+          label={chrome.viewer.name}
+          size={40}
+        />
+      </div>
     </header>
   );
 }

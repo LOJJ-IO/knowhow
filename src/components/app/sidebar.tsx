@@ -9,7 +9,7 @@ import { AppIcon } from "@/components/app/icon";
 import { NAV_ICONS } from "@/components/app/nav-icons";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { useSession } from "@/components/app/session";
-import { APP_NAV, APP_SECTIONS } from "@/lib/app-nav";
+import { APP_NAV, APP_SECTIONS, APP_UTILITY } from "@/lib/app-nav";
 import { cn } from "@/lib/utils";
 
 /** The app's one navigation surface: the org it belongs to, the screens
@@ -45,7 +45,7 @@ export function Sidebar() {
       {/* Nav brought down 30% at the user's request (2026-09-21): the first
           row used to start 4.5rem from the top (the h-16 brand row plus the
           first section's mt-2), and now starts at 5.85rem. */}
-      <div className="flex-1 overflow-y-auto px-3 pt-[1.35rem] pb-4">
+      <div className="flex-1 overflow-y-auto px-3 pt-[1.35rem] pb-2">
         {APP_SECTIONS.map((section) => {
           const items = APP_NAV.filter((item) => item.section === section);
           if (items.length === 0) return null;
@@ -83,6 +83,33 @@ export function Sidebar() {
           );
         })}
       </div>
+
+      {/* Help and Settings sit under the sections, quieter than a feature
+          (user 2026-09-21, Elera's bottom group). Same row shape, muted. */}
+      <ul
+        className={`${satoshi.className} m-0 flex list-none flex-col gap-1 px-3 pb-1`}
+      >
+        {APP_UTILITY.map((item) => {
+          const active = pathname === item.href;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "flex h-[var(--app-row-h)] items-center gap-3 rounded-full px-3.5 text-[1.0625rem] transition-colors",
+                  active
+                    ? "bg-[var(--app-active)] font-medium text-[#1c1917]"
+                    : "text-[var(--app-dim)] hover:bg-[var(--app-muted)]",
+                )}
+              >
+                <AppIcon name={NAV_ICONS[item.href]} size={22} />
+                <span className="truncate">{item.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
 
       {/* The person, with their generated gradient avatar — seeded from their
           address, so it is the same avatar everywhere. The organization's name

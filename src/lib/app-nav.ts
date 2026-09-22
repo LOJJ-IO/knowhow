@@ -18,6 +18,12 @@ export type AppNavItem = {
 
 export const APP_NAV: AppNavItem[] = [
   {
+    label: "Dashboard",
+    href: "/dashboard",
+    section: "Organization",
+    purpose: "Where your organization stands.",
+  },
+  {
     label: "Workspace",
     href: "/workspace",
     section: "Organization",
@@ -95,6 +101,6 @@ export function navItemFor(href: string): AppNavItem {
 /** Where a signed-in member lands when the landing has nothing left to ask:
  *  after the account picker signs them in, and at the end of org setup.
  *
- *  Assumed, not confirmed by the user — see the open question in
- *  `FEAT-core-app-screens.md`. One constant so changing it is one edit. */
-export const APP_HOME = "/workspace";
+ *  The dashboard, because it is the one screen that reflects what setup just
+ *  produced. One constant so changing it is one edit. */
+export const APP_HOME = "/dashboard";

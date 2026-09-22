@@ -69,3 +69,121 @@ export async function fetchOrgTeams(organizationId: string): Promise<OrgTeam[]> 
     autoOwnEnabled: team.auto_own_enabled,
   }));
 }
+
+/** Everything onboarding produced, in one read.
+ *
+ *  Onboarding asks a long series of questions and each answer lands somewhere
+ *  different — the org's name, who owns it, the teams that were named, who is
+ *  in them, the join link, the people waiting for approval, a person's several
+ *  linked addresses. `GET /organizations/{org_id}/overview` assembles all of
+ *  it server-side so the dashboard is one request, not five. */
+export type OverviewMember = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  standing: "approved" | "auto_affiliated";
+  /** Shared by one human's several addresses — how onboarding's "add another
+   *  account" shows up. Null when the account was never linked. */
+  personId: string | null;
+  isSuperAdmin: boolean;
+  teamIds: string[];
+  /** Org-wide roles, which have no team: top_leader, authorized_user. */
+  orgWideRoles: string[];
+};
+
+export type OverviewTeam = {
+  id: string;
+  name: string;
+  leaderId: string | null;
+  autoOwnEnabled: boolean;
+  memberIds: string[];
+};
+
+export type OrgOverview = {
+  organizationId: string;
+  name: string;
+  observedDomain: string | null;
+  autoAcceptWorkspaceMembers: boolean;
+  /** Null once setup finished; otherwise the step it stopped on. */
+  setupStep: string | null;
+  setupCompleted: boolean;
+  ownerMemberId: string | null;
+  /** An owner named during setup who hasn't signed in yet. */
+  nominatedSuperAdminEmail: string | null;
+  teams: OverviewTeam[];
+  members: OverviewMember[];
+  joinLinkActive: boolean;
+  openInvitations: number;
+  pendingMembers: number;
+};
+
+type OverviewResponse = {
+  organization: {
+    id: string;
+    name: string;
+    observed_domain: string | null;
+    auto_accept_workspace_members: boolean;
+    setup_step: string | null;
+    setup_completed_at: string | null;
+  };
+  owner_member_id: string | null;
+  nominated_super_admin_email: string | null;
+  teams: {
+    id: string;
+    name: string;
+    team_leader_id: string | null;
+    auto_own_enabled: boolean;
+    member_ids: string[];
+  }[];
+  members: {
+    id: string;
+    email: string;
+    display_name: string | null;
+    standing: "approved" | "auto_affiliated";
+    person_id: string | null;
+    is_super_admin: boolean;
+    team_ids: string[];
+    org_wide_roles: string[];
+  }[];
+  join_link: { active: boolean };
+  open_invitations: number;
+  pending_members: number;
+};
+
+export async function fetchOrgOverview(
+  organizationId: string,
+): Promise<OrgOverview> {
+  const res = await backendFetch(`/organizations/${organizationId}/overview`);
+  if (!res.ok) throw new Error(await backendError(res));
+  const body = (await res.json()) as OverviewResponse;
+  return {
+    organizationId: body.organization.id,
+    name: body.organization.name,
+    observedDomain: body.organization.observed_domain,
+    autoAcceptWorkspaceMembers: body.organization.auto_accept_workspace_members,
+    setupStep: body.organization.setup_step,
+    setupCompleted: body.organization.setup_completed_at !== null,
+    ownerMemberId: body.owner_member_id,
+    nominatedSuperAdminEmail: body.nominated_super_admin_email,
+    teams: body.teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      leaderId: team.team_leader_id,
+      autoOwnEnabled: team.auto_own_enabled,
+      memberIds: team.member_ids,
+    })),
+    members: body.members.map((member) => ({
+      id: member.id,
+      email: member.email,
+      displayName: member.display_name,
+      standing: member.standing,
+      personId: member.person_id,
+      isSuperAdmin: member.is_super_admin,
+      teamIds: member.team_ids,
+      orgWideRoles: member.org_wide_roles,
+    })),
+    joinLinkActive: body.join_link.active,
+    openInvitations: body.open_invitations,
+    pendingMembers: body.pending_members,
+  };
+}

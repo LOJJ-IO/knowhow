@@ -34,6 +34,7 @@ export const APP_ICONS = {
   add: 0xe145,
   help: 0xe8fd,
   settings: 0xe8b8,
+  visibility: 0xe8f4,
 } as const;
 
 export type AppIconName = keyof typeof APP_ICONS;

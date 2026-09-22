@@ -9,15 +9,14 @@ import {
 
 /** Show or hide the sidebar.
  *
- *  Follows Sage_v1's behaviour for the same control (user 2026-09-21): a round
- *  icon button whose **icon flips with state** rather than staying put, with a
- *  tooltip carrying the word. Sage's white pill around it — hairline, shadow —
- *  was dropped at the user's request the same day, so the icon sits directly on
- *  the page. Rebuilt on Knohow's own tokens and Google's Material Symbols; no
- *  Sage code, icon set or tokens crossed over (CLAUDE.md invariant 5).
- *
- *  The icon shows what the click will do, not what is currently true: panel
- *  closing when it is open, panel opening when it is hidden.
+ *  Sage_v1's behaviour for the same control (user 2026-09-21) — a round icon
+ *  button with a tooltip carrying the word — but the reference's plain panel
+ *  glyph rather than Sage's arrowed one, and without Sage's white pill
+ *  (hairline, shadow), both dropped at the user's request the same day. So:
+ *  one bare panel icon sitting directly on the page, and the tooltip is what
+ *  says which way it goes. Rebuilt on Knohow's own tokens and Google's
+ *  Material Symbols; no Sage code, icon set or tokens crossed over (CLAUDE.md
+ *  invariant 5).
  *
  *  Needs a `TooltipProvider` above it; `Topbar` supplies one. */
 export function PanelToggle({
@@ -42,7 +41,7 @@ export function PanelToggle({
             />
           }
         >
-          <AppIcon name={open ? "left_panel_close" : "left_panel_open"} size={20} />
+          <AppIcon name="view_sidebar" size={20} />
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={8}>
           {label}

@@ -21,6 +21,7 @@ from app.onboarding.service import (
     approve_member,
     list_invitations,
     list_pending_members,
+    org_overview,
     reassign_owner,
     set_auto_accept_workspace_members,
     complete_signup,
@@ -238,6 +239,18 @@ def approve_member_route(
     except ValueError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return {"id": str(approved.id), "email": approved.email, "standing": approved.standing.value}
+
+
+@router.get("/organizations/{org_id}/overview")
+def org_overview_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Everything onboarding produced, in one read — the app's dashboard is
+    built from this. Any member of the org may read it; `require_same_org`
+    keeps it to their own organization."""
+    return org_overview(org_id, db)
 
 
 @router.get("/organizations/{org_id}/members/pending")
