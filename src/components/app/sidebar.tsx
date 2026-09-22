@@ -7,6 +7,7 @@ import { useState } from "react";
 import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
 import { AppIcon } from "@/components/app/icon";
+import { MorphIcon, NAV_MORPH } from "@/components/app/nav-morph";
 import { NAV_ICONS } from "@/components/app/nav-icons";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { useSession } from "@/components/app/session";
@@ -28,6 +29,9 @@ export function Sidebar() {
   const pathname = usePathname();
   const { chrome } = useSession();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** Which row the pointer is on. Home and Workspace use it for their icons'
+   *  hover states; every other row ignores it. */
+  const [hovered, setHovered] = useState<string | null>(null);
 
   return (
     <nav
@@ -48,14 +52,14 @@ export function Sidebar() {
       {/* Nav brought down 30% at the user's request (2026-09-21): the first
           row used to start 4.5rem from the top (the h-16 brand row plus the
           first section's mt-2), and now starts at 5.85rem. */}
-      <div className="flex-1 overflow-y-auto px-3 pt-[1.35rem] pb-2">
+      <div className="app-scroll-plain flex-1 overflow-y-auto px-3 pt-[1.35rem] pb-2">
         {APP_SECTIONS.map((section) => {
           const items = APP_NAV.filter((item) => item.section === section);
           if (items.length === 0) return null;
           return (
             <div key={section} className="mt-6 first:mt-2">
               <p
-                className={`${satoshi.className} px-3 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}
+                className={`${satoshi.className} px-4 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}
               >
                 {section}
               </p>
@@ -67,15 +71,28 @@ export function Sidebar() {
                       <Link
                         href={item.href}
                         aria-current={active ? "page" : undefined}
+                        onMouseEnter={() => setHovered(item.href)}
+                        onMouseLeave={() =>
+                          setHovered((current) =>
+                            current === item.href ? null : current,
+                          )
+                        }
                         className={cn(
                           satoshi.className,
-                          "flex h-[var(--app-row-h)] items-center gap-3 rounded-full px-3.5 text-[1.0625rem] transition-colors",
+                          "flex h-[var(--app-row-h)] items-center gap-3 rounded-full px-4 text-[1.0625rem] transition-[background-color,color,transform] duration-150 active:scale-[0.98]",
                           active
                             ? "bg-[var(--app-active)] font-medium text-[#1c1917]"
                             : "text-[#44403c] hover:bg-[var(--app-muted)]",
                         )}
                       >
-                        <AppIcon name={NAV_ICONS[item.href]} size={22} />
+                        {NAV_MORPH[item.href] ? (
+                          <MorphIcon
+                            href={item.href}
+                            open={hovered === item.href}
+                          />
+                        ) : (
+                          <AppIcon name={NAV_ICONS[item.href]} size={22} />
+                        )}
                         <span className="truncate">{item.label}</span>
                       </Link>
                     </li>
@@ -100,7 +117,7 @@ export function Sidebar() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex h-[var(--app-row-h)] items-center gap-3 rounded-full px-3.5 text-[1.0625rem] transition-colors",
+                  "flex h-[var(--app-row-h)] items-center gap-3 rounded-full px-4 text-[1.0625rem] transition-[background-color,color,transform] duration-150 active:scale-[0.98]",
                   active
                     ? "bg-[var(--app-active)] font-medium text-[#1c1917]"
                     : "text-[var(--app-dim)] hover:bg-[var(--app-muted)]",
@@ -117,7 +134,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setSettingsOpen(true)}
             className={cn(
-              "flex h-[var(--app-row-h)] w-full cursor-pointer items-center gap-3 rounded-full px-3.5 text-left text-[1.0625rem] text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)]",
+              "flex h-[var(--app-row-h)] w-full cursor-pointer items-center gap-3 rounded-full px-4 text-left text-[1.0625rem] text-[var(--app-dim)] transition-[background-color,color,transform] duration-150 active:scale-[0.98] hover:bg-[var(--app-muted)]",
             )}
           >
             <AppIcon name="settings" size={22} />
@@ -130,7 +147,9 @@ export function Sidebar() {
       {/* The person, with their generated gradient avatar — seeded from their
           address, so it is the same avatar everywhere. The organization's name
           sits under it: the lockup above is the product, this is the tenant. */}
-      <div className={`${satoshi.className} flex items-center gap-2.5 px-4 py-4`}>
+      <div
+        className={`${satoshi.className} flex items-center gap-2.5 px-4 py-4`}
+      >
         <PersonAvatar
           identity={chrome.viewer.email}
           label={chrome.viewer.name}

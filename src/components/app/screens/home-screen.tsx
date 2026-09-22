@@ -23,7 +23,8 @@ import {
 } from "@/lib/organization";
 import { cn } from "@/lib/utils";
 
-/** The dashboard: the org chart and oversight in one screen (user 2026-09-22).
+/** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
+ *  chart and oversight in one screen.
  *
  *  The owner sits at the top and the teams spread beneath them, which is the
  *  chart. What has *happened* in each team is carried on the same cards — a
@@ -34,15 +35,18 @@ import { cn } from "@/lib/utils";
  *  `/org-chart` and `/oversight` are gone; this replaced both.
  *
  *  Everything here is real. Changes come from the backend's audit-log feed,
- *  measured against when this person last opened the dashboard, and a
+ *  measured against when this person last opened Home, and a
  *  connector only pulses for a team that actually changed. Quiet is the
  *  correct state when nothing has happened. */
 
 const OWNER_NODE = "owner";
-const OWNER_W = 268;
-const TEAM_W = 232;
+/** Both cards run 30% bigger than the first pass (user 2026-09-22) — width,
+ *  padding, avatar and type all scaled together, so a card grows rather than
+ *  just getting wider around the same contents. */
+const OWNER_W = 348;
+const TEAM_W = 302;
 
-export function DashboardScreen() {
+export function HomeScreen() {
   const { chrome, me } = useSession();
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [error, setError] = useState("");
@@ -174,14 +178,15 @@ export function DashboardScreen() {
             spread
             renderNode={(node, { selected }) => {
               if (node.id === OWNER_NODE) {
-                const name = owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+                const name =
+                  owner?.displayName ?? owner?.email ?? chrome.viewer.name;
                 return (
                   <Card selected={selected}>
-                    <div className="flex items-center gap-2.5 p-2.5">
+                    <div className="flex items-center gap-[13px] p-[13px]">
                       <PersonAvatar
                         identity={owner?.email ?? chrome.viewer.email}
                         label={name}
-                        size={40}
+                        size={52}
                       />
                       <span className="min-w-0 text-left">
                         <CardTitle>{name}</CardTitle>
@@ -204,8 +209,8 @@ export function DashboardScreen() {
 
               return (
                 <Card selected={selected} changed={Boolean(change)}>
-                  <div className="flex items-center gap-2.5 p-2.5">
-                    <TeamIcon name={team.name} size={40} />
+                  <div className="flex items-center gap-[13px] p-[13px]">
+                    <TeamIcon name={team.name} size={52} />
                     <span className="min-w-0 flex-1 text-left">
                       <CardTitle>
                         {team.name}
@@ -235,13 +240,13 @@ export function DashboardScreen() {
                             : [...current, team.id],
                         )
                       }
-                      className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
+                      className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
                     >
                       <svg
                         viewBox="0 0 24 24"
                         fill="none"
                         className={cn(
-                          "size-4 transition-transform duration-200",
+                          "size-5 transition-transform duration-200",
                           open && "rotate-180",
                         )}
                         aria-hidden
@@ -292,10 +297,10 @@ function TeamDetail({
   membersById: Map<string, OverviewMember>;
 }) {
   return (
-    <div className="border-t border-[var(--app-border)] px-2.5 py-2.5">
+    <div className="border-t border-[var(--app-border)] px-[13px] py-[13px]">
       {members.length === 0 ? (
         <p
-          className={`${satoshi.className} m-0 px-1 text-[0.75rem] leading-[1.5] text-[var(--app-dim)]`}
+          className={`${satoshi.className} m-0 px-1 text-[0.975rem] leading-[1.5] text-[var(--app-dim)]`}
         >
           Nobody is in this team yet.
         </p>
@@ -306,16 +311,16 @@ function TeamDetail({
               <PersonAvatar
                 identity={member.email}
                 label={member.displayName ?? member.email}
-                size={22}
+                size={29}
               />
               <span
-                className={`${satoshi.className} min-w-0 flex-1 truncate text-[0.8125rem] leading-[1.4] text-[#1c1917]`}
+                className={`${satoshi.className} min-w-0 flex-1 truncate text-[1.0625rem] leading-[1.4] text-[#1c1917]`}
               >
                 {member.displayName ?? member.email}
               </span>
               {member.id === leaderId ? (
                 <span
-                  className={`${satoshi.className} shrink-0 text-[0.6875rem] text-[var(--app-dim)]`}
+                  className={`${satoshi.className} shrink-0 text-[0.875rem] text-[var(--app-dim)]`}
                 >
                   Lead
                 </span>
@@ -330,7 +335,7 @@ function TeamDetail({
           {events.map((event) => (
             <li
               key={event.id}
-              className={`${satoshi.className} flex items-baseline gap-2 text-[0.75rem] leading-[1.5]`}
+              className={`${satoshi.className} flex items-baseline gap-2 text-[0.975rem] leading-[1.5]`}
             >
               <span className="min-w-0 flex-1 truncate text-[#1c1917]">
                 {describe(event, membersById)}
@@ -422,7 +427,7 @@ function Card({
 function CardTitle({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className={`${sohne.className} flex items-center gap-1.5 truncate text-[0.9375rem] leading-[1.35] tracking-tight text-[#1c1917]`}
+      className={`${sohne.className} flex items-center gap-1.5 truncate text-[1.21875rem] leading-[1.35] tracking-tight text-[#1c1917]`}
     >
       {children}
     </span>
@@ -432,7 +437,7 @@ function CardTitle({ children }: { children: React.ReactNode }) {
 function CardMeta({ children }: { children: React.ReactNode }) {
   return (
     <span
-      className={`${satoshi.className} block truncate text-[0.75rem] leading-[1.4] text-[var(--app-dim)]`}
+      className={`${satoshi.className} block truncate text-[0.975rem] leading-[1.4] text-[var(--app-dim)]`}
     >
       {children}
     </span>

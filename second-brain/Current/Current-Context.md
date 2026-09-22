@@ -99,7 +99,7 @@ Restart `next dev` if it shows up.
 in the app, then asked that **every onboarding function seed the dashboard**. Done —
 [[0018-dashboard-reflects-onboarding]]. New backend read `GET /organizations/{org_id}/overview`
 (`org_overview`, plus `list_members`) assembles every answer setup collects in one round trip; new
-`/dashboard` screen (now `APP_HOME`, first nav row) shows the org, setup state, owner, Super Admin
+`/home` screen (now `APP_HOME`, first nav row) shows the org, setup state, owner, Super Admin
 confirmation, teams with their generated icons, everyone including people waiting for approval, linked
 accounts counted as *people* not accounts, join link state and open invitations. `tests/test_org_overview.py`
 covers it (3 tests); backend suite 112 passing. `/org-chart` is now a **graph** — owner on top, teams
@@ -127,7 +127,35 @@ highlighted border; its connector sends a **pulse** up to the owner. Changes are
 attribution to a team is four rules, and anything unattributable stays visible as an org-wide change.
 `org_members.dashboard_seen_at` (migration `0016_dashboard_seen`) is stamped **after** the dashboard is
 drawn, never before. Pulses fire on **real events only** — quiet is correct when nothing happened, which
-is everything today. Backend suite **116 passing**.
+is everything today. Backend suite **116 passing**. Canvas rows no longer stretch to the full window
+height — the gap between owner and teams caps at `MAX_ROW_GAP` (240px in `FlowCanvas`), so the tree
+sits near the top the way the user positioned it by hand, and spare height is left empty. Both cards
+run **30% bigger** than the first pass (`OWNER_W` 348, `TEAM_W` 302, padding/avatar/type scaled with
+them), so the chart stays one scale. The sidebar toggle is now the same control as the topbar's
+Notifications button — grey disc, 40px, 20px glyph, `--app-active` on hover — with the white ringed
+pill it used to sit in removed. The screen is **Home** now, not "Dashboard" (user
+2026-09-22): route `/home`, label "Home", `HomeScreen` in `screens/home-screen.tsx`, `APP_HOME =
+"/home"`. The backend keeps its `dashboard-seen` endpoint and `org_members.dashboard_seen_at` column —
+renaming those is a migration, not a label. Its nav icon is codicon **home**, whose doorway fills in while the sidebar row is hovered
+(`HomeMorph` — the whole glyph pop-swaps on the folder's 600/25 spring, colour unchanged). Every nav row's icon now morphs on hover, one
+pattern in `nav-morph.tsx` (`NAV_MORPH`, `AnimatePresence` `popLayout`, scale 0.5↔1, spring 600/25,
+supplied by the user): Home's house lights its doorway, Workspace's folder opens, Ownership's shield
+gains its check, Sharing's link becomes a send, Offboarding's user gains an X. No row changes
+colour: red on Offboarding was tried and taken back out (user 2026-09-22), so the glyph carries the
+meaning on its own.
+Resting icons are lucide so the still icon is the same drawing that animates (`LUCIDE` in `icon.tsx`),
+at `NAV_STROKE` 1.75 to sit with the 400-weight labels. Rows are `px-4` with a `gap-3`, section labels
+aligned to the same left edge, and the sidebar's scroll area is `.app-scroll-plain` so macOS's always-on
+scrollbar stops painting a divider down its right edge. Every app button now carries the landing's press
+feedback (`active:scale-95`, 150ms). Home's topbar title is a greeting, not the screen's name:
+"Good morning/afternoon/evening, <first name>", computed from the **browser's** clock and therefore
+only after hydration. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL shader the user
+supplied): one colour per identity from `personColor`, which reuses the old gradient's seed so nobody's
+colour changed. The gradient it replaced is still rendered underneath as the fallback and fades out
+once the orb reports it is painted — an orb holds a live WebGL context, a page gets ~16, so past a
+budget of 10 the avatar is simply the gradient — `AppIcon` now resolves a
+small inlined `CODICONS` set as well as the Material Symbols subset, so a route's icon can come from
+either set by name.
 
 **Next:** user picks which screen to build first.
 

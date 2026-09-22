@@ -31,7 +31,10 @@ export function PanelToggle({
 }) {
   const label = open ? "Collapse" : "Expand";
   return (
-    <div className="inline-flex w-fit shrink-0 items-center rounded-full border border-[var(--app-border)] bg-white p-0.5 shadow-sm">
+    // Same control as the topbar's Notifications button (user 2026-09-22):
+    // grey disc, 40px, 20px glyph, darkening on hover. The white ringed pill
+    // this used to sit in read as a second, competing control.
+    <div className="inline-flex w-fit shrink-0 items-center">
       <Tooltip>
         <TooltipTrigger
           render={
@@ -40,7 +43,7 @@ export function PanelToggle({
               aria-label={label}
               aria-pressed={open}
               onClick={onToggle}
-              className="flex size-8 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)] hover:text-[#1c1917] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]"
+              className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-[var(--app-muted)] text-[#44403c] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-active)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]"
             />
           }
         >
@@ -60,12 +63,7 @@ export function PanelToggle({
  *  is not Sage's design system, so invariant 5 is untouched. */
 function SidebarGlyph({ showing }: { showing: boolean }) {
   return (
-    <svg
-      viewBox="0 0 16 16"
-      className="size-[18px]"
-      fill="currentColor"
-      aria-hidden
-    >
+    <svg viewBox="0 0 16 16" className="size-5" fill="currentColor" aria-hidden>
       {showing ? (
         <path d="M1 3.5V12.5C1 13.879 2.122 15 3.5 15H12.5C13.878 15 15 13.879 15 12.5V3.5C15 2.122 13.878 1 12.5 1H3.5C2.122 1 1 2.122 1 3.5ZM12.5 14H7V2H12.5C13.327 2 14 2.673 14 3.5V12.5C14 13.327 13.327 14 12.5 14ZM2 3.5C2 2.673 2.673 2 3.5 2H6V14H3.5C2.673 14 2 13.327 2 12.5V3.5Z" />
       ) : (

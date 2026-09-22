@@ -18,8 +18,8 @@ export type AppNavItem = {
 
 export const APP_NAV: AppNavItem[] = [
   {
-    label: "Dashboard",
-    href: "/dashboard",
+    label: "Home",
+    href: "/home",
     section: "Organization",
     // The org chart and oversight were folded into this screen (user
     // 2026-09-22): the chart is the layout, the changes on it are the
@@ -90,6 +90,6 @@ export function navItemFor(href: string): AppNavItem {
 /** Where a signed-in member lands when the landing has nothing left to ask:
  *  after the account picker signs them in, and at the end of org setup.
  *
- *  The dashboard, because it is the one screen that reflects what setup just
+ *  Home, because it is the one screen that reflects what setup just
  *  produced. One constant so changing it is one edit. */
-export const APP_HOME = "/dashboard";
+export const APP_HOME = "/home";

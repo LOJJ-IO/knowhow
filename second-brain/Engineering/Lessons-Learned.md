@@ -420,3 +420,33 @@ differs by a whole filled pane and is unmistakable at the same size. A state ico
 an icon looks wrong, check the source icon set before redrawing — Sage's look came from codicons, and no
 Material glyph was ever going to match it.
 
+
+## "Fill the height" and "read as a tree" are not the same instruction (2026-09-22)
+Stretching `FlowCanvas`'s row gap to consume whatever height the window gave it did fill the canvas,
+but with two rows it pinned the owner to the top edge and the teams to the bottom, ~500px apart: two
+unrelated bands joined by very long connectors, not a chart. The stretch now stops at `MAX_ROW_GAP`
+(240px, the distance the user dragged the cards to by hand) and the leftover height simply stays empty.
+Filling space is a weak goal; the relationship between the rows has to survive the fill.
+
+## Three icon sets, one `AppIcon` (2026-09-22)
+The app's icons are now a subsetted Material Symbols font, a couple of inlined codicon paths, and one
+lucide component (Workspace's folder, which has to be the same drawing as the `FolderOpen` it morphs
+into on hover). Rather than three call sites' worth of imports, `AppIcon` resolves a name against
+`APP_ICONS` / `CODICONS` / `LUCIDE` in turn, so `NAV_ICONS` stays a flat route → name map and screens
+never learn which set their icon came from. Adding a Material icon still means re-fetching the font
+subset with the new name; the other two sets are just another entry.
+
+## A WebGL avatar needs a context budget and something underneath it (2026-09-22)
+Swapping the person avatar's SVG gradient for a WebGL orb makes every avatar on the page hold a live
+context, and browsers keep only ~16 before they start losing the oldest — one team card with a dozen
+members would have blanked the sidebar's avatar. `FluidOrb` therefore counts live orbs in a module
+scalar, stops taking contexts past 10, releases on unmount (`WEBGL_lose_context`), and pauses its frame
+loop when it scrolls out of view. What it must **not** do is call
+`WEBGL_lose_context.loseContext()` in cleanup: `canvas.getContext` returns the *same* context object
+for the life of the element, so losing it poisons every later mount — in development React runs effects
+twice, and the second run compiled its shaders against a dead context and reported the failure with a
+null info log. Deleting the program, shaders and buffer is the whole of the cleanup; the context goes
+with the element. The second half is the fallback: the old gradient stays rendered
+behind the orb and only fades out once the orb reports it is painted. Without that the orb's
+antialiased edge leaves the layer behind it showing as a coloured rim around the sphere — visible in
+the first browser probe, invisible in any static check.

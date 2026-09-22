@@ -97,7 +97,9 @@ export function teamComposition(name: string): Composition {
   // set has quiet members. Either way the shapes must clear it, so the
   // ground's darkness decides whether they lighten or deepen.
   const coloredGround = rng.chance(0.68);
-  const ground = coloredGround ? shade(colors[0], rng.float(0.1, 0.4)) : NEUTRAL_GROUND;
+  const ground = coloredGround
+    ? shade(colors[0], rng.float(0.1, 0.4))
+    : NEUTRAL_GROUND;
   const groundIsDark = isDark(ground);
 
   const spots = rng.some(GRID, count);
@@ -159,6 +161,14 @@ export type GradientField = {
    *  differ in topology. */
   rotation: number;
 };
+
+/** The one colour a person's fluid orb is built from. Same seed and the same
+ *  first pick as `personGradient`, so swapping the avatar's renderer didn't
+ *  change anyone's colour. */
+export function personColor(identity: string): string {
+  const rng = rngFrom(identitySeed(identity));
+  return harmony(rng, rng.int(2, 4))[0];
+}
 
 export function personGradient(identity: string): GradientField {
   const seed = identitySeed(identity);

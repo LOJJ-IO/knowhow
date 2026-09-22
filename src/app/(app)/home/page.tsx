@@ -1,5 +1,5 @@
-import { DashboardScreen } from "@/components/app/screens/dashboard-screen";
+import { HomeScreen } from "@/components/app/screens/home-screen";
 
-export default function DashboardPage() {
-  return <DashboardScreen />;
+export default function HomePage() {
+  return <HomeScreen />;
 }

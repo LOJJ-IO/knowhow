@@ -74,11 +74,14 @@ export function SettingsDialog({
     setError("");
     try {
       if (name.trim() && name.trim() !== overview.name) {
-        const res = await backendFetch(`/organizations/${chrome.organizationId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: name.trim() }),
-        });
+        const res = await backendFetch(
+          `/organizations/${chrome.organizationId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim() }),
+          },
+        );
         if (!res.ok) throw new Error(await backendError(res));
       }
       if (autoAccept !== overview.autoAcceptWorkspaceMembers) {
@@ -255,7 +258,7 @@ function Switch({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-colors disabled:cursor-default disabled:opacity-60 ${
+      className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-[background-color,transform] duration-150 active:scale-95 disabled:cursor-default disabled:opacity-60 ${
         checked ? "bg-[#1c1917]" : "bg-[var(--app-active)]"
       }`}
     >

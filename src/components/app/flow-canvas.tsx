@@ -23,6 +23,11 @@ import { EdgePulse } from "@/components/app/edge-pulse";
 const PAD_Y = 28;
 const PAD_X = 20;
 const ROW_GAP = 72;
+/** How far the gap between rows may stretch when the canvas has spare height.
+ *  Without a ceiling the rows are pushed to the two ends of the window and the
+ *  chart reads as two unrelated bands; this keeps the tree together near the
+ *  top, which is where the user positioned it by hand (2026-09-22). */
+const MAX_ROW_GAP = 240;
 /** Closest two cards in a spread row may sit. Below this the row stops
  *  spreading and the canvas scrolls sideways instead. */
 const MIN_COL_GAP = 28;
@@ -142,17 +147,21 @@ export function FlowCanvas({
     : 240;
 
   // Fit the window (user 2026-09-22): when the parent gives the canvas more
-  // height than the rows need, the gap grows to use it, so the chart fills the
-  // screen instead of huddling at the top. When it doesn't, the natural gap
-  // stands and the canvas scrolls — a chart that shrinks until it is unreadable
-  // is worse than one you scroll.
+  // height than the rows need, the gap grows to use it — but only up to
+  // MAX_ROW_GAP, so the rows stay a tree near the top rather than being flung
+  // to the top and bottom edges. When the height falls short, the natural gap
+  // stands and the canvas scrolls — a chart that shrinks until it is
+  // unreadable is worse than one you scroll.
   const canvasH = Math.max(available || 0, contentH);
   const gap =
     rows.length > 1
-      ? Math.max(
-          ROW_GAP,
-          (canvasH - PAD_Y * 2 - rowH.reduce((total, h) => total + h, 0)) /
-            (rows.length - 1),
+      ? Math.min(
+          MAX_ROW_GAP,
+          Math.max(
+            ROW_GAP,
+            (canvasH - PAD_Y * 2 - rowH.reduce((total, h) => total + h, 0)) /
+              (rows.length - 1),
+          ),
         )
       : ROW_GAP;
 

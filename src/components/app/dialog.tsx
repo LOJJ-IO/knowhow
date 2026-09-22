@@ -103,7 +103,7 @@ export function AppDialog({
         >
           <DialogPrimitive.Close
             aria-label="Close"
-            className="absolute top-4 right-4 flex size-8 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
+            className="absolute top-4 right-4 flex size-8 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
           >
             <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
               <path
@@ -234,7 +234,9 @@ export function ConfirmDialog({
           <DialogButton
             variant={destructive ? "destructive" : "filled"}
             disabled={busy}
-            onClick={() => void Promise.resolve(onConfirm()).then(() => onOpenChange(false))}
+            onClick={() =>
+              void Promise.resolve(onConfirm()).then(() => onOpenChange(false))
+            }
           >
             {confirmLabel}
           </DialogButton>

@@ -78,7 +78,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         gridTemplateColumns: `${sidebarVisible ? `${sidebarWidth}px` : "0px"} minmax(0, 1fr)`,
         // Snappy while dragging (no lag behind the pointer), eased when the
         // toggle flips it.
-        transition: resizing ? "none" : "grid-template-columns 180ms cubic-bezier(0.4, 0, 0.2, 1)",
+        transition: resizing
+          ? "none"
+          : "grid-template-columns 180ms cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
       <div className="relative min-w-0 overflow-hidden">

@@ -5,8 +5,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: Arial, Helvetica, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-    "Liberation Mono", "Courier New", monospace;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
 }
 
 body {
@@ -46,6 +47,20 @@ html {
   /* Something changed here: the team-card border, its badge, and the pulse
      travelling up its connector all use this one colour. */
   --app-change: #2563eb;
+}
+
+/* A scroll area with no visible scrollbar. The sidebar uses it: with macOS
+   set to always show scrollbars, its overflow-y-auto column paints a grey
+   track down the sidebar's right edge, which reads as a divider between the
+   nav and the page (user 2026-09-22). The nav rarely overflows and still
+   scrolls by wheel, trackpad and keyboard. */
+.app-scroll-plain {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.app-scroll-plain::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 @layer base {
@@ -1064,8 +1079,8 @@ body.t-deck-dragging * {
 
 /* %-stops are cumulative durations (80, 60, 80, 60 = 280ms). */
 .t-input.is-shaking {
-  animation: t-input-shake
-    calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2) linear;
+  animation: t-input-shake calc(var(--shake-dur-a) * 2 + var(--shake-dur-b) * 2)
+    linear;
 }
 @keyframes t-input-shake {
   0% {

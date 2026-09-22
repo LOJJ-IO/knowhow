@@ -76,7 +76,7 @@ export async function fetchOrgTeams(organizationId: string): Promise<OrgTeam[]> 
  *  different — the org's name, who owns it, the teams that were named, who is
  *  in them, the join link, the people waiting for approval, a person's several
  *  linked addresses. `GET /organizations/{org_id}/overview` assembles all of
- *  it server-side so the dashboard is one request, not five. */
+ *  it server-side so Home is one request, not five. */
 export type OverviewMember = {
   id: string;
   email: string;
@@ -132,7 +132,7 @@ export type OrgOverview = {
   joinLinkActive: boolean;
   openInvitations: number;
   pendingMembers: number;
-  /** What changed since this viewer last opened the dashboard, keyed by team
+  /** What changed since this viewer last opened Home, keyed by team
    *  id. A team with no entry has no news. */
   changesByTeam: Record<string, TeamChanges>;
   /** Changes that belong to the organization rather than to a team. */
@@ -251,8 +251,8 @@ function toChangeEvent(event: {
   };
 }
 
-/** Tells the backend the dashboard has been seen, so the next visit's badges
- *  only cover what happened after this one. Called **after** the dashboard is
+/** Tells the backend Home has been seen, so the next visit's badges
+ *  only cover what happened after this one. Called **after** Home is
  *  drawn — clearing before would erase the badges in the same render that was
  *  meant to show them. Best-effort: failing costs a stale badge, never the
  *  screen. */
