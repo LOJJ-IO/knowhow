@@ -29,12 +29,10 @@ html {
    and one dimmed text colour. Screens compose these instead of picking
    greys of their own. */
 :root {
-  /* Sidebar sized off the X reference (user 2026-09-21), then cut at the
-     user's request the same day: 17.5rem → 14rem (−20%) → 12.6rem (−10%) →
-     11.34rem (−10% again) → 13rem, because the 2.5rem lockup filled that
-     column edge to edge and the band read as crowded. Rows stay tall enough
-     to read as destinations rather than list items. */
-  --app-sidebar-w: 13rem;
+  /* The sidebar's width is no longer a token: it is state, because it is
+     resizable (see `app-shell.tsx`, where DEFAULT_SIDEBAR_W carries the 13rem
+     this token settled on). Rows stay tall enough to read as destinations
+     rather than list items. */
   --app-row-h: 3rem;
   /* The app's ground, a shade under the landing's #f9f8f6 so the white panels
      on it read as panels (Elera's relationship between the two). */
@@ -45,6 +43,9 @@ html {
   --app-dim: #78716c;
   /* The dotted editor canvas, and the connectors drawn on it. */
   --app-dot: #d6d1c9;
+  /* Something changed here: the team-card border, its badge, and the pulse
+     travelling up its connector all use this one colour. */
+  --app-change: #2563eb;
 }
 
 @layer base {

@@ -32,7 +32,7 @@ export function Sidebar() {
   return (
     <nav
       aria-label="Knohow"
-      className="flex w-[var(--app-sidebar-w)] shrink-0 flex-col"
+      className="flex h-full w-full min-w-0 flex-col overflow-hidden"
     >
       {/* The full landing lockup, not the bare hexagon mark (user 2026-09-21),
           then resized at the user's request: 1.6rem → 1.92rem → 2.5rem →

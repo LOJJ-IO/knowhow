@@ -1,47 +1,100 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
+import {
+  FlowCanvas,
+  type FlowEdge,
+  type FlowNode,
+} from "@/components/app/flow-canvas";
 import { useSession } from "@/components/app/session";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
-import { fetchOrgOverview, type OrgOverview } from "@/lib/organization";
+import {
+  fetchOrgOverview,
+  markDashboardSeen,
+  type ChangeEvent,
+  type OrgOverview,
+  type OverviewMember,
+} from "@/lib/organization";
+import { cn } from "@/lib/utils";
 
-/** The first screen after sign-in: what onboarding produced.
+/** The dashboard: the org chart and oversight in one screen (user 2026-09-22).
  *
- *  The complaint this answers (user 2026-09-21): the work done in onboarding
- *  wasn't reflected anywhere. So every answer setup collects appears here —
- *  the organization's name and the domain it was observed on, whether setup
- *  finished, who owns it, whether Google confirmed a Super Admin, the teams
- *  that were named with the people who said they were in them, everyone in the
- *  organization including anyone still waiting for approval, a person's linked
- *  addresses, and whether the join link is live.
+ *  The owner sits at the top and the teams spread beneath them, which is the
+ *  chart. What has *happened* in each team is carried on the same cards — a
+ *  badge, a lit border, and a pulse travelling up its connector — which is the
+ *  oversight. Two screens' worth of information, one place to look, because
+ *  the question "what changed?" is always asked about a particular team.
  *
- *  One request (`fetchOrgOverview`) rather than five, so it can't half-render. */
+ *  `/org-chart` and `/oversight` are gone; this replaced both.
+ *
+ *  Everything here is real. Changes come from the backend's audit-log feed,
+ *  measured against when this person last opened the dashboard, and a
+ *  connector only pulses for a team that actually changed. Quiet is the
+ *  correct state when nothing has happened. */
+
+const OWNER_NODE = "owner";
+const OWNER_W = 268;
+const TEAM_W = 232;
+
 export function DashboardScreen() {
   const { chrome, me } = useSession();
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [error, setError] = useState("");
+  const [expanded, setExpanded] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     fetchOrgOverview(chrome.organizationId)
       .then((result) => {
-        if (!cancelled) setOverview(result);
+        if (cancelled) return;
+        setOverview(result);
+        // Stamp only after this visit has its data: clearing first would erase
+        // the badges in the very render meant to show them.
+        void markDashboardSeen(chrome.organizationId);
       })
       .catch((e: unknown) => {
-        if (cancelled) return;
-        setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       });
     return () => {
       cancelled = true;
     };
   }, [chrome.organizationId]);
+
+  const owner = overview?.members.find((m) => m.id === overview.ownerMemberId);
+  const membersById = useMemo(
+    () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
+    [overview],
+  );
+
+  const { nodes, edges } = useMemo(() => {
+    if (!overview) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
+    const teams = overview.teams;
+    return {
+      nodes: [
+        { id: OWNER_NODE, row: 0, x: 0.5, w: OWNER_W },
+        // (i + 1) / (n + 1) leaves a margin at both ends, so the breadth reads
+        // as balanced rather than edge to edge.
+        ...teams.map((team, i) => ({
+          id: team.id,
+          row: 1,
+          x: (i + 1) / (teams.length + 1),
+          w: TEAM_W,
+        })),
+      ],
+      edges: teams.map((team) => ({
+        from: OWNER_NODE,
+        to: team.id,
+        // Only a team that actually changed gets a pulse.
+        active: (overview.changesByTeam[team.id]?.count ?? 0) > 0,
+      })),
+    };
+  }, [overview]);
 
   if (error)
     return (
@@ -63,22 +116,17 @@ export function DashboardScreen() {
       </AppPage>
     );
 
-  const approved = overview.members.filter((m) => m.standing === "approved");
-  const superAdmins = overview.members.filter((m) => m.isSuperAdmin);
-  // One human's several addresses share a person_id — onboarding's "add
-  // another account". Counting people, not accounts, is the honest number.
-  const linkedAccounts = overview.members.filter((m) => m.personId).length;
   const people = new Set(
     overview.members.map((m) => m.personId ?? `account:${m.id}`),
   ).size;
-  const yourTeams = overview.teams.filter((team) =>
-    team.memberIds.includes(me.id),
-  );
+  const changedTeams = Object.keys(overview.changesByTeam).length;
 
   return (
     <AppPage>
-      <div className="flex flex-col gap-3">
-        {/* The organization itself: what it is called, and where it came from. */}
+      {/* The chart takes whatever height is left after the summary row, so it
+          fits the window rather than huddling at the top of a scrolling page
+          (user 2026-09-22). */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
         <Panel className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div className="min-w-0">
             <h2
@@ -95,138 +143,310 @@ export function DashboardScreen() {
               {overview.setupCompleted ? " · setup complete" : ""}
             </p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Chip
-              label={
-                superAdmins.length
-                  ? "Google confirmed a Super Admin"
-                  : "Super Admin not confirmed"
-              }
-              tone={superAdmins.length ? "good" : "waiting"}
+          <div className={`${satoshi.className} flex shrink-0 flex-wrap gap-2`}>
+            <Stat label="Teams" value={overview.teams.length} />
+            <Stat label="People" value={people} />
+            <Stat
+              label="Waiting"
+              value={overview.pendingMembers}
+              tone={overview.pendingMembers ? "waiting" : undefined}
             />
-            <Chip
-              label={overview.joinLinkActive ? "Join link live" : "No join link"}
-              tone={overview.joinLinkActive ? "good" : "quiet"}
+            <Stat
+              label="Changed"
+              value={changedTeams}
+              tone={changedTeams ? "active" : undefined}
             />
           </div>
         </Panel>
 
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-3">
-          <Stat label="Teams" value={overview.teams.length} />
-          <Stat label="People" value={people} />
-          <Stat
-            label="Waiting for approval"
-            value={overview.pendingMembers}
-            tone={overview.pendingMembers ? "waiting" : undefined}
-          />
-          <Stat label="Open invitations" value={overview.openInvitations} />
-        </div>
+        {overview.teams.length === 0 ? (
+          <Panel className="flex min-h-0 flex-1 items-center justify-center">
+            <EmptyState
+              icon="account_tree"
+              title="No teams yet"
+              description="Your teams and their leads live here. Ownership and access follow this chart, so it is worth keeping it the way the company actually works."
+            />
+          </Panel>
+        ) : (
+          <FlowCanvas
+            nodes={nodes}
+            edges={edges}
+            spread
+            renderNode={(node, { selected }) => {
+              if (node.id === OWNER_NODE) {
+                const name = owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+                return (
+                  <Card selected={selected}>
+                    <div className="flex items-center gap-2.5 p-2.5">
+                      <PersonAvatar
+                        identity={owner?.email ?? chrome.viewer.email}
+                        label={name}
+                        size={40}
+                      />
+                      <span className="min-w-0 text-left">
+                        <CardTitle>{name}</CardTitle>
+                        <CardMeta>
+                          {owner?.id === me.id ? "Owner · you" : "Owner"}
+                        </CardMeta>
+                      </span>
+                    </div>
+                  </Card>
+                );
+              }
 
-        {/* Teams, with the identity each one was given while being named. */}
-        <Panel className="px-5 py-4">
-          <SectionHead
-            title="Teams"
-            hint={
-              yourTeams.length
-                ? `You are in ${yourTeams.map((t) => t.name).join(", ")}`
-                : "You are not in a team yet"
-            }
-            href="/org-chart"
-            hrefLabel="See the chart"
-          />
-          {overview.teams.length === 0 ? (
-            <p
-              className={`${satoshi.className} m-0 mt-3 text-[0.875rem] text-[var(--app-dim)]`}
-            >
-              No teams were created during setup.
-            </p>
-          ) : (
-            <ul className="m-0 mt-3 grid list-none grid-cols-[repeat(auto-fill,minmax(13rem,1fr))] gap-2.5 p-0">
-              {overview.teams.map((team) => (
-                <li key={team.id} className="flex items-center gap-2.5">
-                  <TeamIcon name={team.name} size={36} />
-                  <div className="min-w-0">
-                    <p
-                      className={`${satoshi.className} m-0 truncate text-[0.875rem] font-medium leading-[1.4] text-[#1c1917]`}
-                    >
-                      {team.name}
-                    </p>
-                    <p
-                      className={`${satoshi.className} m-0 truncate text-[0.75rem] leading-[1.4] text-[var(--app-dim)]`}
-                    >
-                      {team.memberIds.length === 1
-                        ? "1 member"
-                        : `${team.memberIds.length} members`}
-                      {team.autoOwnEnabled ? " · Auto-Own on" : ""}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+              const team = overview.teams.find((t) => t.id === node.id);
+              if (!team) return null;
+              const change = overview.changesByTeam[team.id];
+              const lead = team.leaderId
+                ? membersById.get(team.leaderId)
+                : undefined;
+              const open = expanded.includes(team.id);
 
-        {/* Everyone in the organization, including anyone still waiting. */}
-        <Panel className="px-5 py-4">
-          <SectionHead
-            title="People"
-            hint={
-              linkedAccounts > 1
-                ? `${linkedAccounts} accounts linked to a person`
-                : `${approved.length} approved`
-            }
-          />
-          <ul className="m-0 mt-3 flex list-none flex-col gap-2.5 p-0">
-            {overview.members.map((member) => {
-              const name = member.displayName ?? member.email;
-              const isOwner = member.id === overview.ownerMemberId;
               return (
-                <li key={member.id} className="flex items-center gap-2.5">
-                  <PersonAvatar
-                    identity={member.email}
-                    label={name}
-                    size={32}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`${satoshi.className} m-0 truncate text-[0.875rem] font-medium leading-[1.4] text-[#1c1917]`}
+                <Card selected={selected} changed={Boolean(change)}>
+                  <div className="flex items-center gap-2.5 p-2.5">
+                    <TeamIcon name={team.name} size={40} />
+                    <span className="min-w-0 flex-1 text-left">
+                      <CardTitle>
+                        {team.name}
+                        {change ? <ChangeBadge count={change.count} /> : null}
+                      </CardTitle>
+                      <CardMeta>
+                        {team.memberIds.length === 1
+                          ? "1 member"
+                          : `${team.memberIds.length} members`}
+                        {lead ? ` · ${lead.displayName ?? lead.email}` : ""}
+                      </CardMeta>
+                    </span>
+                    {/* data-ui keeps the canvas from treating this as a drag. */}
+                    <button
+                      data-ui
+                      type="button"
+                      aria-expanded={open}
+                      aria-label={
+                        open
+                          ? `Hide ${team.name} members`
+                          : `Show ${team.name} members`
+                      }
+                      onClick={() =>
+                        setExpanded((current) =>
+                          current.includes(team.id)
+                            ? current.filter((id) => id !== team.id)
+                            : [...current, team.id],
+                        )
+                      }
+                      className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-colors hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
                     >
-                      {name}
-                      {member.id === me.id ? " (you)" : ""}
-                    </p>
-                    <p
-                      className={`${satoshi.className} m-0 truncate text-[0.75rem] leading-[1.4] text-[var(--app-dim)]`}
-                    >
-                      {member.email}
-                    </p>
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        className={cn(
+                          "size-4 transition-transform duration-200",
+                          open && "rotate-180",
+                        )}
+                        aria-hidden
+                      >
+                        <path
+                          d="m6 9 6 6 6-6"
+                          stroke="currentColor"
+                          strokeWidth={2.2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
                   </div>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                    {isOwner ? <Chip label="Owner" tone="good" /> : null}
-                    {member.isSuperAdmin ? (
-                      <Chip label="Super Admin" tone="good" />
-                    ) : null}
-                    {member.orgWideRoles.map((role) => (
-                      <Chip key={role} label={role.replace(/_/g, " ")} tone="quiet" />
-                    ))}
-                    {member.standing === "auto_affiliated" ? (
-                      <Chip label="Waiting for approval" tone="waiting" />
-                    ) : null}
-                  </div>
-                </li>
+
+                  {open ? (
+                    <TeamDetail
+                      members={team.memberIds
+                        .map((id) => membersById.get(id))
+                        .filter((m): m is OverviewMember => Boolean(m))}
+                      leaderId={team.leaderId}
+                      events={change?.events ?? []}
+                      membersById={membersById}
+                    />
+                  ) : null}
+                </Card>
               );
-            })}
-          </ul>
-          {overview.nominatedSuperAdminEmail ? (
-            <p
-              className={`${satoshi.className} m-0 mt-3 text-[0.8125rem] leading-[1.5] text-[var(--app-dim)]`}
-            >
-              {overview.nominatedSuperAdminEmail} was named as owner during
-              setup and hasn&rsquo;t signed in yet.
-            </p>
-          ) : null}
-        </Panel>
+            }}
+          />
+        )}
       </div>
     </AppPage>
+  );
+}
+
+/** What the caret opens: who is in the team, then what changed in it. The
+ *  canvas measures node heights, so opening this re-routes the connectors on
+ *  its own. */
+function TeamDetail({
+  members,
+  leaderId,
+  events,
+  membersById,
+}: {
+  members: OverviewMember[];
+  leaderId: string | null;
+  events: ChangeEvent[];
+  membersById: Map<string, OverviewMember>;
+}) {
+  return (
+    <div className="border-t border-[var(--app-border)] px-2.5 py-2.5">
+      {members.length === 0 ? (
+        <p
+          className={`${satoshi.className} m-0 px-1 text-[0.75rem] leading-[1.5] text-[var(--app-dim)]`}
+        >
+          Nobody is in this team yet.
+        </p>
+      ) : (
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {members.map((member) => (
+            <li key={member.id} className="flex items-center gap-2">
+              <PersonAvatar
+                identity={member.email}
+                label={member.displayName ?? member.email}
+                size={22}
+              />
+              <span
+                className={`${satoshi.className} min-w-0 flex-1 truncate text-[0.8125rem] leading-[1.4] text-[#1c1917]`}
+              >
+                {member.displayName ?? member.email}
+              </span>
+              {member.id === leaderId ? (
+                <span
+                  className={`${satoshi.className} shrink-0 text-[0.6875rem] text-[var(--app-dim)]`}
+                >
+                  Lead
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {events.length > 0 ? (
+        <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 border-t border-[var(--app-border)] p-0 pt-2.5">
+          {events.map((event) => (
+            <li
+              key={event.id}
+              className={`${satoshi.className} flex items-baseline gap-2 text-[0.75rem] leading-[1.5]`}
+            >
+              <span className="min-w-0 flex-1 truncate text-[#1c1917]">
+                {describe(event, membersById)}
+              </span>
+              <span className="shrink-0 text-[var(--app-dim)]">
+                {relative(event.at)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/** Audit action types read as machine strings. This turns the ones the app
+ *  actually produces into a sentence, and falls back to a tidied version of
+ *  the raw type for anything new — a feed that counts every action type must
+ *  not render blanks for the ones it hasn't met yet. */
+const ACTIONS: Record<string, string> = {
+  "org_chart.team.created": "Team created",
+  "org_chart.team.edited": "Team renamed",
+  "org_chart.team.deleted": "Team deleted",
+  "org_chart.team.leader_assigned": "Lead assigned",
+  "org_chart.membership.upserted": "Someone joined",
+  "org_chart.membership.removed": "Someone left",
+  "org_chart.member_offboarded": "Member offboarded",
+  "offboard.completed": "Offboarding completed",
+  "transfer_batch.created": "Transfer planned",
+  "transfer_batch.executed": "Ownership moved",
+  "transfer_batch.reversed": "Transfer reversed",
+  "sharing.file_created_handled": "Document created",
+  "sharing.suggested_share_created": "Access suggested",
+  "sharing.suggested_share_confirmed": "Access granted",
+  "sharing.reassignment_requested": "Ownership requested",
+  "sharing.reassignment_confirmed": "Ownership reassigned",
+};
+
+function describe(
+  event: ChangeEvent,
+  membersById: Map<string, OverviewMember>,
+): string {
+  const what =
+    ACTIONS[event.action] ??
+    event.action.split(".").slice(-1)[0].replace(/_/g, " ");
+  const actor = event.actorMemberId
+    ? membersById.get(event.actorMemberId)
+    : undefined;
+  const who = actor?.displayName ?? actor?.email;
+  return who ? `${what} · ${who}` : what;
+}
+
+function relative(iso: string): string {
+  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+/** A card on the canvas. Three states, deliberately distinguishable at a
+ *  glance: resting, selected (you clicked it), and changed (it has news). */
+function Card({
+  selected,
+  changed = false,
+  children,
+}: {
+  selected: boolean;
+  changed?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col rounded-[14px] bg-white transition-shadow duration-200",
+        selected
+          ? "shadow-[0_0_0_1.5px_#1c1917,0_2px_10px_rgba(0,0,0,0.05)]"
+          : changed
+            ? "shadow-[0_0_0_1.5px_var(--app-change),0_2px_12px_rgba(37,99,235,0.10)]"
+            : "shadow-[0_0_0_1px_var(--app-border),0_1px_3px_rgba(0,0,0,0.04)]",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className={`${sohne.className} flex items-center gap-1.5 truncate text-[0.9375rem] leading-[1.35] tracking-tight text-[#1c1917]`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function CardMeta({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className={`${satoshi.className} block truncate text-[0.75rem] leading-[1.4] text-[var(--app-dim)]`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function ChangeBadge({ count }: { count: number }) {
+  return (
+    <span
+      className={`${satoshi.className} inline-flex h-[1.125rem] shrink-0 items-center rounded-full bg-[var(--app-change)] px-1.5 text-[0.6875rem] font-medium text-white`}
+      aria-label={`${count} ${count === 1 ? "change" : "changes"} since you last looked`}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
   );
 }
 
@@ -238,44 +458,9 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className={`rounded-[16px] bg-white ${className ?? ""}`}>
+    <section className={cn("rounded-[16px] bg-white", className)}>
       {children}
     </section>
-  );
-}
-
-function SectionHead({
-  title,
-  hint,
-  href,
-  hrefLabel,
-}: {
-  title: string;
-  hint?: string;
-  href?: string;
-  hrefLabel?: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline justify-between gap-3">
-      <h3
-        className={`${sohne.className} m-0 text-[1rem] leading-[1.35] tracking-tight text-[#1c1917]`}
-      >
-        {title}
-      </h3>
-      <div
-        className={`${satoshi.className} flex items-baseline gap-3 text-[0.8125rem] text-[var(--app-dim)]`}
-      >
-        {hint ? <span className="truncate">{hint}</span> : null}
-        {href && hrefLabel ? (
-          <Link
-            href={href}
-            className="shrink-0 border-b border-current font-medium text-[#1c1917]"
-          >
-            {hrefLabel}
-          </Link>
-        ) : null}
-      </div>
-    </div>
   );
 }
 
@@ -286,43 +471,23 @@ function Stat({
 }: {
   label: string;
   value: number;
-  tone?: "waiting";
+  tone?: "waiting" | "active";
 }) {
   return (
-    <Panel className="px-5 py-4">
-      <p
-        className={`${sohne.className} m-0 text-[1.75rem] leading-[1.2] tracking-tight ${
-          tone === "waiting" ? "text-[#b45309]" : "text-[#1c1917]"
-        }`}
+    <span className="flex items-baseline gap-1.5 rounded-full bg-[var(--app-muted)] px-3 py-1.5">
+      <span
+        className={cn(
+          "text-[0.9375rem] font-medium",
+          tone === "waiting"
+            ? "text-[#92400e]"
+            : tone === "active"
+              ? "text-[var(--app-change)]"
+              : "text-[#1c1917]",
+        )}
       >
         {value}
-      </p>
-      <p
-        className={`${satoshi.className} m-0 mt-1 text-[0.8125rem] leading-[1.4] text-[var(--app-dim)]`}
-      >
-        {label}
-      </p>
-    </Panel>
-  );
-}
-
-function Chip({
-  label,
-  tone = "quiet",
-}: {
-  label: string;
-  tone?: "good" | "waiting" | "quiet";
-}) {
-  const tones = {
-    good: "bg-[#e7f3ec] text-[#166534]",
-    waiting: "bg-[#fdf1dc] text-[#92400e]",
-    quiet: "bg-[var(--app-muted)] text-[#57534e]",
-  };
-  return (
-    <span
-      className={`${satoshi.className} inline-flex h-6 shrink-0 items-center rounded-full px-2.5 text-[0.75rem] font-medium capitalize ${tones[tone]}`}
-    >
-      {label}
+      </span>
+      <span className="text-[0.8125rem] text-[var(--app-dim)]">{label}</span>
     </span>
   );
 }

@@ -3,6 +3,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+import { EdgePulse } from "@/components/app/edge-pulse";
+
 /** A dotted editor canvas: cards in rows, joined by measured connectors, each
  *  card draggable anywhere on the canvas with the connectors following.
  *
@@ -19,36 +21,60 @@ import type { ReactNode } from "react";
  *  about organizations. The caller renders each card. */
 
 const PAD_Y = 28;
+const PAD_X = 20;
 const ROW_GAP = 72;
+/** Closest two cards in a spread row may sit. Below this the row stops
+ *  spreading and the canvas scrolls sideways instead. */
+const MIN_COL_GAP = 28;
+/** Space left under the canvas, matching the page's own bottom padding. */
+const BOTTOM_GUTTER = 24;
 
 export type FlowNode = {
   id: string;
   /** Which band the node sits in. 0 is the top. */
   row: number;
-  /** Centre of the node across the canvas, 0–1. Spread these to give a row
-   *  its breadth. */
+  /** Centre of the node across the canvas, 0–1. Used when the row holds one
+   *  node, or when the canvas isn't spreading. */
   x: number;
   /** Preferred width in px; capped to the canvas. */
   w: number;
 };
 
-export type FlowEdge = { from: string; to: string };
+export type FlowEdge = {
+  from: string;
+  to: string;
+  /** Send a pulse along this connector — set only when something actually
+   *  moved between these two nodes. An edge with no news stays a plain static
+   *  line. See `EdgePulse`. */
+  active?: boolean;
+};
 
 export function FlowCanvas({
   nodes,
   edges,
   estimatedHeight = 96,
+  spread = false,
   renderNode,
 }: {
   nodes: FlowNode[];
   edges: FlowEdge[];
   /** Height used for the first paint, before anything is measured. */
   estimatedHeight?: number;
+  /** Lay each row out across the full width — equal gutters at the edges and
+   *  between cards — instead of honouring each node's `x` fraction. Fractions
+   *  leave the row clustered in the middle with the ends of the canvas empty
+   *  (user 2026-09-22). A row with one node stays centred either way. */
+  spread?: boolean;
   renderNode: (node: FlowNode, state: { selected: boolean }) => ReactNode;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
   const nodeRefs = useRef(new Map<string, HTMLElement>());
   const [width, setWidth] = useState(0);
+  /** How much height there is between the canvas's top and the bottom of the
+   *  window. Measured rather than inherited: a percentage height only resolves
+   *  if every ancestor has a definite one, and one `flex` link missing that
+   *  silently collapses the canvas to its content. Measuring can't collapse. */
+  const [available, setAvailable] = useState(0);
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [offsets, setOffsets] = useState<
@@ -73,6 +99,10 @@ export function FlowCanvas({
 
     const measure = () => {
       setWidth(canvas.clientWidth);
+      // Distance from the canvas's top edge to the bottom of the viewport,
+      // less the page's own bottom gutter.
+      const top = canvas.getBoundingClientRect().top;
+      setAvailable(Math.max(0, window.innerHeight - top - BOTTOM_GUTTER));
       setHeights((previous) => {
         const next = { ...previous };
         let changed = false;
@@ -91,7 +121,11 @@ export function FlowCanvas({
     const observer = new ResizeObserver(measure);
     observer.observe(canvas);
     nodeRefs.current.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
   }, [nodes]);
 
   const heightOf = (id: string) => heights[id] ?? estimatedHeight;
@@ -100,21 +134,59 @@ export function FlowCanvas({
   const rowH = rows.map((r) =>
     Math.max(...nodes.filter((n) => n.row === r).map((n) => heightOf(n.id))),
   );
-  const rowY: number[] = [];
-  rows.forEach((_, i) => {
-    rowY[i] = i === 0 ? PAD_Y : rowY[i - 1] + rowH[i - 1] + ROW_GAP;
-  });
-  const canvasH = rows.length
-    ? rowY[rows.length - 1] + rowH[rows.length - 1] + PAD_Y
+  // The height the rows need at their natural gap.
+  const contentH = rows.length
+    ? rows.reduce((total, _, i) => total + rowH[i], 0) +
+      ROW_GAP * Math.max(rows.length - 1, 0) +
+      PAD_Y * 2
     : 240;
 
+  // Fit the window (user 2026-09-22): when the parent gives the canvas more
+  // height than the rows need, the gap grows to use it, so the chart fills the
+  // screen instead of huddling at the top. When it doesn't, the natural gap
+  // stands and the canvas scrolls — a chart that shrinks until it is unreadable
+  // is worse than one you scroll.
+  const canvasH = Math.max(available || 0, contentH);
+  const gap =
+    rows.length > 1
+      ? Math.max(
+          ROW_GAP,
+          (canvasH - PAD_Y * 2 - rowH.reduce((total, h) => total + h, 0)) /
+            (rows.length - 1),
+        )
+      : ROW_GAP;
+
+  const rowY: number[] = [];
+  rows.forEach((_, i) => {
+    rowY[i] = i === 0 ? PAD_Y : rowY[i - 1] + rowH[i - 1] + gap;
+  });
+
   const cw = width || 720;
+  const widthOf = (n: FlowNode) => Math.min(n.w, cw * 0.92);
+
+  /** Where each node's centre sits, before any drag. When spreading, a row's
+   *  cards are distributed across the full width: the first starts at the left
+   *  gutter, the last ends at the right one, and what is left over becomes the
+   *  gaps between them. */
+  const baseCx = (n: FlowNode) => {
+    const peers = nodes.filter((p) => p.row === n.row);
+    if (!spread || peers.length < 2) return n.x * cw;
+    const widths = peers.map(widthOf);
+    const total = widths.reduce((sum, w) => sum + w, 0);
+    const gap = Math.max(
+      MIN_COL_GAP,
+      (cw - PAD_X * 2 - total) / (peers.length - 1),
+    );
+    const index = peers.indexOf(n);
+    const before = widths.slice(0, index).reduce((sum, w) => sum + w, 0);
+    return PAD_X + before + gap * index + widths[index] / 2;
+  };
+
   const place = (n: FlowNode) => {
-    const w = Math.min(n.w, cw * 0.92);
     const off = offsets[n.id];
     return {
-      w,
-      cx: n.x * cw + (off?.dx ?? 0),
+      w: widthOf(n),
+      cx: baseCx(n) + (off?.dx ?? 0),
       top: rowY[rows.indexOf(n.row)] + (off?.dy ?? 0),
     };
   };
@@ -165,13 +237,13 @@ export function FlowCanvas({
 
       const { w } = place(node);
       const h = heightOf(node.id);
-      const baseCx = node.x * cw;
+      const base = baseCx(node);
       const baseTop = rowY[rows.indexOf(node.row)];
-      const cx = Math.min(Math.max(baseCx + dx, w / 2 + 8), cw - w / 2 - 8);
+      const cx = Math.min(Math.max(base + dx, w / 2 + 8), cw - w / 2 - 8);
       const top = Math.min(Math.max(baseTop + dy, 8), canvasH - h - 8);
       setOffsets((current) => ({
         ...current,
-        [node.id]: { dx: cx - baseCx, dy: top - baseTop },
+        [node.id]: { dx: cx - base, dy: top - baseTop },
       }));
     };
 
@@ -190,7 +262,7 @@ export function FlowCanvas({
   return (
     <div
       ref={canvasRef}
-      className="relative w-full select-none overflow-hidden rounded-[16px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)]"
+      className="relative w-full shrink-0 select-none overflow-auto rounded-[16px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)]"
       style={{
         height: canvasH,
         backgroundImage:
@@ -204,16 +276,25 @@ export function FlowCanvas({
         height={canvasH}
         className="pointer-events-none absolute inset-0"
       >
-        {edges.map((edge) => (
-          <path
-            key={`${edge.from}-${edge.to}`}
-            d={bezier(edge)}
-            fill="none"
-            stroke={lit(edge) ? "#1c1917" : "var(--app-dot)"}
-            strokeWidth={lit(edge) ? 1.75 : 1.25}
-            className="transition-[stroke,stroke-width] duration-150"
-          />
-        ))}
+        {edges.map((edge, i) => {
+          const d = bezier(edge);
+          return (
+            <g key={`${edge.from}-${edge.to}`}>
+              <path
+                d={d}
+                fill="none"
+                stroke={lit(edge) ? "#1c1917" : "var(--app-dot)"}
+                strokeWidth={lit(edge) ? 1.75 : 1.25}
+                className="transition-[stroke,stroke-width] duration-150"
+              />
+              {edge.active ? (
+                // Staggered so several active edges never fire in lockstep,
+                // which is what would make them read as decoration.
+                <EdgePulse d={d} delay={i * 900} />
+              ) : null}
+            </g>
+          );
+        })}
       </svg>
 
       {nodes.map((node) => {

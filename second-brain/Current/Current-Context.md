@@ -118,6 +118,17 @@ user. **Alerts and New are not wired to anything yet** (no notifications; nothin
 documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot has Help (a route) and
 Settings (the dialog).
 
+**Dashboard absorbs the chart and oversight (2026-09-22):** `/org-chart` and `/oversight` are **gone** —
+one screen now, [[0019-dashboard-absorbs-chart-and-oversight]]. Owner on top, teams beneath; a caret on
+each team card enumerates its members inline (the canvas re-measures, so connectors re-route on their
+own); a team that changed since **you** last opened the dashboard carries a count badge and a
+highlighted border; its connector sends a **pulse** up to the owner. Changes are read from the
+**audit log** (`app/activity/changes.py`), so any action type counts without being enumerated;
+attribution to a team is four rules, and anything unattributable stays visible as an org-wide change.
+`org_members.dashboard_seen_at` (migration `0016_dashboard_seen`) is stamped **after** the dashboard is
+drawn, never before. Pulses fire on **real events only** — quiet is correct when nothing happened, which
+is everything today. Backend suite **116 passing**.
+
 **Next:** user picks which screen to build first.
 
 ## Account picker — Remove link icon (2026-09-21)

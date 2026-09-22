@@ -7,10 +7,8 @@ import type { AppIconName } from "@/components/app/icon";
 export const NAV_ICONS: Record<string, AppIconName> = {
   "/dashboard": "monitoring",
   "/workspace": "folder_open",
-  "/oversight": "visibility",
   "/ownership": "verified_user",
   "/sharing": "share",
-  "/org-chart": "account_tree",
   "/offboarding": "person_remove",
   "/search": "search",
   "/help": "help",

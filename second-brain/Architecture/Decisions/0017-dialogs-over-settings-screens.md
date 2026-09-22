@@ -47,3 +47,25 @@ over — invariant 5 holds; what was borrowed is the taxonomy.
 - Both writes are **owner-only in the backend** (`_require_owner`), so a non-owner sees the controls as
   read-only rather than getting a 403 on save.
 - `Help` stays a route: it is a place you go to read, not a thing you adjust.
+
+## Addendum (2026-09-22): the sidebar toggle is a visibility flip, not a width reset
+The same separation the dialog system draws between chrome and content, the shell draws between
+**visibility** and **size** (the VS Code / Cursor model, set out by the user):
+
+| State | Written by | Job |
+| --- | --- | --- |
+| `sidebarWidth` | the resize handle only | How wide the sidebar is *when it exists* |
+| `sidebarVisible` | the toggle only | Whether it exists at all |
+
+Collapsing never writes the width, so reopening restores the size the person chose by hand. Folding the
+two into one number — "collapse = set width to 0" — destroys a preference silently, the same way a
+window's minimise must not forget its geometry.
+
+Hiding is done by the **grid track** (`0px`, with the centre's `minmax(0, 1fr)` taking the space), not
+`display: none` on the panel. The resize handle is **not rendered while hidden**: an invisible hit area
+at the screen edge is a trap and can push scrollbars around. Dragging the handle forces the sidebar
+visible, so a resize can never apply to something nobody can see.
+
+`--app-sidebar-w` is gone as a token — a resizable width is state, not CSS. `DEFAULT_SIDEBAR_W` in
+`app-shell.tsx` carries the 13rem it settled on. Width is **not persisted** across reloads yet; that
+would be a per-device convenience and belongs in `localStorage` if wanted.

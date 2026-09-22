@@ -7,6 +7,7 @@ from jose import JWTError, jwt
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.activity.changes import team_changes
 from app.audit.service import record_audit_entry
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
 from app.auth.login import LoginResult
@@ -837,7 +838,7 @@ def list_members(org_id: uuid.UUID, db: Session) -> list[OrgMember]:
     )
 
 
-def org_overview(org_id: uuid.UUID, db: Session) -> dict:
+def org_overview(org_id: uuid.UUID, db: Session, viewer: OrgMember | None = None) -> dict:
     """Everything onboarding produced, in one read, for the app's dashboard.
 
     Onboarding asks a long series of questions and each answer lands in a
@@ -853,6 +854,12 @@ def org_overview(org_id: uuid.UUID, db: Session) -> dict:
     - linked accounts: `person_id` is shared by one human's several addresses
     - whether the join link is live, and how many invitations are outstanding
     - how many people are waiting for the owner to approve them
+
+    With a `viewer`, it also carries **what changed since they last opened the
+    dashboard** (`app.activity.changes`), which is what the team cards badge
+    and what the connectors pulse for. Reading does not clear it: the caller
+    stamps `dashboard_seen_at` after the response is sent, so this visit shows
+    the badges and the next one starts clean.
 
     One round trip on purpose: the dashboard is the first thing rendered after
     sign-in, and five parallel requests to build it is five ways to half-render.
@@ -939,7 +946,23 @@ def org_overview(org_id: uuid.UUID, db: Session) -> dict:
         },
         "open_invitations": open_invitations,
         "pending_members": sum(1 for m in members if m.standing == MemberStanding.AUTO_AFFILIATED),
+        "changes": team_changes(org_id, viewer.dashboard_seen_at if viewer else None, db),
+        "viewer_last_seen_at": (
+            viewer.dashboard_seen_at.isoformat() if viewer and viewer.dashboard_seen_at else None
+        ),
     }
+
+
+def mark_dashboard_seen(member: OrgMember, db: Session) -> datetime:
+    """Stamps "you have seen the dashboard as of now" on the member.
+
+    Separate from `org_overview` on purpose: if reading the dashboard cleared
+    the badges, the badges would be gone in the same render that was supposed
+    to show them. The frontend asks for the overview, draws it, then calls
+    this."""
+    member.dashboard_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    return member.dashboard_seen_at
 
 
 def set_auto_accept_workspace_members(org_id: uuid.UUID, requester: OrgMember, enabled: bool, db: Session) -> Organization:

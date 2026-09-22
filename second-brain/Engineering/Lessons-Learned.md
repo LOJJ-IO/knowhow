@@ -396,3 +396,27 @@ To check the identity system actually drew something sane, a throwaway route ren
 counts, colours, `NaN`, and the same name at two sizes to prove determinism. Cheaper than reaching for
 a screenshot tool, and it catches the failure that matters (geometry, not looks). Delete the route
 afterwards.
+
+## A percentage/flex height is only as definite as every ancestor (2026-09-22)
+The org-chart canvas was `h-full flex-1` inside four nested flex columns that all looked correct, and
+it still rendered at content height: one indefinite link anywhere in the chain silently collapses the
+whole thing, and `min-height` then masks it as "working, just short". Replaced with a measured height —
+`getBoundingClientRect().top` against `window.innerHeight`, re-measured on resize. Measuring can't
+collapse, and "fit the window" is what it literally computes. Worth reaching for whenever a fill has to
+be certain rather than probable.
+
+## Fractional node positions leave a graph clustered in the middle (2026-09-22)
+Placing a row's cards at `(i + 1) / (n + 1)` puts three cards at 25/50/75% — tidy in the abstract, but
+it leaves ~300px empty at both ends of a wide canvas, which reads as a broken layout rather than a
+composed one. A row that should use its width has to be laid out from the real widths: gutters at the
+edges, the remainder divided between the cards. See `FlowCanvas`'s `spread`.
+
+## Two icons that differ by a few pixels read as "no state change" (2026-09-22)
+The sidebar toggle used Material Symbols' `left_panel_close` / `left_panel_open`. The glyphs genuinely
+differ — comparing the outlines in the font proves it — but only by a small arrow inside an identical
+frame, so at 20px the toggle looked broken: "doesn't even perform the swap". VS Code's codicon pair
+differs by a whole filled pane and is unmistakable at the same size. A state icon has to differ in
+*mass*, not in detail; if you have to look twice, it isn't communicating state. Also: when a user says
+an icon looks wrong, check the source icon set before redrawing — Sage's look came from codicons, and no
+Material glyph was ever going to match it.
+

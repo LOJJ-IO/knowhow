@@ -151,3 +151,95 @@ def test_linked_accounts_share_a_person_id(db):
 
     by_email = {m["email"]: m for m in org_overview(org.id, db)["members"]}
     assert by_email["founder@acme.org"]["person_id"] == by_email["ada@gmail.com"]["person_id"]
+
+
+def _audit(db, org, action, actor=None, target=None, details=None):
+    """Writes through the real audit service so entries are chained the way
+    production writes them."""
+    from app.audit.service import record_audit_entry
+
+    return record_audit_entry(
+        org_id=org.id,
+        actor_user_id=actor.id if actor else None,
+        action_type=action,
+        target_resource_id=target,
+        details=details or {},
+        db=db,
+    )
+
+
+def test_changes_attribute_to_the_right_team(db):
+    org, founder, _waiting, engineering, finance = _onboarded_org(db)
+
+    # 1. details.team_id — a membership written for a team.
+    _audit(db, org, "org_chart.membership.upserted", founder, str(uuid.uuid4()),
+           {"team_id": str(finance.id), "user_id": str(founder.id)})
+    # 2. target_resource_id that is a team — the team.* actions.
+    _audit(db, org, "org_chart.team.edited", founder, str(engineering.id), {"name": "Eng"})
+    # 3. no team anywhere — an org-wide change, kept rather than dropped.
+    _audit(db, org, "organization.renamed", founder, str(org.id), {"name": "Acme"})
+    db.commit()
+
+    changes = org_overview(org.id, db, viewer=founder)["changes"]
+
+    assert changes["teams"][str(finance.id)]["count"] == 1
+    assert changes["teams"][str(engineering.id)]["count"] == 1
+    actions = {e["action"] for e in changes["organization"]}
+    assert "organization.renamed" in actions
+    # The org chart and teams created by the fixture are in there too.
+    assert changes["total"] >= 3
+
+
+def test_changes_follow_a_file_to_its_team(db):
+    from app.models.file_index import FileIndex
+
+    org, founder, _waiting, engineering, _finance = _onboarded_org(db)
+    now = datetime.now(timezone.utc)
+    db.add(
+        FileIndex(
+            file_id="drive-file-1",
+            org_id=org.id,
+            owner_user_id=founder.id,
+            team_id=engineering.id,
+            file_type="document",
+            title="Roadmap",
+            created_at=now,
+            modified_at=now,
+            last_synced_at=now,
+        )
+    )
+    db.commit()
+
+    _audit(db, org, "transfer_batch.executed", founder, None, {"file_id": "drive-file-1"})
+    db.commit()
+
+    teams = org_overview(org.id, db, viewer=founder)["changes"]["teams"]
+    actions = {e["action"] for e in teams[str(engineering.id)]["events"]}
+    assert "transfer_batch.executed" in actions
+
+
+def test_seeing_the_dashboard_clears_what_came_before_it(db):
+    from app.onboarding.service import mark_dashboard_seen
+
+    org, founder, _waiting, engineering, _finance = _onboarded_org(db)
+    _audit(db, org, "org_chart.team.edited", founder, str(engineering.id), {})
+    db.commit()
+    assert org_overview(org.id, db, viewer=founder)["changes"]["total"] > 0
+
+    mark_dashboard_seen(founder, db)
+    assert org_overview(org.id, db, viewer=founder)["changes"]["total"] == 0
+
+    # Something new after the stamp counts again.
+    _audit(db, org, "org_chart.team.edited", founder, str(engineering.id), {})
+    db.commit()
+    after = org_overview(org.id, db, viewer=founder)["changes"]
+    assert after["teams"][str(engineering.id)]["count"] == 1
+
+
+def test_a_member_who_never_opened_the_dashboard_sees_everything(db):
+    org, founder, *_ = _onboarded_org(db)
+    assert founder.dashboard_seen_at is None
+    # The fixture's own setup wrote nothing to the audit log, so add one.
+    _audit(db, org, "onboarding.member_added", founder, str(founder.id), {})
+    db.commit()
+    assert org_overview(org.id, db, viewer=founder)["changes"]["total"] >= 1

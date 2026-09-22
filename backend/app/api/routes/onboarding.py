@@ -21,6 +21,7 @@ from app.onboarding.service import (
     approve_member,
     list_invitations,
     list_pending_members,
+    mark_dashboard_seen,
     org_overview,
     reassign_owner,
     set_auto_accept_workspace_members,
@@ -250,7 +251,18 @@ def org_overview_route(
     """Everything onboarding produced, in one read — the app's dashboard is
     built from this. Any member of the org may read it; `require_same_org`
     keeps it to their own organization."""
-    return org_overview(org_id, db)
+    return org_overview(org_id, db, viewer=member)
+
+
+@router.post("/organizations/{org_id}/dashboard-seen")
+def dashboard_seen_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Called once the dashboard has been drawn, so the next visit's badges
+    only cover what happened after this one."""
+    return {"dashboard_seen_at": mark_dashboard_seen(member, db).isoformat()}
 
 
 @router.get("/organizations/{org_id}/members/pending")

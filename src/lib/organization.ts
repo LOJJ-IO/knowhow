@@ -99,6 +99,23 @@ export type OverviewTeam = {
   memberIds: string[];
 };
 
+/** One thing that happened, from the audit log. `action` is the raw action
+ *  type (`org_chart.team.edited`, `transfer_batch.executed`, …) — deliberately
+ *  not an enum here, because the backend's feed counts any action type,
+ *  including ones added after this was written. */
+export type ChangeEvent = {
+  id: string;
+  action: string;
+  actorMemberId: string | null;
+  at: string;
+};
+
+export type TeamChanges = {
+  count: number;
+  latestAt: string;
+  events: ChangeEvent[];
+};
+
 export type OrgOverview = {
   organizationId: string;
   name: string;
@@ -115,6 +132,13 @@ export type OrgOverview = {
   joinLinkActive: boolean;
   openInvitations: number;
   pendingMembers: number;
+  /** What changed since this viewer last opened the dashboard, keyed by team
+   *  id. A team with no entry has no news. */
+  changesByTeam: Record<string, TeamChanges>;
+  /** Changes that belong to the organization rather than to a team. */
+  organizationChanges: ChangeEvent[];
+  /** Null when they have never opened it — then everything counts as new. */
+  viewerLastSeenAt: string | null;
 };
 
 type OverviewResponse = {
@@ -148,6 +172,19 @@ type OverviewResponse = {
   join_link: { active: boolean };
   open_invitations: number;
   pending_members: number;
+  changes: {
+    teams: Record<
+      string,
+      {
+        count: number;
+        latest_at: string;
+        events: { id: string; action: string; actor_member_id: string | null; at: string }[];
+      }
+    >;
+    organization: { id: string; action: string; actor_member_id: string | null; at: string }[];
+    total: number;
+  };
+  viewer_last_seen_at: string | null;
 };
 
 export async function fetchOrgOverview(
@@ -185,5 +222,46 @@ export async function fetchOrgOverview(
     joinLinkActive: body.join_link.active,
     openInvitations: body.open_invitations,
     pendingMembers: body.pending_members,
+    changesByTeam: Object.fromEntries(
+      Object.entries(body.changes?.teams ?? {}).map(([teamId, change]) => [
+        teamId,
+        {
+          count: change.count,
+          latestAt: change.latest_at,
+          events: change.events.map(toChangeEvent),
+        },
+      ]),
+    ),
+    organizationChanges: (body.changes?.organization ?? []).map(toChangeEvent),
+    viewerLastSeenAt: body.viewer_last_seen_at,
   };
+}
+
+function toChangeEvent(event: {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  at: string;
+}): ChangeEvent {
+  return {
+    id: event.id,
+    action: event.action,
+    actorMemberId: event.actor_member_id,
+    at: event.at,
+  };
+}
+
+/** Tells the backend the dashboard has been seen, so the next visit's badges
+ *  only cover what happened after this one. Called **after** the dashboard is
+ *  drawn — clearing before would erase the badges in the same render that was
+ *  meant to show them. Best-effort: failing costs a stale badge, never the
+ *  screen. */
+export async function markDashboardSeen(organizationId: string): Promise<void> {
+  try {
+    await backendFetch(`/organizations/${organizationId}/dashboard-seen`, {
+      method: "POST",
+    });
+  } catch {
+    // Nothing to recover.
+  }
 }

@@ -21,19 +21,16 @@ export const APP_NAV: AppNavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     section: "Organization",
-    purpose: "Where your organization stands.",
+    // The org chart and oversight were folded into this screen (user
+    // 2026-09-22): the chart is the layout, the changes on it are the
+    // oversight, and "what changed?" is always asked about a team.
+    purpose: "Your org chart, and what changed in it.",
   },
   {
     label: "Workspace",
     href: "/workspace",
     section: "Organization",
     purpose: "Every document the organization owns, in one place.",
-  },
-  {
-    label: "Oversight",
-    href: "/oversight",
-    section: "Organization",
-    purpose: "What your teams created, edited and shared.",
   },
   {
     label: "Ownership",
@@ -46,12 +43,6 @@ export const APP_NAV: AppNavItem[] = [
     href: "/sharing",
     section: "Access",
     purpose: "The rules that decide who gets access, without anyone asking.",
-  },
-  {
-    label: "Org chart",
-    href: "/org-chart",
-    section: "Access",
-    purpose: "Your teams and their leads. Access follows this chart.",
   },
   {
     label: "Offboarding",

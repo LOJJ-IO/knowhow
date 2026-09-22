@@ -152,6 +152,12 @@ top-level paths and the landing at `/` is untouched:
 - **Open question:** the topbar's **Alerts** and **New** are drawn but not wired. Knohow has no
   notifications, and there is nothing to create until documents exist. What should each do?
 
+### Superseded: org chart + oversight merged (2026-09-22)
+`/org-chart` and `/oversight` no longer exist as screens. Both were folded into `/dashboard` —
+[[0019-dashboard-absorbs-chart-and-oversight]]. The 7-screen list above still describes the *features*;
+it no longer describes the *routes*. Remaining screens: Workspace, Ownership, Sharing, Offboarding,
+Search (plus Help; Settings is a dialog).
+
 ### Still to do
 - Enforce the `organizationId` requirement on every data-access function as real reads appear.
 - The six screens other than `/org-chart` are still empty states: there is no data behind them yet.
