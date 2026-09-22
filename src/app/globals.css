@@ -346,24 +346,64 @@ html {
   inset: 0;
 }
 .t-deck-mat--blue {
+  /* PNG first as the floor for anything without image-set(); the second
+     declaration wins everywhere modern and serves AVIF (~15x smaller). */
   background:
     linear-gradient(rgb(66 133 244 / 0.12), rgb(66 133 244 / 0.12)),
     url("/deck/blue.png") center / cover no-repeat;
+  background:
+    linear-gradient(rgb(66 133 244 / 0.12), rgb(66 133 244 / 0.12)),
+    image-set(
+        url("/deck/blue.avif") type("image/avif"),
+        url("/deck/blue.webp") type("image/webp"),
+        url("/deck/blue.png") type("image/png")
+      )
+      center / cover no-repeat;
 }
 .t-deck-mat--green {
+  /* PNG first as the floor for anything without image-set(); the second
+     declaration wins everywhere modern and serves AVIF (~15x smaller). */
   background:
     linear-gradient(rgb(52 168 83 / 0.12), rgb(52 168 83 / 0.12)),
     url("/deck/green.png") center / cover no-repeat;
+  background:
+    linear-gradient(rgb(52 168 83 / 0.12), rgb(52 168 83 / 0.12)),
+    image-set(
+        url("/deck/green.avif") type("image/avif"),
+        url("/deck/green.webp") type("image/webp"),
+        url("/deck/green.png") type("image/png")
+      )
+      center / cover no-repeat;
 }
 .t-deck-mat--red {
+  /* PNG first as the floor for anything without image-set(); the second
+     declaration wins everywhere modern and serves AVIF (~15x smaller). */
   background:
     linear-gradient(rgb(234 67 53 / 0.12), rgb(234 67 53 / 0.12)),
     url("/deck/red.png") center / cover no-repeat;
+  background:
+    linear-gradient(rgb(234 67 53 / 0.12), rgb(234 67 53 / 0.12)),
+    image-set(
+        url("/deck/red.avif") type("image/avif"),
+        url("/deck/red.webp") type("image/webp"),
+        url("/deck/red.png") type("image/png")
+      )
+      center / cover no-repeat;
 }
 .t-deck-mat--yellow {
+  /* PNG first as the floor for anything without image-set(); the second
+     declaration wins everywhere modern and serves AVIF (~15x smaller). */
   background:
     linear-gradient(rgb(251 188 5 / 0.12), rgb(251 188 5 / 0.12)),
     url("/deck/yellow.png") center / cover no-repeat;
+  background:
+    linear-gradient(rgb(251 188 5 / 0.12), rgb(251 188 5 / 0.12)),
+    image-set(
+        url("/deck/yellow.avif") type("image/avif"),
+        url("/deck/yellow.webp") type("image/webp"),
+        url("/deck/yellow.png") type("image/png")
+      )
+      center / cover no-repeat;
 }
 
 .t-deck-window {
@@ -1139,4 +1179,16 @@ body.t-deck-dragging * {
   .t-login-shooting-star {
     display: none;
   }
+}
+
+/* Sign-in sheet backdrop. Same fallback chain as the deck mats: the plain
+   PNG declaration is the floor, image-set() serves AVIF where supported. */
+.t-signin-bg {
+  background: url("/hero/signinbg.png") center / cover no-repeat;
+  background: image-set(
+      url("/hero/signinbg.avif") type("image/avif"),
+      url("/hero/signinbg.webp") type("image/webp"),
+      url("/hero/signinbg.png") type("image/png")
+    )
+    center / cover no-repeat;
 }

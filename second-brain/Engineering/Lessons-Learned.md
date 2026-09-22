@@ -316,3 +316,36 @@ escape the tween that every other step rides on. `SetupDropdown` expands **in fl
 part in layout, the observer sees the body grow, and the modal tweens open like any other step change.
 Before converting it to an overlay, that `overflow: hidden` and the measured-height animation both have to
 go, and the "area bounce" goes with them.
+
+## Setup UI structure: primitives, feature folder, tokens (2026-09-21, user)
+User's principle, now the shape of the code: **one primitive per job, feature folders for product UI,
+tokens for numbers that repeat. New UI composes an existing shell rather than inventing another visual
+system.**
+
+- `src/lib/backend.ts` — `BACKEND_API_URL`, `backendFetch`, `backendError`, `Me`, `recordSetupStep`,
+  `startAdminProof`. No screen builds its own URL or digs its own error message out again.
+- `src/components/ui/` — primitives that own one thing: `drag-stepper.tsx` (a number),
+  `choice-pill.tsx` (a choice), `tokens.ts` (`CTA_CLASS`, `SHEET_SLIDE_MS`).
+- `src/components/setup/shell.tsx` — the shell every screen composes: `SetupHeading`, `SetupBody`,
+  `SetupError`, `SetupAction`, `SetupChoices`, `SetupField`, `SETUP_CHOICE_CLASS`. **The one-heading /
+  one-sub / one-action rule lives here**, so a new screen gets it by construction instead of by review.
+- `src/components/setup/*-step.tsx` — one screen per file. `org-setup-form.tsx` is the *order* of the
+  screens and nothing else.
+
+**Why it mattered:** `landing-hero.tsx` had grown to ~4,700 lines holding the landing page, the demo flow,
+the account picker and all of setup. Editing it by text-index surgery duplicated a block **twice in one
+session** before being caught. It is now ~3,700 and setup is 960 lines across nine files.
+
+**Still to split:** the demo flow and the account picker are the next tenants to move out.
+
+## Measure before claiming a speed win (2026-09-21)
+Splitting `landing-hero.tsx` and adding `next/dynamic` felt like a performance job. Measured, JavaScript was
+**1.6% of the landing page**; four watercolour PNGs were **96.8%**. Converting them to AVIF took the page
+from 15.56 MB to 1.72 MB — roughly **9x**, against the ~6% the code work was worth.
+
+Two habits from it:
+- **Break the page down by resource type before optimising anything.** CDP `Network.responseReceived` +
+  `loadingFinished`, grouped by `mimeType`, takes a minute and settles the argument.
+- **A dynamic import defers nothing if the component still renders.** The modal here was always mounted, so
+  its contents loaded on every visit regardless of `next/dynamic`. Gate on the open state, then verify the
+  chunk is absent from the initial request list rather than trusting the API.

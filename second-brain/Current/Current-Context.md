@@ -189,8 +189,20 @@ state with a resume route don't exist yet.
 
 ## ⏭ Next + a standing reminder (2026-09-21)
 
-**Reminder the user asked me to hold:** *once they have tested everything from the top, **reset the
-database**.* The reset is destructive and is the user's call to trigger — do not run it unprompted.
+**✅ Done 2026-09-21 (user asked for the full reset).** `knohow` was dropped and rebuilt: 24 tables, at
+`0015_join_links (head)`, **zero rows** — no org, member, team or remembered account. The pre-reset dump is
+in the session scratchpad as `knohow-before-reset.sql`. Next sign-in with Google creates the org fresh and
+runs setup from "What's your organization called?".
+
+**Gotcha worth keeping:** `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` run from a shell psql leaves
+`public` owned by the **shell's** role, so Alembic (connecting as `knohow`) fails with *"no schema has been
+selected to create in"*. Fix before migrating:
+
+```bash
+psql -d knohow -c 'ALTER SCHEMA public OWNER TO knohow; GRANT ALL ON SCHEMA public TO knohow;'
+```
+
+The reset is destructive and is the user's call to trigger — do not run it unprompted.
 
 ```bash
 # Wipe and rebuild the dev database, then replay every migration.
@@ -214,6 +226,93 @@ psql -d knohow -c "DELETE FROM org_memberships; DELETE FROM teams; DELETE FROM j
 - No approver view (who joined, who is waiting, naming a lead on approval).
 - No done screen after setup, so finishing still drops onto an unchanged landing page.
 - Wrong-account / already-in-another-org / expired / turned-off screens: copy approved, none built.
+
+## Landing page weight: 15.56 MB → 1.72 MB (2026-09-21)
+**Measured, not estimated** (production build, cache disabled, over CDP). The refactor below was about
+maintainability; **this** is what made the site faster.
+
+| | before | after |
+|---|---|---|
+| images | 15.07 MB (96.8%) | **1.23 MB** |
+| JavaScript | 0.25 MB | 0.25 MB |
+| video | 0.12 MB | 0.12 MB |
+| **total** | **15.56 MB** | **1.72 MB** |
+
+**The cause was four deck mats and the sign-in backdrop shipped as full-size PNGs** — `red` 3.6 MB,
+`blue` 3.3 MB, `green` 3.1 MB, `yellow` 2.5 MB, `signinbg` 1.5 MB, `folder` 892 KB. All 1672×940
+watercolour, the worst possible content for PNG. Converted with `sharp` to **AVIF (q55) + WebP (q82)**:
+15,095 KB → **922 KB AVIF (93.9% smaller)**, WebP 1,762 KB as the middle fallback.
+
+**How they're served:** CSS mats and `.t-signin-bg` use a two-declaration pattern — plain `url(...png)`
+first as the floor, then `image-set()` with AVIF → WebP → PNG, which wins everywhere modern. The Notes
+folder icon is an `<img>`, so it became a `<picture>` with AVIF/WebP `<source>`s. **PNGs stay in the repo
+as the fallback; modern browsers never fetch them.** Verified in-browser: the mats resolve to
+`/deck/green.avif`, and the deck renders unchanged.
+
+**The video was never the problem** (311 KB mp4 / 125 KB webm). It was the stills.
+
+**Lazy loading, honestly:** the setup screens now compile to a separate ~16 KB chunk outside the initial
+ten files, and a real bug was fixed on the way — `DemoForm` was the final fallback branch inside an
+**always-mounted** modal, so it rendered on every page load; the sheet's contents are now gated on
+`sheetOpen`. But JS is only **14%** of the page even now, so this was worth doing for correctness, not for
+speed.
+
+## Setup split out of landing-hero + stepper redesigned (2026-09-21, user)
+**Stepper now matches the reference the user sent:** a capsule with **− on the left, the number centred,
++ on the right**, still draggable sideways, arrow keys, `role="spinbutton"`. (The `lorenzo04us/Bencho`
+source it came from 404s, so this is built to the screenshot.)
+
+**Split, on the user's principle** — *one primitive per job, feature folders for product UI, tokens for
+numbers that repeat; new UI composes an existing shell rather than inventing another visual system*:
+`src/lib/backend.ts`, `src/components/ui/{drag-stepper,choice-pill,tokens}`,
+`src/components/setup/{shell,org-name-step,teams-step,own-team-step,invite-link-step,org-setup-form,types}`.
+`landing-hero.tsx` went ~4,700 → ~3,700 lines and now just imports `OrgSetupForm`. Details in
+[[Lessons-Learned]].
+
+**Re-audited live after the refactor**: all ten screens still 1 heading, ≤1 sub, and the flow runs end to
+end. The count screen's buttons are now − / + / Continue (the first two adjust one value; they are not
+competing actions).
+
+## Teams = count then slots; admin check moved to the end (2026-09-21)
+**User: "one choice per screen" and "one header and sub head per screen".** Worth keeping the distinction
+that came out of it: a *question with answer choices* (Yes / No, or pills) is **one decision** and is fine;
+an **action plus a bail-out** ("Check with Google" / "Do this later") is **two actions** and is not.
+
+- **Super Admin "No" / "I don't know" no longer gets its own screen.** Proving admin was never a gate on
+  setting up an org, and the screen trapped a founder who isn't the Workspace admin. Those answers now go
+  straight to naming the org, and the check became **its own one-action screen at the very end**:
+  "Connect Knohow to Google." / "Only a Workspace admin can do this. Google will check whether that's you,
+  and ask for one extra permission." → **Check with Google**. Setup is recorded `done` *before* it, so
+  closing there doesn't reopen setup. Skipped entirely when `is_super_admin`.
+- **Teams is now two screens** (user's call, after I argued against one-name-per-screen):
+  1. **"How many teams are in {Org}?"** / "Drag to set the number." — a **`DragStepper`**: one control, drag
+     horizontally to set the value, arrow keys for the keyboard, `role="spinbutton"`. The user referenced a
+     `DragStepper` from `lorenzo04us/Bencho` (`src/lab/GlassKit.tsx`); **that repo 404s**, so this is my own
+     implementation of the behaviour the name implies.
+  2. **"What are they called?"** — exactly that many slots. Each commits on blur or Enter (Enter moves to
+     the next slot, **never advances the screen**); editing a committed slot **PATCHes** rather than making
+     a second team.
+- **Why not one name per screen:** nobody knows their team count before listing them, a wrong count either
+  traps you or leaves empty screens, and the count is data we never use. Counting first fixes the real flaw
+  — "am I done yet?" — without those costs.
+- **Link-ready URL is a read-only field, not a paragraph**, so it stops reading as a second sub-line.
+
+**Audited live over CDP, all ten screens:** every one has exactly **1 heading and ≤1 sub**. Button counts:
+one action each, except the two screens whose buttons are *answers* (own-team pills, lifetime pills) plus
+their Continue, and the Yes/No questions.
+
+## Three fixes from the user's first full test (2026-09-21)
+1. **Super Admin "I don't know" screen was unclear.** It asked *"Not sure who your Workspace admin is?"* —
+   the question they had just answered — never said what their answer meant, and offered "Verify I'm the
+   Workspace admin". Rewritten to **state their standing first**: "You're not a Super Admin yet." /
+   "Knohow needs a Workspace admin to connect your organization's Google account. Google can check whether
+   that's you. It asks for one extra permission." Choices: **Check with Google** · **Do this later**.
+2. **It never showed that they aren't the Super Admin** — same fix; the heading is now the fact.
+3. **Teams screen looked like it only wanted one team.** The placeholder was cleared after the first pill,
+   so nothing invited another. Now **"Add another"** once at least one pill exists.
+
+Walked in a real browser: owner → Super Admin → "I don't know" lands on the new screen with the right copy
+and two choices.
 
 ## Invite link built — three screens, one action each (2026-09-21)
 User: **"One action per screen"**, so the link is three screens, not one form.

@@ -414,3 +414,19 @@ case, one supporting line, one action. **No em dashes.** Brand spelled **Knohow*
 - The removal line says out loud what Knohow cannot take back, per [[0014-org-setup-and-join-link]].
 - The off-domain and wrong-account screens name the domain rather than saying "not allowed", so the person
   knows what to do next.
+
+### Super Admin: "No" / "I don't know" (copy written 2026-09-21, user said the old screen was unclear)
+The old screen asked *"Not sure who your Workspace admin is?"* — the same question they had just answered,
+with no statement of what their answer meant, and a claim-shaped button ("Verify I'm the Workspace admin").
+Now:
+- H: You're not a Super Admin yet.
+- Sub: Knohow needs a Workspace admin to connect your organization's Google account. Google can check
+  whether that's you. It asks for one extra permission.
+- Choices: **Check with Google** · **Do this later**
+
+It states their standing before asking anything, and the two choices are answers to one question — the same
+shape as the Yes / No screens, not two competing actions.
+
+### Teams field placeholder
+After the first pill the field went blank, so nothing invited a second team. The placeholder is now
+**"Team name"** empty, **"Add another"** once there is at least one pill.
