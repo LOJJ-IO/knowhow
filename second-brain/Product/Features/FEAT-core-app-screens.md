@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, status/in-progress]
 created: 2026-09-21
-updated: 2026-09-21
+updated: 2026-09-22
 related: ["[[Current-Context]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-org-chart-builder]]", "[[Lessons-Learned]]", "[[0001-mocked-data-first-prototype]]"]
 ---
 <!-- Filename convention: Product/Features/FEAT-short-title.md -->
@@ -92,10 +92,11 @@ The planned screens/views are:
   labels) for everything else. Same two faces as the landing.
 - **Icons: Google Material Symbols (Outlined)**, self-hosted per `next/font/local` like every other
   font here — `src/fonts/material-symbols/`, wrapped by `src/components/app/icon.tsx`. Two things to
-  know: the file is **subsetted** to the 7 icons in use (2KB, fetched with `&icon_names=…`; the full
+  know: the file is **subsetted** to the icons in `APP_ICONS` (~3KB, fetched with `&icon_names=…`; the full
   variable font is 3.8MB), so **adding an icon means re-fetching the subset**, and icons are addressed
   by **codepoint** rather than ligature name so a subset without a ligature table can never render as
-  the literal text "folder_open". `lucide-react` stays in use on the landing and setup screens.
+  the literal text "folder_open". Sidebar toggle uses `left_panel_close` / `left_panel_open`.
+  `lucide-react` stays in use on the landing and setup screens.
 
 - Composes existing tokens (`satoshi`, `sohne`, `#f9f8f6`, `#1c1917`) plus a new app-chrome set in
   `globals.css`: `--app-sidebar-w`, `--app-border`, `--app-muted`, `--app-active`, `--app-dim`.
@@ -138,7 +139,8 @@ top-level paths and the landing at `/` is untouched:
 - The shell reads **`/auth/me` and `/org-chart/{org_id}`**, not a fixture —
   [[0016-app-reads-the-backend-not-fixtures]]. `/org-chart` is the first screen on real data: team
   cards with their generated icon and member count, plus loading, empty and error states.
-- The sidebar has a **toggle** (Sage_v1's behaviour, icon flips with state, tooltip; no white pill).
+- The sidebar has a **toggle** matching Sage_v1 (white pill, icon flips with state, tooltip).
+  Notifications has a tooltip ("Notifications").
 
 ### Dashboard, org chart graph, dialogs (2026-09-21)
 - **`/dashboard` is the app's home** and reflects every onboarding answer —

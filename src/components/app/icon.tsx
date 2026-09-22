@@ -30,6 +30,8 @@ export const APP_ICONS = {
   person_remove: 0xef66,
   search: 0xef7a,
   view_sidebar: 0xf114,
+  left_panel_close: 0xf717,
+  left_panel_open: 0xf716,
   notifications: 0xe7f5,
   add: 0xe145,
   help: 0xe8fd,

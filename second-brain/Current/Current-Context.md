@@ -3,7 +3,7 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-21
+updated: 2026-09-22
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]"]
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
 ---
@@ -86,8 +86,9 @@ Component can't see them), fetched once in `AppSessionProvider` and handed down 
 bounces to `/`. `MOCK_ORGANIZATION_ID` is deleted. `/org-chart` is the first screen on real data.
 **Invariant 2 still holds:** nothing in `src/` touches a Google API.
 
-Shell also gained a **sidebar toggle** following Sage_v1's behaviour (icon flips with state, tooltip)
-but without its white pill (user dropped it). Descenders were being clipped by `leading-none` under
+Shell also gained a **sidebar toggle** matching Sage_v1's control: white pill, glyph flips with
+state (`left_panel_close` / `left_panel_open`), tooltip Collapse/Expand. Notifications bell has a
+tooltip too. Descenders were being clipped by `leading-none` under
 `truncate` — fixed on the page title, the org-chart card title and the sidebar section labels.
 
 **Known dev-server wrinkle (2026-09-21):** `/search` 404s on the long-running `next dev` while every
