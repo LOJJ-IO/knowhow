@@ -820,6 +820,21 @@ def list_pending_members(org_id: uuid.UUID, requester: OrgMember, db: Session) -
     )
 
 
+def list_members(org_id: uuid.UUID, db: Session) -> list[OrgMember]:
+    """Everyone in the organization, approved or still waiting, oldest first.
+
+    Deliberately readable by any member of the org rather than owner-only
+    (unlike list_pending_members, which is a queue of decisions the owner has
+    to make): the app shows who is in the organization on its own screens, and
+    that is not privileged information inside a tenant. Scoped to one org by
+    the caller's route dependency."""
+    return list(
+        db.execute(
+            select(OrgMember).where(OrgMember.organization_id == org_id).order_by(OrgMember.created_at)
+        ).scalars()
+    )
+
+
 def set_auto_accept_workspace_members(org_id: uuid.UUID, requester: OrgMember, enabled: bool, db: Session) -> Organization:
     """Owner's opt-in to approve same-domain Workspace signups on arrival.
     Applies to future signups only; anyone already waiting stays pending

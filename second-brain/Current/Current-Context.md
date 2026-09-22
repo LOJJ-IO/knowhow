@@ -72,6 +72,28 @@ the sidebar). Icons are now **Google Material Symbols**, self-hosted and **subse
 (2KB) and addressed by codepoint — details and the re-fetch caveat in [[FEAT-core-app-screens]].
 Still not opened in a browser.
 
+**Identities + real data (2026-09-21):** teams and people now have **seeded generative SVG identities**
+— [[0015-seeded-generative-identity-system]]. Team icons are abstract geometric compositions from a
+fixed vocabulary; people get gradient fields; the name is **only a seed** (no letters, initials or
+meaning), and the same name always renders the same icon. Visible in the setup teams-naming step (icon
+appears per slot as you type), the "Which teams are you in?" pills, the sidebar's person avatar and the
+`/org-chart` cards. The user chose a **deterministic renderer over an image model** for consistency and
+cost; the image-model prompt they wrote stays an exploration tool, not the product path.
+
+The app also **no longer uses a fixture** — [[0016-app-reads-the-backend-not-fixtures]]. `/auth/me` and
+`/org-chart/{org_id}` are read in the browser (session cookies live on the backend's origin, so a Server
+Component can't see them), fetched once in `AppSessionProvider` and handed down by context; signed-out
+bounces to `/`. `MOCK_ORGANIZATION_ID` is deleted. `/org-chart` is the first screen on real data.
+**Invariant 2 still holds:** nothing in `src/` touches a Google API.
+
+Shell also gained a **sidebar toggle** following Sage_v1's behaviour (icon flips with state, tooltip)
+but without its white pill (user dropped it). Descenders were being clipped by `leading-none` under
+`truncate` — fixed on the page title, the org-chart card title and the sidebar section labels.
+
+**Known dev-server wrinkle (2026-09-21):** `/search` 404s on the long-running `next dev` while every
+other app route serves; `next build` lists the route and the file is correct, so it is stale dev state.
+Restart `next dev` if it shows up.
+
 **Next:** user picks which screen to build first.
 
 ## Account picker — Remove link icon (2026-09-21)

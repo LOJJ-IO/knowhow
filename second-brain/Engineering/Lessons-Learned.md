@@ -378,3 +378,21 @@ client **reference**, not the value, so property access on a plain object export
 the boundary. Fix: drop `"use client"` — lucide icons render fine in RSC, and a client component can
 still import the same module. Rule: config objects read by both server and client must not live in a
 client module.
+
+## Cross-origin session cookies decide where you can fetch (2026-09-21)
+The backend's session cookies live on *its* origin, so no Server Component in `src/app` can read them.
+That single fact forces the whole shape of the signed-in app: the session is fetched in the browser, at
+the top of the route group, and the app has no server-rendered content. Worth checking *before*
+designing a data layer around Server Components — see [[0016-app-reads-the-backend-not-fixtures]].
+
+## `leading-none` plus `truncate` eats descenders (2026-09-21)
+The app's page title cropped the "g" in "Org chart". `leading-none` gives the line box no room below
+the baseline and `truncate`'s `overflow: hidden` then cuts what pokes out. Tight leading is safe only
+where nothing clips. Fixed with `leading-[1.3]`.
+
+## Generated SVG can be verified without a browser (2026-09-21)
+To check the identity system actually drew something sane, a throwaway route rendering it was built with
+`next build`, then the prerendered HTML in `.next/server/app/<route>.html` was read directly: shape
+counts, colours, `NaN`, and the same name at two sizes to prove determinism. Cheaper than reaching for
+a screenshot tool, and it catches the failure that matters (geometry, not looks). Delete the route
+afterwards.

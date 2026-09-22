@@ -29,8 +29,11 @@ export const APP_ICONS = {
   account_tree: 0xe97a,
   person_remove: 0xef66,
   search: 0xef7a,
-  left_panel_close: 0xf717,
-  left_panel_open: 0xf716,
+  view_sidebar: 0xf114,
+  notifications: 0xe7f5,
+  add: 0xe145,
+  help: 0xe8fd,
+  settings: 0xe8b8,
 } as const;
 
 export type AppIconName = keyof typeof APP_ICONS;

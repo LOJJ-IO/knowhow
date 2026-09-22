@@ -133,8 +133,16 @@ top-level paths and the landing at `/` is untouched:
   `AppPage` and renders `EmptyState` just for its empty case.
 - Verified: `next build` prerenders all 7 routes; eslint clean. **Not yet opened in a browser.**
 
+### Identities and real data (2026-09-21)
+- Teams and people carry **seeded generative identities** — [[0015-seeded-generative-identity-system]].
+- The shell reads **`/auth/me` and `/org-chart/{org_id}`**, not a fixture —
+  [[0016-app-reads-the-backend-not-fixtures]]. `/org-chart` is the first screen on real data: team
+  cards with their generated icon and member count, plus loading, empty and error states.
+- The sidebar has a **toggle** (Sage_v1's behaviour, icon flips with state, tooltip; no white pill).
+
 ### Still to do
 - Enforce the `organizationId` requirement on every data-access function as real reads appear.
+- The six screens other than `/org-chart` are still empty states: there is no data behind them yet.
 - Nothing links into the app yet: after `setup_step = done` the founder still lands on the landing
   page. Wiring that redirect is a separate ask.
 - Backend endpoints for DeepSearch and the org chart do not exist yet.

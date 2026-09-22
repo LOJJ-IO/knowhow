@@ -12,4 +12,6 @@ export const NAV_ICONS: Record<string, AppIconName> = {
   "/org-chart": "account_tree",
   "/offboarding": "person_remove",
   "/search": "search",
+  "/help": "help",
+  "/settings": "settings",
 };

@@ -72,7 +72,7 @@ export function OrgChartScreen() {
             <TeamIcon name={team.name} size={44} />
             <div className="min-w-0">
               <p
-                className={`${sohne.className} m-0 truncate text-[1rem] leading-tight tracking-tight text-[#1c1917]`}
+                className={`${sohne.className} m-0 truncate text-[1rem] leading-[1.35] tracking-tight text-[#1c1917]`}
               >
                 {team.name}
               </p>

@@ -9,12 +9,12 @@ import {
 
 /** Show or hide the sidebar.
  *
- *  Follows the shape Sage_v1 used for the same control (user 2026-09-21): a
- *  pill-shaped group with a hairline and a soft shadow, a round icon button
- *  inside it, the **icon flipping with state** rather than staying put, and a
- *  tooltip carrying the word. Rebuilt on Knohow's own tokens and Google's
- *  Material Symbols — no Sage code, icon set or tokens crossed over
- *  (CLAUDE.md invariant 5).
+ *  Follows Sage_v1's behaviour for the same control (user 2026-09-21): a round
+ *  icon button whose **icon flips with state** rather than staying put, with a
+ *  tooltip carrying the word. Sage's white pill around it — hairline, shadow —
+ *  was dropped at the user's request the same day, so the icon sits directly on
+ *  the page. Rebuilt on Knohow's own tokens and Google's Material Symbols; no
+ *  Sage code, icon set or tokens crossed over (CLAUDE.md invariant 5).
  *
  *  The icon shows what the click will do, not what is currently true: panel
  *  closing when it is open, panel opening when it is hidden.
@@ -29,7 +29,7 @@ export function PanelToggle({
 }) {
   const label = open ? "Collapse" : "Expand";
   return (
-    <div className="inline-flex w-fit shrink-0 items-center rounded-full border border-[var(--app-border)] bg-white p-0.5 shadow-sm">
+    <div className="inline-flex w-fit shrink-0 items-center">
       <Tooltip>
         <TooltipTrigger
           render={

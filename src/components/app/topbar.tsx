@@ -35,7 +35,7 @@ export function Topbar({
         <PanelToggle open={sidebarOpen} onToggle={onToggleSidebar} />
       </TooltipProvider>
       <h1
-        className={`${sohne.className} m-0 min-w-0 truncate text-[1.5rem] leading-none tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 min-w-0 truncate text-[1.5rem] leading-[1.3] tracking-tight text-[#1c1917]`}
       >
         {current?.label ?? ""}
       </h1>

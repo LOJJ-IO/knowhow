@@ -32,13 +32,14 @@ export function Sidebar() {
       className="flex w-[var(--app-sidebar-w)] shrink-0 flex-col"
     >
       {/* The full landing lockup, not the bare hexagon mark (user 2026-09-21),
-          then resized at the user's request: 1.6rem → 1.92rem → 2.5rem (+30%).
+          then resized at the user's request: 1.6rem → 1.92rem → 2.5rem →
+          2.125rem (−15%), and nudged 10px down the row.
           `as="div"` because the screen's name is already this page's <h1>, in
           `Topbar`. The row stays h-16 so it keeps lining up with the page title
           across the way. px-4 gives the lockup a gutter on both sides without
           pushing it out of line with the nav rows below. */}
-      <div className="flex h-16 items-center px-4">
-        <LogoLockup fontSize="2.5rem" as="div" />
+      <div className="flex h-16 items-center px-4 pt-[10px]">
+        <LogoLockup fontSize="2.125rem" as="div" />
       </div>
 
       {/* Nav brought down 30% at the user's request (2026-09-21): the first
@@ -51,7 +52,7 @@ export function Sidebar() {
           return (
             <div key={section} className="mt-6 first:mt-2">
               <p
-                className={`${satoshi.className} px-3 pb-2 text-[0.8125rem] leading-none text-[var(--app-dim)]`}
+                className={`${satoshi.className} px-3 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}
               >
                 {section}
               </p>

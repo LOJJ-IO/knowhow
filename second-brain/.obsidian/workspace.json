@@ -165,6 +165,8 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0016-app-reads-the-backend-not-fixtures.md",
+    "Architecture/Decisions/0015-seeded-generative-identity-system.md",
     "Product/Features/FEAT-core-app-screens.md",
     "Architecture/Decisions/0005-layered-file-classification-no-llm-first.md",
     "Architecture/Decisions/0014-org-setup-and-join-link.md",
@@ -189,7 +191,6 @@
     "Product/Features/FEAT-landing-login-panel.md",
     "Features/FEAT-landing-login-panel.md",
     "Features",
-    "Architecture/Decisions.md",
-    "Product/Features/FEAT-landing-deck-notes-folder.md"
+    "Architecture/Decisions.md"
   ]
 }

@@ -64,10 +64,30 @@ export const APP_SEARCH: AppNavItem = {
   purpose: "Find any document in the organization.",
 };
 
+/** The two rows at the foot of the sidebar. Kept out of `APP_NAV` because
+ *  they aren't features of the product — they sit under the sections, quieter,
+ *  the way Elera's do (user 2026-09-21). */
+export const APP_UTILITY: AppNavItem[] = [
+  {
+    label: "Help",
+    href: "/help",
+    section: "Organization",
+    purpose: "Answers, and a way to reach us.",
+  },
+  {
+    label: "Settings",
+    href: "/settings",
+    section: "Organization",
+    purpose: "How Knohow behaves for your organization.",
+  },
+];
+
 export const APP_SECTIONS: AppSection[] = ["Organization", "Access", "People"];
 
 export function navItemFor(href: string): AppNavItem {
-  const item = [...APP_NAV, APP_SEARCH].find((i) => i.href === href);
+  const item = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
+    (i) => i.href === href,
+  );
   if (!item) throw new Error(`No nav entry for ${href}`);
   return item;
 }
