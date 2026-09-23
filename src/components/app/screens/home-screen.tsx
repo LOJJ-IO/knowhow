@@ -5,6 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
+import {
+  ManageTeamsButton,
+  ReplayUpdatesButton,
+} from "@/components/app/screens/home-actions";
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
 import {
@@ -40,6 +44,41 @@ import { cn } from "@/lib/utils";
  *  connector only pulses for a team that actually changed. Quiet is the
  *  correct state when nothing has happened. */
 
+type RecentWindow = { label: string | null; teamIds: Set<string> };
+
+const NO_RECENT: RecentWindow = { label: null, teamIds: new Set() };
+
+/** The narrowest window that holds something, and which teams changed in it. */
+function recentWindow(overview: OrgOverview | null): RecentWindow {
+  if (!overview) return NO_RECENT;
+  const now = Date.now();
+  for (const [hours, label] of RECENT_WINDOWS) {
+    const cutoff = now - hours * 3600_000;
+    const teamIds = new Set(
+      // The week-long feed, not the since-you-last-looked one: the latter is
+      // empty on every visit after the first, which is why the chart had no
+      // pulses at all (user 2026-09-22).
+      Object.entries(overview.recentChangesByTeam)
+        .filter(([, change]) =>
+          change.events.some((event) => Date.parse(event.at) >= cutoff),
+        )
+        .map(([teamId]) => teamId),
+    );
+    if (teamIds.size) return { label, teamIds };
+  }
+  return NO_RECENT;
+}
+
+/** Widening spans, in hours, with the words the button uses for them. */
+const RECENT_WINDOWS: [number, string][] = [
+  [1, "last hour"],
+  [6, "last 6 hours"],
+  [12, "last 12 hours"],
+  [24, "last day"],
+  [24 * 7, "last week"],
+  [24 * 365 * 20, "whole history"],
+];
+
 const OWNER_NODE = "owner";
 /** Both cards run 30% bigger than the first pass (user 2026-09-22) — width,
  *  padding, avatar and type all scaled together, so a card grows rather than
@@ -52,6 +91,13 @@ export function HomeScreen() {
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string[]>([]);
+  /** The pulses run on their own; this stops them, and bumping `replay`
+   *  restarts every one of them from the top. */
+  const [playing, setPlaying] = useState(true);
+  const [replay, setReplay] = useState(0);
+  /** True while a replay is actually travelling, which is what the button's
+   *  green is tied to. */
+  const [running, setRunning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,6 +123,23 @@ export function HomeScreen() {
     [overview],
   );
 
+  /** What "recent" means today. The button plays the **last hour**; when
+   *  nothing happened in it, the window widens — 6 hours, 12, a day, a week —
+   *  and stops at the first span that holds something (user 2026-09-22). A
+   *  replay of an empty hour would say nothing; a replay of everything ever
+   *  would say too much.
+   *
+   *  Computed when the data arrives and again on each press, not in a memo:
+   *  it reads the clock, and a memo that reads the clock is a memo that lies
+   *  as soon as time passes.
+   */
+  const [replayWindow, setReplayWindow] = useState<RecentWindow | null>(null);
+  /** The window the chart is currently showing: the one the last press chose,
+   *  or the narrowest non-empty one for the data on screen. `useSyncExternal`
+   *  isn't needed — reading the clock during render is fine here because the
+   *  result is only ever a starting point, and a press recomputes it. */
+  const recent = replayWindow ?? recentWindow(overview);
+
   const { nodes, edges } = useMemo(() => {
     if (!overview) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
     const teams = overview.teams;
@@ -95,11 +158,11 @@ export function HomeScreen() {
       edges: teams.map((team) => ({
         from: OWNER_NODE,
         to: team.id,
-        // Only a team that actually changed gets a pulse.
-        active: (overview.changesByTeam[team.id]?.count ?? 0) > 0,
+        // Only a team that changed **inside the window being played**.
+        active: recent.teamIds.has(team.id),
       })),
     };
-  }, [overview]);
+  }, [overview, recent]);
 
   if (error)
     return (
@@ -130,7 +193,8 @@ export function HomeScreen() {
         {/* Nothing names the organization here any more: its name moved to
             the foot of the sidebar (user 2026-09-22), and the stat pills and
             the "signed in from…" line went with the panel they sat on. The
-            screen is the chart. */}
+            screen is the chart, and these are the two things you can do to
+            it. */}
         {overview.teams.length === 0 ? (
           <Panel className="flex min-h-0 flex-1 items-center justify-center">
             <EmptyState
@@ -140,111 +204,157 @@ export function HomeScreen() {
             />
           </Panel>
         ) : (
-          <FlowCanvas
-            nodes={nodes}
-            edges={edges}
-            spread
-            renderNode={(node, { selected }) => {
-              if (node.id === OWNER_NODE) {
-                const name =
-                  owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+          // The controls sit *on* the grid, in its top right corner (user
+          // 2026-09-22), not in a band above it. The wrapper is what they are
+          // positioned against: putting them inside the canvas itself would
+          // let them scroll away with the chart.
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+              <ManageTeamsButton teams={overview.teams} />
+              <ReplayUpdatesButton
+                playing={playing}
+                running={running}
+                windowLabel={recent.label}
+                onToggle={() => {
+                  if (playing) {
+                    setPlaying(false);
+                    setRunning(false);
+                    return;
+                  }
+                  // Play means play it again, from the beginning.
+                  // Re-read the clock: an hour may have passed since the
+                  // screen loaded.
+                  const window_ = recentWindow(overview);
+                  setReplayWindow(window_);
+                  setPlaying(true);
+                  setReplay((n) => n + 1);
+                  setRunning(true);
+                  // One pass: each edge is staggered by 900ms and a pulse
+                  // travels for 680. When the last one lands the button
+                  // drops its green and its Pause (user 2026-09-22).
+                  window.setTimeout(
+                    () => {
+                      setRunning(false);
+                      setPlaying(false);
+                    },
+                    Math.max(window_.teamIds.size - 1, 0) * 900 + 1200,
+                  );
+                }}
+              />
+            </div>
+            <FlowCanvas
+              nodes={nodes}
+              edges={
+                playing ? edges : edges.map((e) => ({ ...e, active: false }))
+              }
+              pulseKey={replay}
+              spread
+              renderNode={(node, { selected }) => {
+                if (node.id === OWNER_NODE) {
+                  const name =
+                    owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+                  return (
+                    <Card selected={selected}>
+                      <div className="flex items-center gap-[13px] p-[13px]">
+                        <PersonAvatar
+                          identity={owner?.email ?? chrome.viewer.email}
+                          label={name}
+                          size={52}
+                        />
+                        <span className="min-w-0 text-left">
+                          <CardTitle>{name}</CardTitle>
+                          <CardMeta>
+                            {owner?.id === me.id ? "Owner · you" : "Owner"}
+                          </CardMeta>
+                        </span>
+                      </div>
+                    </Card>
+                  );
+                }
+
+                const team = overview.teams.find((t) => t.id === node.id);
+                if (!team) return null;
+                const change = overview.changesByTeam[team.id];
+                // Flagged by the same feed that pulses: what moves on the
+                // chart and what is marked on the card agree.
+                const updated = recent.teamIds.has(team.id);
+                const lead = team.leaderId
+                  ? membersById.get(team.leaderId)
+                  : undefined;
+                const open = expanded.includes(team.id);
+
                 return (
-                  <Card selected={selected}>
+                  <Card selected={selected} changed={Boolean(change)}>
                     <div className="flex items-center gap-[13px] p-[13px]">
-                      <PersonAvatar
-                        identity={owner?.email ?? chrome.viewer.email}
-                        label={name}
-                        size={52}
-                      />
-                      <span className="min-w-0 text-left">
-                        <CardTitle>{name}</CardTitle>
+                      <TeamIcon name={team.name} size={52} />
+                      <span className="min-w-0 flex-1 text-left">
+                        <CardTitle>
+                          <span className="truncate">{team.name}</span>
+                          {change ? <ChangeBadge count={change.count} /> : null}
+                          {updated ? <NewBadge /> : null}
+                        </CardTitle>
                         <CardMeta>
-                          {owner?.id === me.id ? "Owner · you" : "Owner"}
+                          {team.memberIds.length === 1
+                            ? "1 member"
+                            : `${team.memberIds.length} members`}
+                          {lead ? ` · ${lead.displayName ?? lead.email}` : ""}
                         </CardMeta>
                       </span>
+                      {/* data-ui keeps the canvas from treating this as a drag. */}
+                      <Button
+                        data-ui
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-expanded={open}
+                        aria-label={
+                          open
+                            ? `Hide ${team.name} members`
+                            : `Show ${team.name} members`
+                        }
+                        onClick={() =>
+                          setExpanded((current) =>
+                            current.includes(team.id)
+                              ? current.filter((id) => id !== team.id)
+                              : [...current, team.id],
+                          )
+                        }
+                        className="size-9"
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          className={cn(
+                            "size-5 transition-transform duration-200",
+                            open && "rotate-180",
+                          )}
+                          aria-hidden
+                        >
+                          <path
+                            d="m6 9 6 6 6-6"
+                            stroke="currentColor"
+                            strokeWidth={2.2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </Button>
                     </div>
+
+                    {open ? (
+                      <TeamDetail
+                        members={team.memberIds
+                          .map((id) => membersById.get(id))
+                          .filter((m): m is OverviewMember => Boolean(m))}
+                        leaderId={team.leaderId}
+                        events={change?.events ?? []}
+                        membersById={membersById}
+                      />
+                    ) : null}
                   </Card>
                 );
-              }
-
-              const team = overview.teams.find((t) => t.id === node.id);
-              if (!team) return null;
-              const change = overview.changesByTeam[team.id];
-              const lead = team.leaderId
-                ? membersById.get(team.leaderId)
-                : undefined;
-              const open = expanded.includes(team.id);
-
-              return (
-                <Card selected={selected} changed={Boolean(change)}>
-                  <div className="flex items-center gap-[13px] p-[13px]">
-                    <TeamIcon name={team.name} size={52} />
-                    <span className="min-w-0 flex-1 text-left">
-                      <CardTitle>
-                        {team.name}
-                        {change ? <ChangeBadge count={change.count} /> : null}
-                      </CardTitle>
-                      <CardMeta>
-                        {team.memberIds.length === 1
-                          ? "1 member"
-                          : `${team.memberIds.length} members`}
-                        {lead ? ` · ${lead.displayName ?? lead.email}` : ""}
-                      </CardMeta>
-                    </span>
-                    {/* data-ui keeps the canvas from treating this as a drag. */}
-                    <Button
-                      data-ui
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-expanded={open}
-                      aria-label={
-                        open
-                          ? `Hide ${team.name} members`
-                          : `Show ${team.name} members`
-                      }
-                      onClick={() =>
-                        setExpanded((current) =>
-                          current.includes(team.id)
-                            ? current.filter((id) => id !== team.id)
-                            : [...current, team.id],
-                        )
-                      }
-                      className="size-9"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        className={cn(
-                          "size-5 transition-transform duration-200",
-                          open && "rotate-180",
-                        )}
-                        aria-hidden
-                      >
-                        <path
-                          d="m6 9 6 6 6-6"
-                          stroke="currentColor"
-                          strokeWidth={2.2}
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                  </div>
-
-                  {open ? (
-                    <TeamDetail
-                      members={team.memberIds
-                        .map((id) => membersById.get(id))
-                        .filter((m): m is OverviewMember => Boolean(m))}
-                      leaderId={team.leaderId}
-                      events={change?.events ?? []}
-                      membersById={membersById}
-                    />
-                  ) : null}
-                </Card>
-              );
-            }}
-          />
+              }}
+            />
+          </div>
         )}
       </div>
     </AppPage>
@@ -409,6 +519,27 @@ function CardMeta({ children }: { children: React.ReactNode }) {
       className={`${satoshi.className} block truncate text-[0.975rem] leading-[1.4] text-[var(--app-dim)]`}
     >
       {children}
+    </span>
+  );
+}
+
+/** "New", on the right of a team's name, when that team has moved inside the
+ *  window Home is playing (user 2026-09-22, following a reference).
+ *
+ *  Quiet on purpose: a muted chip in the app's own grey rather than a colour.
+ *  The count badge beside it is the loud one — it says *you* haven't seen
+ *  this — while this says only that something happened recently, which is a
+ *  weaker claim and should look like one.
+ *
+ *  Sits **next to the name**, not out at the card's edge, and its corners are
+ *  5px rather than fully round: both measured off the user's reference
+ *  (2026-09-22 — a 194×56 chip in a 2× capture traces to a ~4.5px arc). */
+function NewBadge() {
+  return (
+    <span
+      className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
+    >
+      New
     </span>
   );
 }

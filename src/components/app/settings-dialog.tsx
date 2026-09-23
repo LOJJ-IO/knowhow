@@ -253,7 +253,7 @@ function Switch({
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-[background-color,transform] duration-150 active:scale-95 disabled:cursor-default disabled:opacity-60 ${
+      className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-[background-color,translate] duration-150 active:translate-y-px disabled:cursor-default disabled:opacity-60 ${
         checked ? "bg-[#1c1917]" : "bg-[var(--app-active)]"
       }`}
     >

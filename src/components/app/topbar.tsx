@@ -60,7 +60,8 @@ export function Topbar({
 
   return (
     <TooltipProvider delay={0}>
-      <header className="flex h-16 shrink-0 items-center gap-5 px-5">
+      {/* px-2 to line the toggle up with the page gutter below it. */}
+      <header className="flex h-16 shrink-0 items-center gap-5 px-2">
         <PanelToggle open={sidebarOpen} onToggle={onToggleSidebar} />
         <h1
           className={`${sohne.className} m-0 min-w-0 truncate text-[1.5rem] leading-[1.3] tracking-tight text-[#1c1917]`}
@@ -72,7 +73,7 @@ export function Topbar({
           <Link
             href={APP_SEARCH.href}
             aria-current={pathname === APP_SEARCH.href ? "page" : undefined}
-            className={`${satoshi.className} flex h-10 w-[15rem] items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 text-[0.9375rem] text-[var(--app-dim)] transition-[border-color,transform] duration-150 hover:border-[#d9d9de] active:scale-[0.98]`}
+            className={`${satoshi.className} flex h-10 w-[15rem] items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 text-[0.9375rem] text-[var(--app-dim)] transition-[border-color,translate] duration-150 hover:border-[#d9d9de] active:translate-y-px`}
           >
             <span className="truncate">Search</span>
             <kbd className="ml-auto shrink-0 font-sans text-[0.8125rem] text-[var(--app-dim)]">
@@ -109,7 +110,7 @@ export function Topbar({
             <button
               type="button"
               aria-label="Account"
-              className={`${satoshi.className} flex h-12 cursor-pointer items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917] transition-transform duration-150 active:scale-95`}
+              className={`${satoshi.className} flex h-12 cursor-pointer items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917] transition-[translate] duration-150 active:translate-y-px`}
             >
               <PersonAvatar
                 identity={chrome.viewer.email}

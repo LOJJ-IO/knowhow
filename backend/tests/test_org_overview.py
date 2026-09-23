@@ -243,3 +243,25 @@ def test_a_member_who_never_opened_the_dashboard_sees_everything(db):
     _audit(db, org, "onboarding.member_added", founder, str(founder.id), {})
     db.commit()
     assert org_overview(org.id, db, viewer=founder)["changes"]["total"] >= 1
+
+
+def test_recent_changes_survive_being_seen(db):
+    """The badge feed empties the moment you look; the replay feed must not.
+
+    Home's "Recent updates" plays a **time window**, not an inbox, so the
+    overview carries both: `changes`, scoped to this viewer, and
+    `recent_changes`, the last week regardless of who has seen what. Without
+    the second one the chart had no pulses at all on any visit after the first
+    (user, 2026-09-22).
+    """
+    from app.onboarding.service import mark_dashboard_seen
+
+    org, founder, _waiting, engineering, _finance = _onboarded_org(db)
+    _audit(db, org, "org_chart.team.edited", founder, str(engineering.id), {})
+    db.commit()
+
+    mark_dashboard_seen(founder, db)
+    overview = org_overview(org.id, db, viewer=founder)
+
+    assert overview["changes"]["total"] == 0
+    assert overview["recent_changes"]["teams"][str(engineering.id)]["count"] >= 1

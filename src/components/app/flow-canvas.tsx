@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { EdgePulse } from "@/components/app/edge-pulse";
@@ -28,6 +28,19 @@ const ROW_GAP = 72;
  *  chart reads as two unrelated bands; this keeps the tree together near the
  *  top, which is where the user positioned it by hand (2026-09-22). */
 const MAX_ROW_GAP = 240;
+/** How far down the canvas the top row starts, as a fraction of the canvas's
+ *  height. 0 puts it at `PAD_Y`. */
+const TOP_SHIFT = 0.2;
+/** How far the board may be zoomed. Far enough out to see a wide org, far
+ *  enough in to read a card that has been dragged somewhere odd. */
+const MIN_SCALE = 0.4;
+const MAX_SCALE = 2.5;
+
+/** Distance between the two live touch points. */
+function touchDistance(points: Map<number, { x: number; y: number }>): number {
+  const [a, b] = [...points.values()];
+  return a && b ? Math.hypot(b.x - a.x, b.y - a.y) : 0;
+}
 /** Closest two cards in a spread row may sit. Below this the row stops
  *  spreading and the canvas scrolls sideways instead. */
 const MIN_COL_GAP = 28;
@@ -59,6 +72,7 @@ export function FlowCanvas({
   edges,
   estimatedHeight = 96,
   spread = false,
+  pulseKey = 0,
   renderNode,
 }: {
   nodes: FlowNode[];
@@ -70,6 +84,9 @@ export function FlowCanvas({
    *  leave the row clustered in the middle with the ends of the canvas empty
    *  (user 2026-09-22). A row with one node stays centred either way. */
   spread?: boolean;
+  /** Bump to replay every active edge's pulse from the start. The pulses are
+   *  periodic on their own; this is what "play it again" writes to. */
+  pulseKey?: number;
   renderNode: (node: FlowNode, state: { selected: boolean }) => ReactNode;
 }) {
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -89,6 +106,31 @@ export function FlowCanvas({
    *  can't read a ref — the original this was adapted from did, which React
    *  now flags. */
   const [lifted, setLifted] = useState<string | null>(null);
+  /** How far the board has been dragged, Figma-style: grab the empty canvas
+   *  and the whole chart moves with you (user 2026-09-22). The dots move too,
+   *  because a grid that stays put while its contents slide reads as the
+   *  contents being dragged *over* a surface rather than the surface moving. */
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  /** Board zoom. Pinch on a trackpad (which arrives as ctrl+wheel) or with
+   *  two fingers on a touchscreen; the point under the fingers stays put
+   *  (user 2026-09-22). Clamped so the chart can't be lost in either
+   *  direction. */
+  const [scale, setScale] = useState(1);
+  /** Live touch points, for the two-finger pinch. */
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; scale: number } | null>(null);
+  /** The zoom as it stands this render, for the native wheel listener below:
+   *  that listener is bound once and would otherwise close over a stale
+   *  scale. */
+  const zoomRef = useRef<
+    (factor: number, clientX: number, clientY: number) => void
+  >(() => {});
+  const panDrag = useRef<{
+    x: number;
+    y: number;
+    baseX: number;
+    baseY: number;
+  } | null>(null);
   const drag = useRef<{
     id: string;
     startX: number;
@@ -133,6 +175,37 @@ export function FlowCanvas({
     };
   }, [nodes]);
 
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    /** React binds `onWheel` **passively**, so a handler bound that way can't
+     *  call `preventDefault` — and without that the browser runs its own page
+     *  zoom on a trackpad pinch on top of ours, which zooms the whole window
+     *  (user 2026-09-22). A native non-passive listener is the only way to
+     *  take the gesture. */
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      // A trackpad pinch reaches the browser as ctrl+wheel; anything else is
+      // an ordinary scroll, which pans.
+      if (event.ctrlKey || event.metaKey) {
+        zoomRef.current(
+          Math.exp(-event.deltaY / 220),
+          event.clientX,
+          event.clientY,
+        );
+        return;
+      }
+      setPan((current) => ({
+        x: current.x - event.deltaX,
+        y: current.y - event.deltaY,
+      }));
+    };
+
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", onWheel);
+  }, []);
+
   const heightOf = (id: string) => heights[id] ?? estimatedHeight;
 
   const rows = [...new Set(nodes.map((n) => n.row))].sort((a, b) => a - b);
@@ -152,14 +225,22 @@ export function FlowCanvas({
   // to the top and bottom edges. When the height falls short, the natural gap
   // stands and the canvas scrolls — a chart that shrinks until it is
   // unreadable is worse than one you scroll.
-  const canvasH = Math.max(available || 0, contentH);
+  /** The whole tree sits a fifth of the canvas down from the top (user
+   *  2026-09-22), rather than starting at `PAD_Y`. The canvas grows to keep
+   *  the bottom row inside it, so moving the chart down never clips it. */
+  const fitted = Math.max(available || 0, contentH);
+  const topShift = fitted * TOP_SHIFT;
+  const canvasH = Math.max(fitted, contentH + topShift);
   const gap =
     rows.length > 1
       ? Math.min(
           MAX_ROW_GAP,
           Math.max(
             ROW_GAP,
-            (canvasH - PAD_Y * 2 - rowH.reduce((total, h) => total + h, 0)) /
+            (canvasH -
+              topShift -
+              PAD_Y * 2 -
+              rowH.reduce((total, h) => total + h, 0)) /
               (rows.length - 1),
           ),
         )
@@ -167,7 +248,7 @@ export function FlowCanvas({
 
   const rowY: number[] = [];
   rows.forEach((_, i) => {
-    rowY[i] = i === 0 ? PAD_Y : rowY[i - 1] + rowH[i - 1] + gap;
+    rowY[i] = i === 0 ? PAD_Y + topShift : rowY[i - 1] + rowH[i - 1] + gap;
   });
 
   const cw = width || 720;
@@ -238,8 +319,8 @@ export function FlowCanvas({
     (node: FlowNode) => (event: React.PointerEvent<HTMLDivElement>) => {
       const d = drag.current;
       if (!d || d.id !== node.id) return;
-      const dx = d.baseDx + event.clientX - d.startX;
-      const dy = d.baseDy + event.clientY - d.startY;
+      const dx = d.baseDx + (event.clientX - d.startX) / scale;
+      const dy = d.baseDy + (event.clientY - d.startY) / scale;
       // A few pixels of slop, so a click with a shaky hand is still a click.
       if (!d.moved && Math.hypot(dx - d.baseDx, dy - d.baseDy) < 3) return;
       d.moved = true;
@@ -265,76 +346,167 @@ export function FlowCanvas({
     else drag.current = null;
   };
 
+  /** Zoom about a point in client space, keeping what is under it under it. */
+  const zoomAt = (next: number, clientX: number, clientY: number) => {
+    const box = canvasRef.current?.getBoundingClientRect();
+    if (!box) return;
+    const clamped = Math.min(Math.max(next, MIN_SCALE), MAX_SCALE);
+    const x = clientX - box.left;
+    const y = clientY - box.top;
+    setPan((current) => ({
+      x: x - ((x - current.x) * clamped) / scale,
+      y: y - ((y - current.y) * clamped) / scale,
+    }));
+    setScale(clamped);
+  };
+
+  // Kept fresh for the native wheel listener, which is bound once.
+  useLayoutEffect(() => {
+    zoomRef.current = (factor, clientX, clientY) =>
+      zoomAt(scale * factor, clientX, clientY);
+  });
+
+  const onBoardPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch")
+      touches.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+    // Two fingers is a pinch, not a pan.
+    if (touches.current.size === 2) {
+      panDrag.current = null;
+      pinch.current = { distance: touchDistance(touches.current), scale };
+      return;
+    }
+    // Only the empty canvas pans; a card handles its own drag.
+    if (event.target !== event.currentTarget) return;
+    panDrag.current = {
+      x: event.clientX,
+      y: event.clientY,
+      baseX: pan.x,
+      baseY: pan.y,
+    };
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  };
+
+  const onBoardPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === "touch" && touches.current.has(event.pointerId))
+      touches.current.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+
+    const gesture = pinch.current;
+    if (gesture && touches.current.size === 2) {
+      const points = [...touches.current.values()];
+      const distance = touchDistance(touches.current);
+      if (gesture.distance > 0)
+        zoomAt(
+          (gesture.scale * distance) / gesture.distance,
+          (points[0].x + points[1].x) / 2,
+          (points[0].y + points[1].y) / 2,
+        );
+      return;
+    }
+
+    const d = panDrag.current;
+    if (!d) return;
+    setPan({
+      x: d.baseX + event.clientX - d.x,
+      y: d.baseY + event.clientY - d.y,
+    });
+  };
+
+  const onBoardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    touches.current.delete(event.pointerId);
+    if (touches.current.size < 2) pinch.current = null;
+    panDrag.current = null;
+  };
+
   const lit = (edge: FlowEdge) =>
     selected === edge.from || selected === edge.to;
 
   return (
     <div
       ref={canvasRef}
-      className="relative w-full shrink-0 select-none overflow-auto rounded-[32px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)]"
+      onPointerDown={onBoardPointerDown}
+      onPointerMove={onBoardPointerMove}
+      onPointerUp={onBoardPointerUp}
+      onPointerCancel={onBoardPointerUp}
+      className="relative w-full shrink-0 cursor-grab touch-none select-none overflow-hidden rounded-[32px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)] active:cursor-grabbing"
       style={{
         height: canvasH,
         backgroundImage:
           "radial-gradient(var(--app-dot) 1px, transparent 1.25px)",
-        backgroundSize: "22px 22px",
-        backgroundPosition: "center",
+        // The grid slides *and* scales with the board, so the dots stay part
+        // of the surface rather than a texture printed on the window.
+        backgroundSize: `${22 * scale}px ${22 * scale}px`,
+        backgroundPosition: `${pan.x}px ${pan.y}px`,
       }}
     >
-      <svg
-        width={cw}
-        height={canvasH}
+      <div
         className="pointer-events-none absolute inset-0"
+        style={{
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+          transformOrigin: "0 0",
+        }}
       >
-        {edges.map((edge, i) => {
-          const d = bezier(edge);
+        <svg
+          width={cw}
+          height={canvasH}
+          className="pointer-events-none absolute inset-0"
+        >
+          {edges.map((edge, i) => {
+            const d = bezier(edge);
+            return (
+              <g key={`${edge.from}-${edge.to}`}>
+                <path
+                  d={d}
+                  fill="none"
+                  stroke={lit(edge) ? "#1c1917" : "var(--app-dot)"}
+                  strokeWidth={lit(edge) ? 1.75 : 1.25}
+                  className="transition-[stroke,stroke-width] duration-150"
+                />
+                {edge.active ? (
+                  // Staggered so several active edges never fire in lockstep,
+                  // which is what would make them read as decoration.
+                  <EdgePulse key={pulseKey} d={d} delay={i * 900} />
+                ) : null}
+              </g>
+            );
+          })}
+        </svg>
+
+        {nodes.map((node) => {
+          const { w, cx, top } = place(node);
+          const active = selected === node.id;
           return (
-            <g key={`${edge.from}-${edge.to}`}>
-              <path
-                d={d}
-                fill="none"
-                stroke={lit(edge) ? "#1c1917" : "var(--app-dot)"}
-                strokeWidth={lit(edge) ? 1.75 : 1.25}
-                className="transition-[stroke,stroke-width] duration-150"
-              />
-              {edge.active ? (
-                // Staggered so several active edges never fire in lockstep,
-                // which is what would make them read as decoration.
-                <EdgePulse d={d} delay={i * 900} />
-              ) : null}
-            </g>
+            <div
+              key={node.id}
+              ref={(el) => {
+                if (el) nodeRefs.current.set(node.id, el);
+                else nodeRefs.current.delete(node.id);
+              }}
+              onPointerDown={onPointerDown(node)}
+              onPointerMove={onPointerMove(node)}
+              onPointerUp={onPointerUp(node)}
+              onClick={() => {
+                if (drag.current?.moved) return;
+                setSelected(active ? null : node.id);
+              }}
+              className="pointer-events-auto absolute flex -translate-x-1/2 cursor-grab touch-none flex-col items-stretch active:cursor-grabbing"
+              style={{
+                left: cx,
+                top,
+                width: w,
+                zIndex: lifted === node.id ? 2 : 1,
+              }}
+            >
+              {renderNode(node, { selected: active })}
+            </div>
           );
         })}
-      </svg>
-
-      {nodes.map((node) => {
-        const { w, cx, top } = place(node);
-        const active = selected === node.id;
-        return (
-          <div
-            key={node.id}
-            ref={(el) => {
-              if (el) nodeRefs.current.set(node.id, el);
-              else nodeRefs.current.delete(node.id);
-            }}
-            onPointerDown={onPointerDown(node)}
-            onPointerMove={onPointerMove(node)}
-            onPointerUp={onPointerUp(node)}
-            onClick={() => {
-              if (drag.current?.moved) return;
-              setSelected(active ? null : node.id);
-            }}
-            className="absolute flex -translate-x-1/2 cursor-grab touch-none flex-col items-stretch active:cursor-grabbing"
-            style={{
-              left: cx,
-              top,
-              width: w,
-              zIndex: lifted === node.id ? 2 : 1,
-            }}
-          >
-            {renderNode(node, { selected: active })}
-          </div>
-        );
-      })}
+      </div>
     </div>
   );
 }

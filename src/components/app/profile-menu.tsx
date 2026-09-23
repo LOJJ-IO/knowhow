@@ -7,7 +7,11 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
 import { AppIcon } from "@/components/app/icon";
-import { MorphIcon, SettingsIcon } from "@/components/app/nav-morph";
+import {
+  LogOutIcon,
+  MorphIcon,
+  SettingsIcon,
+} from "@/components/app/nav-morph";
 import { useSession } from "@/components/app/session";
 import { ManageAccountsDialog } from "@/components/app/manage-accounts-dialog";
 import { SettingsDialog } from "@/components/app/settings-dialog";
@@ -192,7 +196,9 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
                   person isn't in. The action is the same either way: the
                   backend clears this session's cookies. */}
               <Item
-                icon={<AppIcon name="log-out" size={20} />}
+                icon={<LogOutIcon open={hovered === "log-out"} size={20} />}
+                onHover={setHovered}
+                hoverKey="log-out"
                 disabled={leaving}
                 onClick={() => {
                   setLeaving(true);
@@ -201,7 +207,7 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
               >
                 {leaving
                   ? "Logging out…"
-                  : (accounts?.length ?? 0) > 1
+                  : signedInCount(accounts) > 1
                     ? "Log out of all accounts"
                     : "Log out"}
               </Item>
@@ -317,6 +323,21 @@ function AccountRow({
  *  at the right edge of the window, so there is no room on the other side
  *  (user 2026-09-22). An arrow that disagrees with the motion is worse than no
  *  arrow. */
+/** How many accounts this browser holds, counted the way the list above
+ *  counts them: one per remembered organization, plus each linked personal
+ *  address, which has no row in the backend's list but does have one here
+ *  (user 2026-09-22 — with two accounts the copy still read "Log out"). */
+function signedInCount(accounts: RememberedOrg[] | null): number {
+  if (!accounts) return 0;
+  const emails = new Set<string>();
+  for (const row of accounts) {
+    emails.add(row.email.toLowerCase());
+    for (const email of row.linked_personal_emails)
+      emails.add(email.toLowerCase());
+  }
+  return emails.size;
+}
+
 /** The picker's black chip, at menu scale. */
 function Chip({ children }: { children: ReactNode }) {
   return (

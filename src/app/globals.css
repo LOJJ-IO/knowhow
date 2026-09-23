@@ -44,6 +44,10 @@ html {
   --app-dim: #78716c;
   /* The dotted editor canvas, and the connectors drawn on it. */
   --app-dot: #d6d1c9;
+  /* The replay control, and the recent-updates pulse it plays. Green rather
+     than the blue below: blue marks "changed since you last looked", green is
+     "this happened just now" (user 2026-09-22). */
+  --app-play: #15803d;
   /* Something changed here: the team-card border, its badge, and the pulse
      travelling up its connector all use this one colour. */
   --app-change: #2563eb;

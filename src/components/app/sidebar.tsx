@@ -55,17 +55,8 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           className={cn(
             // Centred in both states (user 2026-09-22), so the brand sits on
             // the sidebar's axis rather than on its left gutter.
-            // Tighter in the rail (user 2026-09-22): the brand row keeps the
-            // h-16 that lines the lockup up with the page title, but the mark
-            // needs no such alignment, so the rail's row is 12px shorter.
-            "flex items-center justify-center",
-            collapsed ? "h-[52px]" : "h-16",
-            // The 10px nudge is the lockup's, not the mark's: it exists to
-            // sit the wordmark on the page title's line across the way. In
-            // the rail it only pushed the mark 10px further from the first
-            // icon than the icons sit from each other, which is the gap the
-            // user kept seeing (measured 44px against a 35px rhythm).
-            collapsed ? "px-0" : "px-4 pt-[10px]",
+            "flex h-16 items-center justify-center pt-[10px]",
+            collapsed ? "px-0" : "px-4",
           )}
         >
           {collapsed ? (
@@ -82,24 +73,15 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           first section's mt-2), and now starts at 5.85rem. */}
         <div
           className={cn(
-            "app-scroll-plain flex-1 overflow-y-auto pb-2",
-            collapsed ? "px-2 pt-0" : "px-3 pt-[1.35rem]",
+            "app-scroll-plain flex-1 overflow-y-auto pt-[1.35rem] pb-2",
+            collapsed ? "px-2" : "px-3",
           )}
         >
           {APP_SECTIONS.map((section) => {
             const items = APP_NAV.filter((item) => item.section === section);
             if (items.length === 0) return null;
             return (
-              <div
-                key={section}
-                className={cn(
-                  // Expanded, the gap separates one caption from the list
-                  // above it. Collapsed there are no captions, so the gap
-                  // would be a hole in a column of icons (user 2026-09-22:
-                  // the reference's rail has none).
-                  collapsed ? "mt-1 first:mt-0" : "mt-6 first:mt-2",
-                )}
-              >
+              <div key={section} className="mt-6 first:mt-2">
                 {collapsed ? null : (
                   <p
                     className={`${satoshi.className} px-4 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}
@@ -194,10 +176,10 @@ function Row({
 }) {
   const className = cn(
     satoshi.className,
-    "flex h-[var(--app-row-h)] cursor-pointer items-center rounded-full text-[1.0625rem] transition-[background-color,color,transform] duration-150 active:scale-[0.98]",
+    "flex cursor-pointer items-center rounded-full text-[1.0625rem] transition-[background-color,color,translate] duration-150 active:translate-y-px",
     collapsed
-      ? "w-[var(--app-row-h)] justify-center px-0"
-      : "w-full gap-3 px-4",
+      ? "size-[var(--app-row-h)] justify-center px-0"
+      : "h-[var(--app-row-h)] w-full gap-3 px-4",
     active
       ? "bg-[var(--app-active)] font-medium text-[#1c1917]"
       : cn(

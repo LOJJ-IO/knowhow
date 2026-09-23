@@ -47,7 +47,9 @@ export type OrgTeam = {
 /** The org's teams, from `GET /org-chart/{org_id}`. That endpoint is
  *  field-complete rather than shaped for a screen, so the mapping to what a
  *  screen needs happens here, once. */
-export async function fetchOrgTeams(organizationId: string): Promise<OrgTeam[]> {
+export async function fetchOrgTeams(
+  organizationId: string,
+): Promise<OrgTeam[]> {
   const res = await backendFetch(`/org-chart/${organizationId}`);
   if (!res.ok) throw new Error(await backendError(res));
   const chart = (await res.json()) as {
@@ -137,8 +139,29 @@ export type OrgOverview = {
   changesByTeam: Record<string, TeamChanges>;
   /** Changes that belong to the organization rather than to a team. */
   organizationChanges: ChangeEvent[];
+  /** The **last week** of changes, keyed by team, regardless of whether this
+   *  viewer has seen them. `changesByTeam` above empties the moment they open
+   *  Home, which is right for a badge and useless for "Recent updates", which
+   *  plays a time window rather than an inbox (user 2026-09-22). */
+  recentChangesByTeam: Record<string, TeamChanges>;
   /** Null when they have never opened it — then everything counts as new. */
   viewerLastSeenAt: string | null;
+};
+
+type RawEvent = {
+  id: string;
+  action: string;
+  actor_member_id: string | null;
+  at: string;
+};
+
+type ChangeFeed = {
+  teams: Record<
+    string,
+    { count: number; latest_at: string; events: RawEvent[] }
+  >;
+  organization: RawEvent[];
+  total: number;
 };
 
 type OverviewResponse = {
@@ -172,18 +195,8 @@ type OverviewResponse = {
   join_link: { active: boolean };
   open_invitations: number;
   pending_members: number;
-  changes: {
-    teams: Record<
-      string,
-      {
-        count: number;
-        latest_at: string;
-        events: { id: string; action: string; actor_member_id: string | null; at: string }[];
-      }
-    >;
-    organization: { id: string; action: string; actor_member_id: string | null; at: string }[];
-    total: number;
-  };
+  changes: ChangeFeed;
+  recent_changes: ChangeFeed;
   viewer_last_seen_at: string | null;
 };
 
@@ -222,19 +235,24 @@ export async function fetchOrgOverview(
     joinLinkActive: body.join_link.active,
     openInvitations: body.open_invitations,
     pendingMembers: body.pending_members,
-    changesByTeam: Object.fromEntries(
-      Object.entries(body.changes?.teams ?? {}).map(([teamId, change]) => [
-        teamId,
-        {
-          count: change.count,
-          latestAt: change.latest_at,
-          events: change.events.map(toChangeEvent),
-        },
-      ]),
-    ),
+    changesByTeam: byTeam(body.changes),
     organizationChanges: (body.changes?.organization ?? []).map(toChangeEvent),
+    recentChangesByTeam: byTeam(body.recent_changes),
     viewerLastSeenAt: body.viewer_last_seen_at,
   };
+}
+
+function byTeam(feed: ChangeFeed | undefined): Record<string, TeamChanges> {
+  return Object.fromEntries(
+    Object.entries(feed?.teams ?? {}).map(([teamId, change]) => [
+      teamId,
+      {
+        count: change.count,
+        latestAt: change.latest_at,
+        events: change.events.map(toChangeEvent),
+      },
+    ]),
+  );
 }
 
 function toChangeEvent(event: {

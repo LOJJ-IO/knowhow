@@ -947,6 +947,12 @@ def org_overview(org_id: uuid.UUID, db: Session, viewer: OrgMember | None = None
         "open_invitations": open_invitations,
         "pending_members": sum(1 for m in members if m.standing == MemberStanding.AUTO_AFFILIATED),
         "changes": team_changes(org_id, viewer.dashboard_seen_at if viewer else None, db),
+        # Everything in the last week, regardless of whether this person has
+        # seen it. "Changes" above is scoped to *you* and empties as soon as
+        # you look, which is right for a badge and useless for a replay - the
+        # Home screen's "Recent updates" plays a time window, not an inbox
+        # (user, 2026-09-22).
+        "recent_changes": team_changes(org_id, datetime.now(timezone.utc) - timedelta(days=7), db),
         "viewer_last_seen_at": (
             viewer.dashboard_seen_at.isoformat() if viewer and viewer.dashboard_seen_at else None
         ),

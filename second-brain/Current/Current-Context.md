@@ -116,7 +116,25 @@ owner-only in the backend, and shows the join link read-only.
 search, alerts, New, and the person's generated avatar. The reference's grid icon was left out per the
 user. **Alerts and New are not wired to anything yet** (no notifications; nothing to create until
 documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot is the organization's name (1.40625rem, and it stays in the collapsed rail at 0.75rem rather than disappearing with the labels — which org you are in is the one thing the rail can't say by shape); Help and Settings both live in the
-profile menu (2026-09-22). Home is the chart alone — no summary panel, no stat pills.
+profile menu (2026-09-22). The chart is a **board** (2026-09-22): drag empty canvas to pan, pinch to zoom (a trackpad pinch
+arrives as ctrl+wheel; two-finger touch is tracked through pointer events), 0.4–2.5×, zooming about the
+point under the fingers. The dots pan and scale with it, and a card drag divides by the scale so it
+still tracks the pointer. Home is the chart alone — no summary panel, no stat pills — plus two
+`secondary` buttons top right (2026-09-22): **Recent updates**, which replays the pulses for the
+**narrowest recent window that holds anything** — last hour, else 6h, 12h, a day, a week (`RECENT_WINDOWS`,
+recomputed on each press because it reads the clock). It reads a **new** `recent_changes` feed on the
+overview — a week of activity regardless of who has seen it — because `changes` is scoped to the viewer
+and `dashboard_seen_at` is stamped on every visit, so from the second visit on there was nothing left
+to pulse and the chart looked broken. One pass: the icon shows Pause while it travels
+and returns to Play when the last pulse lands, and the **icon alone** goes `--app-play` green
+(`#15803d`) for exactly that long. `pulseKey` on `FlowCanvas` remounts every pulse, stagger and all,
+and **Manage teams**, whose team marks overlap into a stack and which is **disabled on purpose** until
+the screen behind it is specified. Both sit **on** the grid (absolute, top right of a wrapper around
+`FlowCanvas` — inside the canvas they would scroll away with the chart) and rest at `--app-active`, the
+fill `secondary` normally reaches on hover, because `--app-muted` disappears against the dots. Hover is
+a 1.02 lift instead of a colour change. Manage accounts is a **tree** like the Log In picker's remove
+screen: linked personal addresses branch under their org, joined by a trunk, because forgetting an org
+row and hiding a linked address are different acts and the nesting is what says so.
 
 **Dashboard absorbs the chart and oversight (2026-09-22):** `/org-chart` and `/oversight` are **gone** —
 one screen now, [[0019-dashboard-absorbs-chart-and-oversight]]. Owner on top, teams beneath; a caret on
@@ -161,8 +179,11 @@ swaps `CircleHelp` for `MessageCircleQuestion`, both from the same family.
 topbar chip and aligned to its right edge so it opens leftward. It holds who you are (orb, name, email
 — not a row, there is nothing to switch to), **Settings** (moved out of the sidebar, taking its gear
 turn with it), **Help** (a `Menu.LinkItem` on a Next `Link`, since it is a route — still in the sidebar
-too) and **Log out**, whose copy becomes "Log out of all accounts" only when more than one account is
-remembered (user 2026-09-22). The account block is a **submenu trigger**: it opens "Switch accounts"
+too) and **Log out**, whose arrow steps through its doorway on hover (`LogOutIcon` — only the arrow
+moves, so the icon is drawn from lucide's geometry rather than used as a component) and whose copy
+becomes "Log out of all accounts" only when more than one account is remembered. That count includes
+linked personal addresses, because they have rows in this list even though the backend carries them on
+an org row. The account block is a **submenu trigger**: it opens "Switch accounts"
 to its left, listing the same `GET /auth/remembered-accounts` rows the Log In picker uses, a tick on the
 current one, then "Add another account" (`continueWithGoogle`) and "Manage accounts"
 (`manage-accounts-dialog.tsx` — per-row **Forget**, which is `DELETE /auth/remembered-accounts` and

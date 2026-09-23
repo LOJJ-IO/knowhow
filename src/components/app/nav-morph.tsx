@@ -132,3 +132,42 @@ export function SettingsIcon({
     </motion.span>
   );
 }
+
+/** Log out, which moves rather than swaps (user 2026-09-22): the door stays
+ *  put and the arrow steps through it. Same spring as the gear's turn, since
+ *  both travel rather than land.
+ *
+ *  Drawn here instead of using lucide's `LogOut` component because only the
+ *  arrow may move — the icon is three paths and two of them are the doorway.
+ *  Geometry is lucide's own (log-out, 24×24, MIT). */
+export function LogOutIcon({
+  open,
+  size = 22,
+}: {
+  open: boolean;
+  size?: number;
+}) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={NAV_STROKE}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="inline-block shrink-0"
+    >
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <motion.g
+        animate={{ x: open ? 3 : 0 }}
+        transition={{ type: "spring", stiffness: 400, damping: 25 }}
+      >
+        <path d="m16 17 5-5-5-5" />
+        <path d="M21 12H9" />
+      </motion.g>
+    </svg>
+  );
+}

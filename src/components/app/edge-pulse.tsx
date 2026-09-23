@@ -36,7 +36,9 @@ export function EdgePulse({
   period = 7000,
   /** Offset into the cycle, so edges fire at different moments. */
   delay = 0,
-  color = "var(--app-change)",
+  // Ink, not the change-blue (user 2026-09-22): on a dotted grey canvas the
+  // blue read as a status colour rather than as something moving.
+  color = "#1c1917",
 }: {
   d: string;
   period?: number;

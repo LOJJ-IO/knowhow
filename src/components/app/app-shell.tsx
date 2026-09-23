@@ -19,8 +19,7 @@ import { Topbar } from "@/components/app/topbar";
 
 /** Open. 208px is the 13rem the old `--app-sidebar-w` token settled on. */
 const SIDEBAR_W = 208;
-/** Collapsed. 64px holds a 48px row with an 8px gutter either side, and puts
- *  the logo mark at the reference's proportion (~0.29 of the rail). */
+/** Collapsed. 64px: a 48px row with an 8px gutter either side. */
 const RAIL_W = 64;
 
 export function AppShell({ children }: { children: React.ReactNode }) {

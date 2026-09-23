@@ -68,9 +68,15 @@ export function Button({
       data-slot="button"
       className={cn(
         satoshi.className,
-        // Rounded-full is the app's button shape; press feedback is the
-        // landing's, so a control feels the same on both sides of sign-in.
-        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full font-medium whitespace-nowrap transition-[background-color,border-color,color,transform] duration-150 outline-none select-none active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917] disabled:cursor-default disabled:opacity-60 disabled:active:scale-100",
+        // Rounded-full is the app's button shape. The press is a **1px
+        // nudge**, not the landing's `scale-95` (user 2026-09-22: "sometimes
+        // when i click on buttons they dont fire"). A button that shrinks
+        // under the pointer can finish its press outside its own box, and a
+        // `click` is only dispatched when pointerdown and pointerup share a
+        // target — so on small controls the press sometimes swallowed the
+        // click. A translate keeps the hit area where the finger is, and it
+        // is what Sage's own buttons do.
+        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full font-medium whitespace-nowrap transition-[background-color,border-color,color,translate] duration-150 outline-none select-none active:translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917] disabled:cursor-default disabled:opacity-60 disabled:active:translate-y-0",
         VARIANT[variant],
         SIZE[size],
         // `link` is text, not a control with a body.
