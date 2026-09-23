@@ -19,7 +19,13 @@ from app.auth.identity import (
     start_link_account,
     start_link_account_for_pending_personal,
 )
-from app.auth.remembered import forget_device, hide_emails, list_remembered_orgs, remember_account
+from app.auth.remembered import (
+    forget_device,
+    hide_emails,
+    is_remembered,
+    list_remembered_orgs,
+    remember_account,
+)
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
 from app.google.directory import DirectoryLookupError
@@ -37,7 +43,13 @@ from app.onboarding.service import (
     needs_org_setup,
     resume_setup_step,
 )
-from app.security.jwt import InvalidSessionToken, TokenType, decode_session_token, issue_access_token
+from app.security.jwt import (
+    InvalidSessionToken,
+    TokenType,
+    decode_session_token,
+    issue_access_token,
+    issue_refresh_token,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = get_logger(__name__)
@@ -150,9 +162,17 @@ def link_account_redirect(
         outcome = "linked"
     except AccountAlreadyLinked:
         outcome = "already_linked"
-    response = RedirectResponse(
-        f"{settings.frontend_origin}?link={outcome}", status_code=status.HTTP_302_FOUND
+    # Where they came from decides where they go back to (user, 2026-09-22):
+    # someone already inside the app pressed "Add another account" and should
+    # land back inside it, not on the marketing page. The pending-personal
+    # route has no session yet, so it still returns to the landing, which is
+    # where its next question is asked.
+    destination = (
+        f"{settings.frontend_origin}?link={outcome}"
+        if pending_email
+        else f"{settings.frontend_origin}/home?link={outcome}"
     )
+    response = RedirectResponse(destination, status_code=status.HTTP_302_FOUND)
     set_session_cookies(response, result.access_token, result.refresh_token)
     # The pending personal signup is spent either way — no domainless org was
     # created for it, by design.
@@ -243,6 +263,58 @@ def refresh(
         ACCESS_COOKIE, access_token, max_age=settings.jwt_access_token_ttl_seconds, **cookie_kwargs()
     )
     return {"status": "refreshed"}
+
+
+class SwitchAccountPayload(BaseModel):
+    member_id: uuid.UUID
+
+
+@router.post("/switch")
+def switch_account(
+    payload: SwitchAccountPayload,
+    response: Response,
+    db: Session = Depends(get_db),
+    knohow_device: str | None = Cookie(default=None),
+) -> dict:
+    """Signs this browser in as another account it already signed in as.
+
+    **Device trust, chosen deliberately** (user, 2026-09-22): the round trip to
+    Google was the only thing switching accounts did, and it asked the person
+    to prove again what this browser had already proved. The device cookie is
+    the credential here, so this endpoint will only ever move between accounts
+    that are *remembered on this device* - it cannot be pointed at an
+    arbitrary member id, and forgetting a row (or losing the cookie) takes the
+    shortcut away with it.
+
+    An account that was never signed in here still goes through Google.
+    """
+    if not knohow_device:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "this browser has no remembered accounts")
+    try:
+        device_id = uuid.UUID(knohow_device)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "malformed device cookie") from exc
+
+    if not is_remembered(device_id, payload.member_id, db):
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "that account has not signed in on this browser - sign in with Google instead",
+        )
+
+    member = db.get(OrgMember, payload.member_id)
+    if member is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "member no longer exists")
+
+    set_session_cookies(
+        response,
+        issue_access_token(member.id, member.organization_id),
+        issue_refresh_token(member.id, member.organization_id),
+    )
+    # Switching counts as using the account, so it sorts to the top of the
+    # picker next time.
+    remember_account(device_id, member, db)
+    db.commit()
+    return {"status": "switched", "organization_id": str(member.organization_id)}
 
 
 @router.post("/logout")

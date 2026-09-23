@@ -278,3 +278,52 @@ def test_removing_a_row_and_hiding_an_address_in_one_call(monkeypatch):
     assert forgotten == [(uuid.UUID(DEVICE), [member_id])]
     assert hidden == [(uuid.UUID(DEVICE), ["someone@gmail.com"])]
     assert response.json() == {"removed": 1, "hidden": 1}
+
+
+def test_switch_requires_a_device_cookie():
+    try:
+        response = _client().post("/auth/switch", json={"member_id": str(uuid.uuid4())})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 401
+
+
+def test_switch_refuses_an_account_this_browser_never_used(monkeypatch):
+    # The device cookie is the credential, so the *only* thing it may unlock
+    # is an account already remembered against it.
+    monkeypatch.setattr(auth_routes, "is_remembered", lambda device_id, member_id, db: False)
+    client = _client()
+    client.cookies.set("knohow_device", DEVICE)
+    try:
+        response = client.post("/auth/switch", json={"member_id": str(uuid.uuid4())})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 403
+
+
+def test_switch_issues_session_cookies_for_a_remembered_account(monkeypatch):
+    member_id, org_id = uuid.uuid4(), uuid.uuid4()
+    member = SimpleNamespace(id=member_id, organization_id=org_id)
+
+    class _Db:
+        def get(self, model, key):
+            return member
+
+        def commit(self):
+            pass
+
+    monkeypatch.setattr(auth_routes, "is_remembered", lambda device_id, m, db: True)
+    monkeypatch.setattr(auth_routes, "remember_account", lambda device_id, m, db: None)
+    app.dependency_overrides[deps.get_db] = lambda: _Db()
+    client = TestClient(app, follow_redirects=False)
+    client.cookies.set("knohow_device", DEVICE)
+    try:
+        response = client.post("/auth/switch", json={"member_id": str(member_id)})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert response.json()["organization_id"] == str(org_id)
+    cookies = response.headers.get_list("set-cookie")
+    assert any("knohow_access_token=" in c for c in cookies)
+    assert any("knohow_refresh_token=" in c for c in cookies)

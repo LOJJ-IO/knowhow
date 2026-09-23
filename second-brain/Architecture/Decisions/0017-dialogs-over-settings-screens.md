@@ -69,3 +69,17 @@ visible, so a resize can never apply to something nobody can see.
 `--app-sidebar-w` is gone as a token — a resizable width is state, not CSS. `DEFAULT_SIDEBAR_W` in
 `app-shell.tsx` carries the 13rem it settled on. Width is **not persisted** across reloads yet; that
 would be a per-device convenience and belongs in `localStorage` if wanted.
+
+## Addendum (2026-09-22): Settings is opened from the profile menu, not the sidebar
+The sidebar's Settings row moved into the topbar profile chip's menu (`profile-menu.tsx`), at the
+user's request and following their reference. The decision above is untouched — Settings is still a
+dialog, still `size="lg"`, `kind="form"` — only its entry point changed: it is about *you*, not about
+the organization, and the sidebar is the organization's list of places. The gear's hover turn moved with
+it. The menu also holds Log out; it deliberately holds nothing else, because nothing else exists yet.
+
+## Addendum (2026-09-22): the sidebar no longer resizes
+The width/visibility split recorded above is half retired. **Visibility** is still the toggle's alone,
+but **width** is no longer state: the sidebar is 208px open and 64px collapsed, and the drag handle is
+gone at the user's request. The reasoning that produced the split still holds — collapsing must not
+destroy a width — it simply has nothing left to protect once there is no width to choose. `AppShell`
+keeps one boolean.

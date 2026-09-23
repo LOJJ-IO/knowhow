@@ -95,39 +95,50 @@ export function AppDialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-[500] bg-black/35 transition-opacity duration-150 data-[ending-style]:opacity-0 data-[starting-style]:opacity-0" />
-        <DialogPrimitive.Popup
-          className={cn(
-            "fixed top-1/2 left-1/2 z-[500] flex max-h-[min(42rem,calc(100dvh-4rem))] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] outline-none transition-all duration-150 data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
-            SIZE[size],
-          )}
-        >
-          <DialogPrimitive.Close
-            aria-label="Close"
-            // Chrome, so: ghost, icon-sized.
-            render={<Button variant="ghost" size="icon-sm" />}
-            className="absolute top-4 right-4 z-10"
+        <DialogPrimitive.Backdrop className="app-modal-backdrop fixed inset-0 z-[500] bg-black/35" />
+        {/* Centring is done by this wrapper, not by a translate on the popup:
+            `app-modal` animates `transform`, and a scale and a translate on
+            one element fight over the same property. The wrapper ignores the
+            pointer so the backdrop still receives an outside click. */}
+        <div className="pointer-events-none fixed inset-0 z-[500] flex items-center justify-center p-4">
+          <DialogPrimitive.Popup
+            className={cn(
+              "app-modal pointer-events-auto relative flex max-h-[min(42rem,calc(100dvh-4rem))] w-full flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] outline-none",
+              SIZE[size],
+            )}
           >
-            <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
-              <path
-                d="M6 6l12 12M18 6L6 18"
-                stroke="currentColor"
-                strokeWidth={2.2}
-                strokeLinecap="round"
-              />
-            </svg>
-          </DialogPrimitive.Close>
-          {onSubmit ? (
-            <form
-              onSubmit={onSubmit}
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            <DialogPrimitive.Close
+              aria-label="Close"
+              // Chrome, so: ghost, icon-sized.
+              render={<Button variant="ghost" size="icon-sm" />}
+              className="absolute top-4 right-4 z-10"
             >
-              {chrome}
-            </form>
-          ) : (
-            chrome
-          )}
-        </DialogPrimitive.Popup>
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                className="size-4"
+                aria-hidden
+              >
+                <path
+                  d="M6 6l12 12M18 6L6 18"
+                  stroke="currentColor"
+                  strokeWidth={2.2}
+                  strokeLinecap="round"
+                />
+              </svg>
+            </DialogPrimitive.Close>
+            {onSubmit ? (
+              <form
+                onSubmit={onSubmit}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                {chrome}
+              </form>
+            ) : (
+              chrome
+            )}
+          </DialogPrimitive.Popup>
+        </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );

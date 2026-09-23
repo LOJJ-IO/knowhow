@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +9,7 @@ import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
 import { AppIcon } from "@/components/app/icon";
 import { PanelToggle } from "@/components/app/panel-toggle";
+import { ProfileMenu } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import {
@@ -17,6 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/brand/tooltip";
 import { APP_HOME, APP_NAV, APP_SEARCH, APP_UTILITY } from "@/lib/app-nav";
+import { firstName, pickGreeting } from "@/lib/greeting";
 import { useHydrated } from "@/lib/use-hydrated";
 
 /** The row above every screen, laid out off the reference (user 2026-09-21):
@@ -43,14 +46,17 @@ export function Topbar({
     (item) => item.href === pathname,
   );
   // Home greets the person instead of naming the screen (user 2026-09-22).
-  // The time of day is the browser's, so the title only becomes the greeting
-  // after hydration — rendering it on the server would greet everyone in the
-  // server's timezone and then swap the heading under them.
+  // The clock and the pick live in the browser, so the title only becomes the
+  // greeting after hydration — rendering it on the server would greet everyone
+  // in the server's timezone and then swap the heading under them.
   const hydrated = useHydrated();
+  const name = firstName(chrome.viewer.name);
+  const greeting = useMemo(
+    () => (hydrated ? pickGreeting(name) : ""),
+    [hydrated, name],
+  );
   const title =
-    pathname === APP_HOME && hydrated
-      ? `Good ${partOfDay()}, ${firstName(chrome.viewer.name)}`
-      : (current?.label ?? "");
+    pathname === APP_HOME && hydrated ? greeting : (current?.label ?? "");
 
   return (
     <TooltipProvider delay={0}>
@@ -84,7 +90,7 @@ export function Topbar({
                 />
               }
             >
-              <AppIcon name="notifications" size={20} />
+              <AppIcon name="bell" size={22} />
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={8}>
               Notifications
@@ -97,35 +103,24 @@ export function Topbar({
           </Button>
 
           {/* The person, as a chip: their orb and their first name on a white
-              pill (user 2026-09-22's reference). Not a control yet — there is
-              nothing behind it to open. */}
-          <div
-            className={`${satoshi.className} flex h-12 items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917]`}
-          >
-            <PersonAvatar
-              identity={chrome.viewer.email}
-              label={chrome.viewer.name}
-              size={36}
-            />
-            <span className="truncate">{firstName(chrome.viewer.name)}</span>
-          </div>
+              pill (user 2026-09-22's reference). Clicking it opens the profile
+              menu, which is where Settings lives now. */}
+          <ProfileMenu>
+            <button
+              type="button"
+              aria-label="Account"
+              className={`${satoshi.className} flex h-12 cursor-pointer items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917] transition-transform duration-150 active:scale-95`}
+            >
+              <PersonAvatar
+                identity={chrome.viewer.email}
+                label={chrome.viewer.name}
+                size={36}
+              />
+              <span className="truncate">{name}</span>
+            </button>
+          </ProfileMenu>
         </div>
       </header>
     </TooltipProvider>
   );
-}
-
-/** Morning until noon, afternoon until 6, evening after that. The plain
- *  reading of the clock, not sunrise maths. */
-function partOfDay(now = new Date()): string {
-  const hour = now.getHours();
-  if (hour < 12) return "morning";
-  if (hour < 18) return "afternoon";
-  return "evening";
-}
-
-/** What people call each other. Falls back to the whole string, which is what
- *  an address or a one-word name already is. */
-function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0] || name;
 }

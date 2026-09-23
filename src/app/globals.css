@@ -49,6 +49,65 @@ html {
   --app-change: #2563eb;
 }
 
+/* Modal mechanics (Transitions.dev, supplied by the user 2026-09-22): a
+   popup scales up from 0.96 over 250ms on the way in and falls back to 0.96
+   over 150ms on the way out — an exit is quicker than an entrance, because
+   leaving should not be something you wait for.
+
+   Driven by Base UI's `data-starting-style` / `data-ending-style` rather than
+   by an `.is-open` class and a timer: the state comes from the component that
+   owns the open state, so an interrupted open can't strand the animation
+   half-played. Used by every overlay in the app — dialogs and menus — so they
+   all move the same way.
+
+   The layering they share is a scale too, and it is small on purpose:
+   menus 450 · dialogs 500 · tooltips 600. A tooltip labels things on a
+   dialog, a dialog covers a menu, and nothing on a page reaches any of them.
+   **Put the z-index on the positioner, not on the popup**: a portalled popup
+   whose positioner has no z-index lands in the body's default layer, where
+   ordinary page content can paint over it. */
+:root {
+  --modal-open-dur: 250ms;
+  --modal-close-dur: 150ms;
+  --modal-scale: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.app-modal {
+  transform-origin: var(--transform-origin, center);
+  transition-property: transform, opacity;
+  transition-duration: var(--modal-open-dur);
+  transition-timing-function: var(--modal-ease);
+  will-change: transform, opacity;
+}
+.app-modal[data-starting-style],
+.app-modal[data-ending-style] {
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+}
+.app-modal[data-ending-style] {
+  transition-duration: var(--modal-close-dur);
+}
+
+/* The backdrop only fades; scaling a full-screen wash does nothing. */
+.app-modal-backdrop {
+  transition: opacity var(--modal-open-dur) var(--modal-ease);
+}
+.app-modal-backdrop[data-starting-style],
+.app-modal-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.app-modal-backdrop[data-ending-style] {
+  transition-duration: var(--modal-close-dur);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-modal,
+  .app-modal-backdrop {
+    transition: none !important;
+  }
+}
+
 /* A scroll area with no visible scrollbar. The sidebar uses it: with macOS
    set to always show scrollbars, its overflow-y-auto column paints a grey
    track down the sidebar's right edge, which reads as a divider between the

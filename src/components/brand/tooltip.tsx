@@ -30,7 +30,9 @@ function Tooltip(props: ComponentProps<typeof TooltipPrimitive.Root>) {
   return <TooltipPrimitive.Root {...props} />;
 }
 
-function TooltipTrigger(props: ComponentProps<typeof TooltipPrimitive.Trigger>) {
+function TooltipTrigger(
+  props: ComponentProps<typeof TooltipPrimitive.Trigger>,
+) {
   return <TooltipPrimitive.Trigger {...props} />;
 }
 
@@ -54,11 +56,13 @@ function TooltipContent({
         sideOffset={sideOffset}
         align={align}
         alignOffset={alignOffset}
-        // Above the Log In sheet (z-[400] in landing-hero). The portal
-        // escapes the sheet's clipping, but both end up as siblings on
-        // <body>, so the tooltip still has to out-rank it: portalling alone
-        // is not enough when the thing it must clear is also a root layer.
-        className="isolate z-[500]"
+        // Above the Log In sheet (z-[400] in landing-hero) and above the
+        // app's dialogs (500) and menus (450) — a tooltip labels whatever is
+        // in front. The portal escapes the sheet's clipping, but both end up
+        // as siblings on <body>, so the tooltip still has to out-rank it:
+        // portalling alone is not enough when the thing it must clear is also
+        // a root layer.
+        className="isolate z-[600]"
       >
         <TooltipPrimitive.Popup
           className={cn(

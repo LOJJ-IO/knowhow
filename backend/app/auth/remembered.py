@@ -61,6 +61,29 @@ def remember_account(device_id: uuid.UUID, member: OrgMember, db: Session) -> No
     db.commit()
 
 
+def is_remembered(device_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> bool:
+    """Has this browser signed in as this member before?
+
+    This is the whole check behind switching accounts without Google (user,
+    2026-09-22). It is a **device-trust** decision, taken deliberately: the
+    browser proved this account once, and until it is forgotten or the device
+    cookie is gone, switching back to it is allowed without another round trip
+    to Google. Whoever holds the unlocked browser can therefore enter any
+    account remembered on it - which is the same bargain every "stay signed
+    in" switcher makes, and the reason logging out clears the session while
+    leaving the row.
+    """
+    return (
+        db.execute(
+            select(RememberedAccount.member_id).where(
+                RememberedAccount.device_id == device_id,
+                RememberedAccount.member_id == member_id,
+            )
+        ).scalar_one_or_none()
+        is not None
+    )
+
+
 def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOrgView]:
     """The picker's rows, most recently used first — one per organization
     this browser has signed in to."""

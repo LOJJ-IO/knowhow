@@ -165,6 +165,7 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0020-button-taxonomy.md",
     "Architecture/Decisions/0019-dashboard-absorbs-chart-and-oversight.md",
     "Architecture/Decisions/0018-dashboard-reflects-onboarding.md",
     "Architecture/Decisions/0017-dialogs-over-settings-screens.md",
@@ -190,7 +191,6 @@
     "Architecture/Decisions/0006-observed-domain-tenant-identity.md",
     "Engineering/Patterns-landing-mc-recess-deck.md",
     "Product/Features/FEAT-drive-file-classification.md",
-    "Product/Features/FEAT-workspace-onboarding-flow.md",
     "Features"
   ]
 }

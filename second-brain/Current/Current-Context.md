@@ -115,8 +115,8 @@ owner-only in the backend, and shows the join link read-only.
 **Top band + sidebar foot (2026-09-21):** topbar matches the reference — panel toggle, page name, then
 search, alerts, New, and the person's generated avatar. The reference's grid icon was left out per the
 user. **Alerts and New are not wired to anything yet** (no notifications; nothing to create until
-documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot has Help (a route) and
-Settings (the dialog).
+documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot is the organization's name (1.40625rem, and it stays in the collapsed rail at 0.75rem rather than disappearing with the labels — which org you are in is the one thing the rail can't say by shape); Help and Settings both live in the
+profile menu (2026-09-22). Home is the chart alone — no summary panel, no stat pills.
 
 **Dashboard absorbs the chart and oversight (2026-09-22):** `/org-chart` and `/oversight` are **gone** —
 one screen now, [[0019-dashboard-absorbs-chart-and-oversight]]. Owner on top, teams beneath; a caret on
@@ -131,7 +131,11 @@ is everything today. Backend suite **116 passing**. Canvas rows no longer stretc
 height — the gap between owner and teams caps at `MAX_ROW_GAP` (240px in `FlowCanvas`), so the tree
 sits near the top the way the user positioned it by hand, and spare height is left empty. Both cards
 run **30% bigger** than the first pass (`OWNER_W` 348, `TEAM_W` 302, padding/avatar/type scaled with
-them), so the chart stays one scale. The sidebar toggle is now the same control as the topbar's
+them), so the chart stays one scale. The sidebar toggle keeps **Sage's codicon pair**
+(`layout-sidebar-left` / `-off`): lucide's `panel-left` pair was tried so the topbar would match the
+sidebar's icon set and rejected — this control is Sage's, and its two states have to differ by a whole
+filled pane, not an arrow. The bell beside it is lucide (Sage has no equivalent). The toggle is
+otherwise the same control as the topbar's
 Notifications button — grey disc, 40px, 20px glyph, `--app-active` on hover — with the white ringed
 pill it used to sit in removed. The screen is **Home** now, not "Dashboard" (user
 2026-09-22): route `/home`, label "Home", `HomeScreen` in `screens/home-screen.tsx`, `APP_HOME =
@@ -153,6 +157,35 @@ window keep their own 14px. Every app button now carries the landing's press
 feedback (`active:scale-95`, 150ms). Settings turns its gear 180° on hover (spring 400/25) and Help
 swaps `CircleHelp` for `MessageCircleQuestion`, both from the same family.
 
+**The profile chip opens a menu (2026-09-22):** `profile-menu.tsx`, a Base UI `Menu` anchored under the
+topbar chip and aligned to its right edge so it opens leftward. It holds who you are (orb, name, email
+— not a row, there is nothing to switch to), **Settings** (moved out of the sidebar, taking its gear
+turn with it), **Help** (a `Menu.LinkItem` on a Next `Link`, since it is a route — still in the sidebar
+too) and **Log out**, whose copy becomes "Log out of all accounts" only when more than one account is
+remembered (user 2026-09-22). The account block is a **submenu trigger**: it opens "Switch accounts"
+to its left, listing the same `GET /auth/remembered-accounts` rows the Log In picker uses, a tick on the
+current one, then "Add another account" (`continueWithGoogle`) and "Manage accounts"
+(`manage-accounts-dialog.tsx` — per-row **Forget**, which is `DELETE /auth/remembered-accounts` and
+device-local: the member, the org and the linked identity are untouched, and the row returns on the next
+sign-in). **Switching is now instant** (user 2026-09-22, chosen over keeping the Google round trip): `POST
+/auth/switch` issues session cookies for any account **remembered on this device** — the device cookie
+is the credential, the endpoint refuses anything not in this browser's list, and a linked personal
+address (which has no member row) still goes through Google. "Add another account" is the **identity
+linking** flow (`GET /auth/link-account/start`), not signup, and that callback now returns to `/home`
+instead of the landing — signup was asking a personal address whether its company uses Workspace and
+stranding the person on the marketing page. Rows carry the Log In picker's Org / Personal chips (`POST /auth/logout`, then `/`; the backend keeps the device cookie so the
+picker still offers the account). The reference had teams, themes, plans and a desktop app; those are
+left out because Knohow has none of them.
+
+**Overlay mechanics and layering (2026-09-22):** one motion for every overlay — `.app-modal` in
+globals.css, the Transitions.dev curve the user supplied: scale 0.96 → 1 over **250ms** in,
+**150ms** out, `cubic-bezier(0.22, 1, 0.36, 1)`, off under `prefers-reduced-motion`. Driven by Base UI's
+`data-starting-style` / `data-ending-style`, not an `.is-open` class and a timer. The dialog is centred
+by a wrapper rather than a translate, because a scale and a translate on one element fight over
+`transform`. Layers: **menus 450 · dialogs 500 · tooltips 600**, and the z-index goes on the
+**positioner**, never the popup — that was the "z index is all wrong" bug: a portalled popup whose
+positioner has no z-index sits in the body's default layer, where a canvas card painted over it.
+
 **Buttons have a taxonomy (2026-09-22):** [[0020-button-taxonomy]] — one `Button`
 (`src/components/app/button.tsx`) on two axes, the same shape as the dialog system's: `variant`
 (`default`/`outline`/`secondary`/`ghost`/`destructive`/`link`) and `size`
@@ -161,19 +194,23 @@ Knohow's own ink and rounding. Adopted by the dialog footers, the settings dialo
 notifications, the sidebar toggle and the team caret. `FormDialog` now exists beside `ConfirmDialog`, so
 both are compositions of `AppDialog`.
 
-**Collapse is a rail, not a disappearance (2026-09-22):** the toggle takes the sidebar to `RAIL_W` 64px
-instead of 0 — icons only, centred, labels moved into right-side tooltips, section captions dropped, and
+**Collapse is a rail, and the sidebar no longer resizes (2026-09-22):** the toggle takes the sidebar to
+`RAIL_W` 64px instead of 0, and the drag-to-resize handle is **gone** — two widths, 208 and 64, no
+stored preference. In the rail the section groups lose their `mt-6` (there are no captions left for it
+to separate, and it read as a hole in the column) and the nav starts `pt-2` under the mark — icons only, centred, labels moved into right-side tooltips, section captions dropped, and
 the lockup reduced to the bare `LogoMark` at 18px (the reference puts its mark at ~0.29 of the rail's
 width; measured 37px of 129px). One `Row` component renders every entry in both states. The sidebar's
 foot is **empty**: the person's avatar, their name and the organization were all removed from it, and
 the person now lives only in the topbar's white profile chip (36px orb plus first name). The sidebar no
-longer reads the session at all. Home's topbar title is a greeting, not the screen's name:
-"Good morning/afternoon/evening, <first name>", computed from the **browser's** clock and therefore
-only after hydration. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL shader the user
-supplied): one colour per identity from `personColor`, which reuses the old gradient's seed so nobody's
-colour changed. The gradient it replaced is still rendered underneath as the fallback and fades out
-once the orb reports it is painted — an orb holds a live WebGL context, a page gets ~16, so past a
-budget of 10 the avatar is simply the gradient — `AppIcon` now resolves a
+longer reads the session at all. Home's topbar title is a **rotating greeting** (playful, time-of-day,
+weekday, season, short UI lines, favorites weighted), not the screen's name — every line includes the
+person's first name in a way that still reads naturally. Picked once per tab in
+`sessionStorage`, from the **browser's** clock, and therefore only after hydration. Rainy/cold/sunny
+weather lines wait on a real weather signal. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL
+shader the user supplied): one colour per identity from `personColor`, which reuses the old gradient's
+seed so nobody's colour changed. The gradient it replaced is still rendered underneath as the fallback
+and fades out once the orb reports it is painted — an orb holds a live WebGL context, a page gets ~16,
+so past a budget of 10 the avatar is simply the gradient — `AppIcon` now resolves a
 small inlined `CODICONS` set as well as the Material Symbols subset, so a route's icon can come from
 either set by name.
 

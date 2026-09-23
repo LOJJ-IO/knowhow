@@ -121,49 +121,16 @@ export function HomeScreen() {
       </AppPage>
     );
 
-  const people = new Set(
-    overview.members.map((m) => m.personId ?? `account:${m.id}`),
-  ).size;
-  const changedTeams = Object.keys(overview.changesByTeam).length;
-
   return (
     <AppPage>
       {/* The chart takes whatever height is left after the summary row, so it
           fits the window rather than huddling at the top of a scrolling page
           (user 2026-09-22). */}
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <Panel className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <div className="min-w-0">
-            <h2
-              className={`${sohne.className} m-0 truncate text-[1.25rem] leading-[1.3] tracking-tight text-[#1c1917]`}
-            >
-              {overview.name}
-            </h2>
-            <p
-              className={`${satoshi.className} m-0 mt-1 truncate text-[0.875rem] leading-[1.4] text-[var(--app-dim)]`}
-            >
-              {overview.observedDomain
-                ? `Signed in from ${overview.observedDomain}`
-                : "No Workspace domain on this organization"}
-              {overview.setupCompleted ? " · setup complete" : ""}
-            </p>
-          </div>
-          <div className={`${satoshi.className} flex shrink-0 flex-wrap gap-2`}>
-            <Stat label="Teams" value={overview.teams.length} />
-            <Stat label="People" value={people} />
-            <Stat
-              label="Waiting"
-              value={overview.pendingMembers}
-              tone={overview.pendingMembers ? "waiting" : undefined}
-            />
-            <Stat
-              label="Changed"
-              value={changedTeams}
-              tone={changedTeams ? "active" : undefined}
-            />
-          </div>
-        </Panel>
-
+        {/* Nothing names the organization here any more: its name moved to
+            the foot of the sidebar (user 2026-09-22), and the stat pills and
+            the "signed in from…" line went with the panel they sat on. The
+            screen is the chart. */}
         {overview.teams.length === 0 ? (
           <Panel className="flex min-h-0 flex-1 items-center justify-center">
             <EmptyState
@@ -476,33 +443,5 @@ function Panel({
     <section className={cn("rounded-[32px] bg-white", className)}>
       {children}
     </section>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: "waiting" | "active";
-}) {
-  return (
-    <span className="flex items-baseline gap-1.5 rounded-full bg-[var(--app-muted)] px-3 py-1.5">
-      <span
-        className={cn(
-          "text-[0.9375rem] font-medium",
-          tone === "waiting"
-            ? "text-[#92400e]"
-            : tone === "active"
-              ? "text-[var(--app-change)]"
-              : "text-[#1c1917]",
-        )}
-      >
-        {value}
-      </span>
-      <span className="text-[0.8125rem] text-[var(--app-dim)]">{label}</span>
-    </span>
   );
 }

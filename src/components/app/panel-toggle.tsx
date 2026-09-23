@@ -10,15 +10,16 @@ import {
 /** Show or hide the sidebar — Sage_v1's control, rebuilt on Knohow's tokens
  *  (CLAUDE.md invariant 5: no Sage code or tokens).
  *
- *  **The glyph is VS Code's `layout-sidebar-left` pair**, which is what Sage
- *  uses. Material Symbols' nearest equivalent was tried first and was wrong
- *  twice over (user, 2026-09-22): a different shape language, and its two
- *  states differ only by a small arrow inside an identical frame — at 20px
- *  that reads as no swap at all.
+ *  **The glyph is VS Code's `layout-sidebar-left` pair**, which is the pair
+ *  Sage uses (`codicon-layout-sidebar-left-off` / `codicon-layout-sidebar-left`
+ *  in its page chrome). Two other sets were tried and rejected: Material
+ *  Symbols' equivalent, whose two states differ only by a small arrow inside
+ *  an identical frame, and lucide's `panel-left` pair, which matched the
+ *  sidebar's own icons but was not this control (user 2026-09-22, twice).
  *
  *  The codicon pair differs by a whole filled pane, so the state is legible at
  *  a glance: **split frame** while the sidebar shows (click to collapse),
- *  **right pane filled** while it is hidden (the filled side is where the
+ *  **right pane filled** while it is a rail (the filled side is where the
  *  content is now, click to bring the sidebar back).
  *
  *  Tooltip carries the word. Needs a `TooltipProvider` above it; `Topbar`
@@ -32,9 +33,6 @@ export function PanelToggle({
 }) {
   const label = open ? "Collapse" : "Expand";
   return (
-    // Same control as the topbar's Notifications button (user 2026-09-22):
-    // grey disc, 40px, 20px glyph, darkening on hover. The white ringed pill
-    // this used to sit in read as a second, competing control.
     <div className="inline-flex w-fit shrink-0 items-center">
       <Tooltip>
         <TooltipTrigger

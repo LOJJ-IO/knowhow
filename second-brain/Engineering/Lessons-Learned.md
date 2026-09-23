@@ -450,3 +450,28 @@ with the element. The second half is the fallback: the old gradient stays render
 behind the orb and only fades out once the orb reports it is painted. Without that the orb's
 antialiased edge leaves the layer behind it showing as a coloured rim around the sphere — visible in
 the first browser probe, invisible in any static check.
+
+## "Switch account" in this product is a sign-in, not a flip (2026-09-22)
+The profile menu's account list looks like Google's switcher, and the resemblance is the trap: Knohow
+holds **one session at a time**, keyed to cookies on the backend's origin, and the remembered rows are a
+device-local list keyed to an opaque device cookie — they are not parallel logged-in sessions. So a row
+click is `continueWithGoogle(null, row.email)`: Google decides who signs in, and the address is only a
+`login_hint`. A remembered row grants nothing on its own. The same reasoning sets the copy: "Log out of
+all accounts" appears only when more than one account is remembered, and "Forget" is the word in Manage
+accounts because removing a row is a device-local hide, never an unlink.
+
+## Put the z-index on the positioner, not the popup (2026-09-22)
+The profile menu was portalled to `<body>` with `z-[400]` on its popup, and a card on the org canvas
+still painted over it. The popup isn't the element that establishes the layer — Base UI's positioner is
+the positioned ancestor, and with no z-index of its own it lands in the body's default stacking order,
+so a z-index on its child can only order it against its own siblings. The tooltip in this repo had it
+right (`isolate z-[500]` on the positioner) and the menu copied the wrong half. Layers are now a
+documented scale — menus 450, dialogs 500, tooltips 600 — because "portalled" is not the same as
+"on top".
+
+## A scale and a translate on one element fight over `transform` (2026-09-22)
+The dialog was centred with `top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2` and animated with a
+`scale`. Both write `transform`, so adding the scale class silently moved the dialog to the middle-right
+of the screen. Centring moved to a `fixed inset-0 flex items-center justify-center` wrapper
+(`pointer-events-none`, so the backdrop still gets the outside click) and the popup now only ever
+scales. Verified in a browser: 214px of margin either side at 1100px wide.

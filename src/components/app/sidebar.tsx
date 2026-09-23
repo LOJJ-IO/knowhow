@@ -9,16 +9,16 @@ import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { AppIcon } from "@/components/app/icon";
-import { MorphIcon, NAV_MORPH, SettingsIcon } from "@/components/app/nav-morph";
+import { MorphIcon, NAV_MORPH } from "@/components/app/nav-morph";
 import { NAV_ICONS } from "@/components/app/nav-icons";
-import { SettingsDialog } from "@/components/app/settings-dialog";
+import { useSession } from "@/components/app/session";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/brand/tooltip";
-import { APP_NAV, APP_SECTIONS, APP_UTILITY } from "@/lib/app-nav";
+import { APP_NAV, APP_SECTIONS } from "@/lib/app-nav";
 import { cn } from "@/lib/utils";
 
 /** The app's one navigation surface: the org it belongs to, the screens
@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
  *  comes in as props or from `APP_NAV`. */
 export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
   const pathname = usePathname();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { chrome } = useSession();
   /** Which row the pointer is on. Home and Workspace use it for their icons'
    *  hover states; every other row ignores it. */
   const [hovered, setHovered] = useState<string | null>(null);
@@ -53,8 +53,19 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           pushing it out of line with the nav rows below. */}
         <div
           className={cn(
-            "flex h-16 items-center pt-[10px]",
-            collapsed ? "justify-center px-0" : "px-4",
+            // Centred in both states (user 2026-09-22), so the brand sits on
+            // the sidebar's axis rather than on its left gutter.
+            // Tighter in the rail (user 2026-09-22): the brand row keeps the
+            // h-16 that lines the lockup up with the page title, but the mark
+            // needs no such alignment, so the rail's row is 12px shorter.
+            "flex items-center justify-center",
+            collapsed ? "h-[52px]" : "h-16",
+            // The 10px nudge is the lockup's, not the mark's: it exists to
+            // sit the wordmark on the page title's line across the way. In
+            // the rail it only pushed the mark 10px further from the first
+            // icon than the icons sit from each other, which is the gap the
+            // user kept seeing (measured 44px against a 35px rhythm).
+            collapsed ? "px-0" : "px-4 pt-[10px]",
           )}
         >
           {collapsed ? (
@@ -71,15 +82,24 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           first section's mt-2), and now starts at 5.85rem. */}
         <div
           className={cn(
-            "app-scroll-plain flex-1 overflow-y-auto pt-[1.35rem] pb-2",
-            collapsed ? "px-2" : "px-3",
+            "app-scroll-plain flex-1 overflow-y-auto pb-2",
+            collapsed ? "px-2 pt-0" : "px-3 pt-[1.35rem]",
           )}
         >
           {APP_SECTIONS.map((section) => {
             const items = APP_NAV.filter((item) => item.section === section);
             if (items.length === 0) return null;
             return (
-              <div key={section} className="mt-6 first:mt-2">
+              <div
+                key={section}
+                className={cn(
+                  // Expanded, the gap separates one caption from the list
+                  // above it. Collapsed there are no captions, so the gap
+                  // would be a hole in a column of icons (user 2026-09-22:
+                  // the reference's rail has none).
+                  collapsed ? "mt-1 first:mt-0" : "mt-6 first:mt-2",
+                )}
+              >
                 {collapsed ? null : (
                   <p
                     className={`${satoshi.className} px-4 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}
@@ -117,54 +137,28 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
           })}
         </div>
 
-        {/* Help and Settings sit under the sections, quieter than a feature
-          (user 2026-09-21, Elera's bottom group). Same row shape, muted. */}
-        <ul
+        {/* The organization, at the foot of its own nav (user 2026-09-22).
+            Help left for the profile menu, where Settings already is, so this
+            is what the bottom of the sidebar is for now: naming the tenant you
+            are in.
+
+            It stays in the rail rather than disappearing with the labels
+            (user 2026-09-22) — which org you are in is the one thing the rail
+            can't say by shape — and shrinks to fit the 64px column, where a
+            long name truncates. */}
+        <p
           className={cn(
             satoshi.className,
-            "m-0 flex list-none flex-col gap-1 pb-1",
-            collapsed ? "px-2" : "px-3",
+            // Lifted off the bottom edge (user 2026-09-22): the block sits
+            // ~30% of its own height higher, which is the extra 20px of
+            // bottom padding rather than a margin, so the sidebar's last
+            // element still owns the space under it.
+            "m-0 truncate pt-4 pb-9 text-center font-medium text-[#1c1917]",
+            collapsed ? "px-2 text-[0.75rem]" : "px-4 text-[1.40625rem]",
           )}
         >
-          {APP_UTILITY.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <li key={item.href}>
-                <Row
-                  collapsed={collapsed}
-                  label={item.label}
-                  href={item.href}
-                  active={active}
-                  onHover={setHovered}
-                  muted
-                >
-                  {NAV_MORPH[item.href] ? (
-                    <MorphIcon href={item.href} open={hovered === item.href} />
-                  ) : (
-                    <AppIcon name={NAV_ICONS[item.href]} size={22} />
-                  )}
-                </Row>
-              </li>
-            );
-          })}
-          <li>
-            <Row
-              collapsed={collapsed}
-              label="Settings"
-              onClick={() => setSettingsOpen(true)}
-              onHover={setHovered}
-              hoverKey="settings"
-              muted
-            >
-              <SettingsIcon open={hovered === "settings"} />
-            </Row>
-          </li>
-        </ul>
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-
-        {/* Nothing under the utility rows. The person used to sit here with
-            their name and organization; all three are gone (user 2026-09-22).
-            The topbar's profile chip is where the person is now. */}
+          {chrome.name}
+        </p>
       </nav>
     </TooltipProvider>
   );
