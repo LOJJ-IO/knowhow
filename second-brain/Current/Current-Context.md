@@ -146,8 +146,28 @@ meaning on its own.
 Resting icons are lucide so the still icon is the same drawing that animates (`LUCIDE` in `icon.tsx`),
 at `NAV_STROKE` 1.75 to sit with the 400-weight labels. Rows are `px-4` with a `gap-3`, section labels
 aligned to the same left edge, and the sidebar's scroll area is `.app-scroll-plain` so macOS's always-on
-scrollbar stops painting a divider down its right edge. Every app button now carries the landing's press
-feedback (`active:scale-95`, 150ms). Home's topbar title is a greeting, not the screen's name:
+scrollbar stops painting a divider down its right edge. Windows (the surfaces content sits on: the summary panel, the dotted canvas, empty screens, the loading
+placeholder) are **`rounded-[32px]`**, measured off a reference the user supplied rather than eyeballed
+— its corner arc traces to ~55px in the image and its type sizes put that image at ~1.6×. Cards *on* a
+window keep their own 14px. Every app button now carries the landing's press
+feedback (`active:scale-95`, 150ms). Settings turns its gear 180° on hover (spring 400/25) and Help
+swaps `CircleHelp` for `MessageCircleQuestion`, both from the same family.
+
+**Buttons have a taxonomy (2026-09-22):** [[0020-button-taxonomy]] — one `Button`
+(`src/components/app/button.tsx`) on two axes, the same shape as the dialog system's: `variant`
+(`default`/`outline`/`secondary`/`ghost`/`destructive`/`link`) and `size`
+(`default`/`xs`/`sm`/`lg` plus the `icon-*` mirror), taken from Sage_v1's taxonomy and rendered on
+Knohow's own ink and rounding. Adopted by the dialog footers, the settings dialog, the topbar's New and
+notifications, the sidebar toggle and the team caret. `FormDialog` now exists beside `ConfirmDialog`, so
+both are compositions of `AppDialog`.
+
+**Collapse is a rail, not a disappearance (2026-09-22):** the toggle takes the sidebar to `RAIL_W` 64px
+instead of 0 — icons only, centred, labels moved into right-side tooltips, section captions dropped, and
+the lockup reduced to the bare `LogoMark` at 18px (the reference puts its mark at ~0.29 of the rail's
+width; measured 37px of 129px). One `Row` component renders every entry in both states. The sidebar's
+foot is **empty**: the person's avatar, their name and the organization were all removed from it, and
+the person now lives only in the topbar's white profile chip (36px orb plus first name). The sidebar no
+longer reads the session at all. Home's topbar title is a greeting, not the screen's name:
 "Good morning/afternoon/evening, <first name>", computed from the **browser's** clock and therefore
 only after hydration. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL shader the user
 supplied): one colour per identity from `personColor`, which reuses the old gradient's seed so nobody's

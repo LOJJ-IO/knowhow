@@ -271,7 +271,7 @@ export function FlowCanvas({
   return (
     <div
       ref={canvasRef}
-      className="relative w-full shrink-0 select-none overflow-auto rounded-[16px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)]"
+      className="relative w-full shrink-0 select-none overflow-auto rounded-[32px] bg-[var(--app-ground)] shadow-[inset_0_0_0_1px_var(--app-border)]"
       style={{
         height: canvasH,
         backgroundImage:

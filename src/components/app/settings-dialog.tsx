@@ -3,11 +3,8 @@
 import { useEffect, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
-import {
-  AppDialog,
-  DialogButton,
-  DialogSection,
-} from "@/components/app/dialog";
+import { Button } from "@/components/app/button";
+import { AppDialog, DialogSection } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { backendError, backendFetch } from "@/lib/backend";
 import { fetchOrgOverview, type OrgOverview } from "@/lib/organization";
@@ -136,15 +133,13 @@ export function SettingsDialog({
               Saved.
             </p>
           ) : null}
-          <DialogButton onClick={() => onOpenChange(false)}>Close</DialogButton>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
           {canEdit ? (
-            <DialogButton
-              variant="filled"
-              disabled={!dirty || saving}
-              onClick={() => void save()}
-            >
+            <Button disabled={!dirty || saving} onClick={() => void save()}>
               {saving ? "Saving…" : "Save changes"}
-            </DialogButton>
+            </Button>
           ) : null}
         </>
       }

@@ -2,6 +2,9 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  CircleHelp,
+  MessageCircleQuestion,
+  Settings,
   Folder,
   FolderOpen,
   Link,
@@ -62,6 +65,10 @@ export const NAV_MORPH: Record<string, { rest: ReactNode; hover: ReactNode }> =
       rest: <Link size="100%" strokeWidth={NAV_STROKE} />,
       hover: <Send size="100%" strokeWidth={NAV_STROKE} />,
     },
+    "/help": {
+      rest: <CircleHelp size="100%" strokeWidth={NAV_STROKE} />,
+      hover: <MessageCircleQuestion size="100%" strokeWidth={NAV_STROKE} />,
+    },
     "/offboarding": {
       rest: <User size="100%" strokeWidth={NAV_STROKE} />,
       hover: <UserX size="100%" strokeWidth={NAV_STROKE} />,
@@ -99,5 +106,29 @@ export function MorphIcon({
         </motion.span>
       </AnimatePresence>
     </span>
+  );
+}
+
+/** Settings, which turns rather than swaps (pattern supplied by the user
+ *  2026-09-22): a gear's own affordance is that it rotates, so a second glyph
+ *  would be saying the same thing twice. Half a turn on a looser spring than
+ *  the pops above, since it travels rather than lands. */
+export function SettingsIcon({
+  open,
+  size = 22,
+}: {
+  open: boolean;
+  size?: number;
+}) {
+  return (
+    <motion.span
+      aria-hidden
+      className="inline-flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+      animate={{ rotate: open ? 180 : 0 }}
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+    >
+      <Settings size={size} strokeWidth={NAV_STROKE} />
+    </motion.span>
   );
 }

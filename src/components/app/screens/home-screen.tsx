@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
+import { Button } from "@/components/app/button";
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
 import {
@@ -116,7 +117,7 @@ export function HomeScreen() {
   if (!overview)
     return (
       <AppPage>
-        <div className="min-h-[18rem] flex-1 rounded-[16px] bg-white" />
+        <div className="min-h-[18rem] flex-1 rounded-[32px] bg-white" />
       </AppPage>
     );
 
@@ -224,9 +225,10 @@ export function HomeScreen() {
                       </CardMeta>
                     </span>
                     {/* data-ui keeps the canvas from treating this as a drag. */}
-                    <button
+                    <Button
                       data-ui
-                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       aria-expanded={open}
                       aria-label={
                         open
@@ -240,7 +242,7 @@ export function HomeScreen() {
                             : [...current, team.id],
                         )
                       }
-                      className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
+                      className="size-9"
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -259,7 +261,7 @@ export function HomeScreen() {
                           strokeLinejoin="round"
                         />
                       </svg>
-                    </button>
+                    </Button>
                   </div>
 
                   {open ? (
@@ -455,6 +457,14 @@ function ChangeBadge({ count }: { count: number }) {
   );
 }
 
+/** A window: the surface a screen's content sits on. 32px corners, measured
+ *  off the reference the user supplied (2026-09-22) rather than eyeballed —
+ *  tracing its corner arc gives a radius of ~55px in the image, and its type
+ *  sizes put that image at ~1.6×, so ~34px, called 32.
+ *
+ *  The canvas, the empty screens and the loading placeholder are the same
+ *  window and carry the same radius, whether or not they happen to be white.
+ *  Cards *on* a window keep their own, smaller radius. */
 function Panel({
   className,
   children,
@@ -463,7 +473,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className={cn("rounded-[16px] bg-white", className)}>
+    <section className={cn("rounded-[32px] bg-white", className)}>
       {children}
     </section>
   );

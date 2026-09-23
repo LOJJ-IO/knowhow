@@ -5,6 +5,7 @@ import type { FormEvent, ReactNode } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
+import { Button } from "@/components/app/button";
 import { cn } from "@/lib/utils";
 
 /** The app's dialog, and the shape every dialog in it takes.
@@ -103,7 +104,9 @@ export function AppDialog({
         >
           <DialogPrimitive.Close
             aria-label="Close"
-            className="absolute top-4 right-4 flex size-8 cursor-pointer items-center justify-center rounded-full text-[var(--app-dim)] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-muted)] hover:text-[#1c1917]"
+            // Chrome, so: ghost, icon-sized.
+            render={<Button variant="ghost" size="icon-sm" />}
+            className="absolute top-4 right-4 z-10"
           >
             <svg viewBox="0 0 24 24" fill="none" className="size-4" aria-hidden>
               <path
@@ -160,34 +163,69 @@ export function DialogSection({
   );
 }
 
-/** The app's buttons for dialog footers. Filled is the answer, outline is the
- *  way out, and destructive looks destructive. */
-export function DialogButton({
-  variant = "outline",
+/** A dialog footer's buttons are just `Button`s: the answer is `default`, the
+ *  way out is `outline`, and a destructive answer is `destructive`. This alias
+ *  exists so a footer reads as a footer at the call site; it adds nothing. */
+export const DialogButton = Button;
+
+/** A form: the person is editing, and the footer holds the action that keeps
+ *  the edit. The way out sits beside it and never destroys work silently —
+ *  give `onSafeExit` when closing needs to ask first.
+ *
+ *  Paired with `ConfirmDialog` below: both are compositions of `AppDialog`,
+ *  which is the only thing that knows what a dialog looks like. */
+export function FormDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  size = "lg",
+  submitLabel = "Save",
+  cancelLabel = "Cancel",
+  busy = false,
+  disabled = false,
+  onSubmit,
   children,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "filled" | "outline" | "destructive";
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  description?: ReactNode;
+  size?: DialogSize;
+  submitLabel?: string;
+  cancelLabel?: string;
+  busy?: boolean;
+  /** The action can't be taken yet — nothing has changed, or it isn't valid. */
+  disabled?: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  children: ReactNode;
 }) {
-  const variants = {
-    filled: "bg-[#1c1917] text-white",
-    outline:
-      "border border-[var(--app-border)] bg-white text-[#1c1917] hover:border-[#d9d9de]",
-    destructive: "bg-[#EA4335] text-white",
-  };
   return (
-    <button
-      type="button"
-      {...props}
-      className={cn(
-        satoshi.className,
-        "inline-flex h-10 cursor-pointer items-center justify-center rounded-full px-4 text-[0.9375rem] font-medium transition-transform duration-150 active:scale-95 disabled:cursor-default disabled:opacity-60",
-        variants[variant],
-        props.className,
-      )}
+    <AppDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={title}
+      description={description}
+      size={size}
+      kind="form"
+      onSubmit={onSubmit}
+      footer={
+        <>
+          <Button
+            variant="outline"
+            disabled={busy}
+            onClick={() => onOpenChange(false)}
+          >
+            {cancelLabel}
+          </Button>
+          <Button type="submit" disabled={busy || disabled}>
+            {busy ? "Saving…" : submitLabel}
+          </Button>
+        </>
+      }
     >
       {children}
-    </button>
+    </AppDialog>
   );
 }
 
@@ -224,22 +262,23 @@ export function ConfirmDialog({
       kind="confirm"
       footer={
         <>
-          <DialogButton
+          <Button
+            variant="outline"
             disabled={busy}
             onClick={() => onOpenChange(false)}
             autoFocus={open}
           >
             {cancelLabel}
-          </DialogButton>
-          <DialogButton
-            variant={destructive ? "destructive" : "filled"}
+          </Button>
+          <Button
+            variant={destructive ? "destructive" : "default"}
             disabled={busy}
             onClick={() =>
               void Promise.resolve(onConfirm()).then(() => onOpenChange(false))
             }
           >
             {confirmLabel}
-          </DialogButton>
+          </Button>
         </>
       }
     />

@@ -19,7 +19,7 @@ export function EmptyScreen({
 }) {
   return (
     <AppPage>
-      <div className="flex min-h-0 flex-1 items-center justify-center rounded-[16px] bg-white">
+      <div className="flex min-h-0 flex-1 items-center justify-center rounded-[32px] bg-white">
         <EmptyState
           icon={NAV_ICONS[href]}
           title={title}

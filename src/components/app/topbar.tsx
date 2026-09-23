@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
+import { Button } from "@/components/app/button";
 import { AppIcon } from "@/components/app/icon";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { useSession } from "@/components/app/session";
@@ -76,10 +77,10 @@ export function Topbar({
           <Tooltip>
             <TooltipTrigger
               render={
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
+                  size="icon"
                   aria-label="Notifications"
-                  className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-[var(--app-muted)] text-[#44403c] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-active)]"
                 />
               }
             >
@@ -90,19 +91,24 @@ export function Topbar({
             </TooltipContent>
           </Tooltip>
 
-          <button
-            type="button"
-            className={`${satoshi.className} flex h-10 cursor-pointer items-center gap-1.5 rounded-full bg-[#1c1917] pr-4 pl-3 text-[0.9375rem] font-medium text-white transition-transform duration-150 active:scale-95`}
-          >
+          <Button className="pr-4 pl-3">
             <AppIcon name="add" size={19} />
             New
-          </button>
+          </Button>
 
-          <PersonAvatar
-            identity={chrome.viewer.email}
-            label={chrome.viewer.name}
-            size={40}
-          />
+          {/* The person, as a chip: their orb and their first name on a white
+              pill (user 2026-09-22's reference). Not a control yet — there is
+              nothing behind it to open. */}
+          <div
+            className={`${satoshi.className} flex h-12 items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917]`}
+          >
+            <PersonAvatar
+              identity={chrome.viewer.email}
+              label={chrome.viewer.name}
+              size={36}
+            />
+            <span className="truncate">{firstName(chrome.viewer.name)}</span>
+          </div>
         </div>
       </header>
     </TooltipProvider>

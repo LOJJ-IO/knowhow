@@ -1,4 +1,4 @@
-import { Folder, Link, Shield, User } from "lucide-react";
+import { CircleHelp, Folder, Link, Shield, User } from "lucide-react";
 import localFont from "next/font/local";
 
 import { cn } from "@/lib/utils";
@@ -55,6 +55,7 @@ export const CODICONS = {
 export const NAV_STROKE = 1.75;
 
 export const LUCIDE = {
+  "circle-help": CircleHelp,
   folder: Folder,
   link: Link,
   shield: Shield,

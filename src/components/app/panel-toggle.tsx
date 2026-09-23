@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/app/button";
 import {
   Tooltip,
   TooltipContent,
@@ -38,12 +39,12 @@ export function PanelToggle({
       <Tooltip>
         <TooltipTrigger
           render={
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="icon"
               aria-label={label}
               aria-pressed={open}
               onClick={onToggle}
-              className="flex size-10 cursor-pointer items-center justify-center rounded-full bg-[var(--app-muted)] text-[#44403c] transition-[background-color,color,transform] duration-150 active:scale-95 hover:bg-[var(--app-active)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]"
             />
           }
         >
