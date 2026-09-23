@@ -25,6 +25,7 @@ from app.auth.remembered import (
     is_remembered,
     list_remembered_orgs,
     remember_account,
+    unhide_email,
 )
 from app.config import get_settings
 from app.exceptions import MemberNotProvisioned
@@ -63,6 +64,10 @@ PENDING_PERSONAL_SIGNUP_COOKIE = "knohow_pending_signup"
 DEVICE_COOKIE = "knohow_device"
 DEVICE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 ADMIN_PROOF_START_PATH = "/auth/admin-proof/start"
+# Where "add another account" falls back to when there is no session to add
+# an account *to*: the ordinary way in, which signs in existing members and
+# bootstraps new ones.
+SIGNUP_PATH = "/onboarding/signup"
 
 
 def cookie_kwargs() -> dict:
@@ -136,6 +141,16 @@ def signup_redirect(
     return response
 
 
+def _device_id(cookie: str | None) -> uuid.UUID | None:
+    """This browser's id, or None when it has none or the cookie is junk."""
+    if not cookie:
+        return None
+    try:
+        return uuid.UUID(cookie)
+    except ValueError:
+        return None
+
+
 def link_account_redirect(
     code: str, state: str, device_cookie: str | None, db: Session
 ) -> RedirectResponse:
@@ -144,15 +159,35 @@ def link_account_redirect(
     that newly signed-in account."""
     settings = get_settings()
     state_payload = decode_state_token(state, expected_purpose=LINK_ACCOUNT_STATE_PURPOSE)
-    result = complete_login(code, state, db, expected_purpose=LINK_ACCOUNT_STATE_PURPOSE)
+    person_in_state = state_payload.get("person_id")
+    try:
+        result = complete_login(code, state, db, expected_purpose=LINK_ACCOUNT_STATE_PURPOSE)
+    except MemberNotProvisioned as exc:
+        # The address they picked has no member row - an ordinary personal
+        # Gmail, say. In *signup* that is a question ("does your company use
+        # Workspace?"); here it is not a question at all, because this is
+        # **linking**: someone signed in is saying "this is also me" (user,
+        # 2026-09-22). Attach it to their person and leave their session
+        # exactly as it was.
+        if not person_in_state:
+            raise
+        try:
+            attach_pending_personal_email(uuid.UUID(person_in_state), exc.email, db)
+            outcome = "linked"
+        except AccountAlreadyLinked:
+            outcome = "already_linked"
+        # Linking it says they want it; a hide from an earlier "forget" on
+        # this browser would otherwise keep it invisible.
+        unhide_email(_device_id(device_cookie), exc.email, db)
+        return RedirectResponse(
+            f"{settings.frontend_origin}/home?link={outcome}", status_code=status.HTTP_302_FOUND
+        )
     # Two ways in: an already-signed-in person adding an account, or a
     # personal sign-in that answered "yes, I have an organization account"
     # and so has no session yet.
     pending_email = state_payload.get("pending_personal_email")
     person_id = (
-        person_for(result.member, db).id
-        if pending_email
-        else uuid.UUID(state_payload["person_id"])
+        person_for(result.member, db).id if pending_email else uuid.UUID(str(person_in_state))
     )
     try:
         if pending_email:
@@ -162,6 +197,7 @@ def link_account_redirect(
         outcome = "linked"
     except AccountAlreadyLinked:
         outcome = "already_linked"
+    unhide_email(_device_id(device_cookie), pending_email or result.member.email, db)
     # Where they came from decides where they go back to (user, 2026-09-22):
     # someone already inside the app pressed "Add another account" and should
     # land back inside it, not on the marketing page. The pending-personal
@@ -458,10 +494,22 @@ def _device_has_rows(device_cookie: str | None, db: Session) -> bool:
 
 
 @router.get("/link-account/start")
-def link_account_start(member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)) -> RedirectResponse:
+def link_account_start(
+    knohow_access_token: str | None = Cookie(default=None), db: Session = Depends(get_db)
+) -> RedirectResponse:
     """Adds another of this person's Google accounts. Identity linking is
-    only ever done this way — by someone already signed in choosing to sign
-    in again as themselves. Nothing is inferred from names or devices."""
+    only ever done this way - by someone already signed in choosing to sign
+    in again as themselves. Nothing is inferred from names or devices.
+
+    **A missing or expired session is not an error here** (user, 2026-09-22):
+    this route is reached by a top-level navigation from a button called "Add
+    another account", so a 401 lands the person on a JSON error page. They
+    wanted to sign in as somebody; send them to sign in.
+    """
+    try:
+        member = get_current_member(knohow_access_token, db)
+    except HTTPException:
+        return RedirectResponse(SIGNUP_PATH, status_code=status.HTTP_302_FOUND)
     person_for(member, db)
     return RedirectResponse(start_link_account(member).authorization_url, status_code=status.HTTP_302_FOUND)
 

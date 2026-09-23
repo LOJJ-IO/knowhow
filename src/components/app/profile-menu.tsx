@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 
-import { AppIcon } from "@/components/app/icon";
 import {
+  AddAccountIcon,
+  CaretIcon,
   LogOutIcon,
+  ManageAccountsIcon,
   MorphIcon,
   SettingsIcon,
 } from "@/components/app/nav-morph";
@@ -79,7 +81,11 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
               <Menu.Group>
                 <Menu.GroupLabel className={LABEL}>Accounts</Menu.GroupLabel>
                 <Menu.SubmenuRoot>
-                  <Menu.SubmenuTrigger className="mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[highlighted]:bg-[var(--app-muted)] data-[popup-open]:bg-[var(--app-muted)]">
+                  <Menu.SubmenuTrigger
+                    onMouseEnter={() => setHovered("accounts")}
+                    onMouseLeave={() => setHovered(null)}
+                    className="mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[highlighted]:bg-[var(--app-muted)] data-[popup-open]:bg-[var(--app-muted)]"
+                  >
                     <PersonAvatar
                       identity={chrome.viewer.email}
                       label={chrome.viewer.name}
@@ -93,7 +99,7 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
                         {me.email}
                       </span>
                     </span>
-                    <Chevron />
+                    <CaretIcon open={hovered === "accounts"} direction="left" />
                   </Menu.SubmenuTrigger>
 
                   <Menu.Portal>
@@ -117,43 +123,86 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
                             No other accounts on this browser.
                           </p>
                         ) : (
-                          accounts.flatMap((row) => [
-                            <AccountRow
-                              key={row.member_id}
-                              memberId={row.member_id}
-                              name={row.person_name ?? row.organization_name}
-                              email={row.email}
-                              chip={row.kind === "org" ? "Org" : "Personal"}
-                              current={row.member_id === me.id}
-                            />,
-                            // A linked personal address has no row of its own
-                            // in the backend's list — it is carried on the
-                            // person's org row (see `RememberedOrg`). It is
-                            // still an account you can sign in as, so it gets
-                            // a row here (user 2026-09-22: "doesn't show the
-                            // other account").
-                            ...row.linked_personal_emails.map((email) => (
+                          accounts.map((row) => (
+                            <div key={row.member_id}>
                               <AccountRow
-                                key={`${row.member_id}:${email}`}
-                                name={row.person_name ?? "Personal"}
-                                email={email}
-                                chip="Personal"
-                                current={email === me.email}
+                                memberId={row.member_id}
+                                name={row.person_name ?? row.organization_name}
+                                email={row.email}
+                                chip={row.kind === "org" ? "Org" : "Personal"}
+                                current={row.member_id === me.id}
                               />
-                            )),
-                          ])
+
+                              {/* A linked personal address has no row of its
+                                  own in the backend's list — it is carried on
+                                  the person's org row — so it **branches**
+                                  under it, the way the Log In picker and
+                                  Manage accounts draw the same relationship
+                                  (user 2026-09-22). The trunk is the point:
+                                  these addresses belong to that person, they
+                                  are not separate organizations. */}
+                              {row.linked_personal_emails.length > 0 ? (
+                                <div className="pl-7">
+                                  {row.linked_personal_emails.map(
+                                    (email, i) => {
+                                      const last =
+                                        i ===
+                                        row.linked_personal_emails.length - 1;
+                                      return (
+                                        <div
+                                          key={email}
+                                          className="relative pt-0.5"
+                                        >
+                                          {last ? (
+                                            <span
+                                              aria-hidden
+                                              className="pointer-events-none absolute -left-2 top-0 h-[29px] w-3 rounded-bl-[6px] border-b border-l border-[var(--app-border)]"
+                                            />
+                                          ) : (
+                                            <>
+                                              <span
+                                                aria-hidden
+                                                className="pointer-events-none absolute -left-2 top-0 bottom-0 w-px bg-[var(--app-border)]"
+                                              />
+                                              <span
+                                                aria-hidden
+                                                className="pointer-events-none absolute -left-2 top-[29px] h-px w-3 bg-[var(--app-border)]"
+                                              />
+                                            </>
+                                          )}
+                                          <AccountRow
+                                            name={row.person_name ?? "Personal"}
+                                            email={email}
+                                            chip="Personal"
+                                            current={email === me.email}
+                                            nested
+                                          />
+                                        </div>
+                                      );
+                                    },
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ))
                         )}
 
                         <Divider />
 
                         <Item
-                          icon={<AppIcon name="add" size={20} />}
+                          icon={<AddAccountIcon open={hovered === "add"} />}
+                          onHover={setHovered}
+                          hoverKey="add"
                           onClick={() => addAnotherAccount()}
                         >
                           Add another account
                         </Item>
                         <Item
-                          icon={<AppIcon name="user-cog" size={20} />}
+                          icon={
+                            <ManageAccountsIcon open={hovered === "manage"} />
+                          }
+                          onHover={setHovered}
+                          hoverKey="manage"
                           onClick={() => setManageOpen(true)}
                         >
                           Manage accounts
@@ -250,6 +299,7 @@ function AccountRow({
   email,
   chip,
   current,
+  nested = false,
 }: {
   /** Present for an account with a row of its own. A linked personal address
    *  has none — it is carried on someone's org row — so it has nothing to
@@ -262,10 +312,12 @@ function AccountRow({
    *  (user 2026-09-22). */
   chip?: string;
   current: boolean;
+  /** A linked address hanging off an organization's row. */
+  nested?: boolean;
 }) {
   const body = (
     <>
-      <PersonAvatar identity={email} label={name} size={36} />
+      <PersonAvatar identity={email} label={name} size={nested ? 28 : 36} />
       <span className="min-w-0 flex-1 text-left">
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[0.9375rem] font-medium text-[#1c1917]">
@@ -294,7 +346,10 @@ function AccountRow({
   if (current)
     return (
       <div
-        className="mx-1 flex items-center gap-3 rounded-[12px] px-3 py-2.5 text-[#44403c]"
+        className={cn(
+          "mx-1 flex items-center gap-3 rounded-[12px] px-3 text-[#44403c]",
+          nested ? "py-1.5" : "py-2.5",
+        )}
         aria-current="true"
       >
         {body}
@@ -312,17 +367,17 @@ function AccountRow({
           else continueWithGoogle(null, email);
         });
       }}
-      className="mx-1 flex cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 text-[#44403c] outline-none select-none data-[highlighted]:bg-[var(--app-muted)]"
+      className={cn(
+        "mx-1 flex cursor-pointer items-center gap-3 rounded-[12px] px-3 text-[#44403c] outline-none select-none data-[highlighted]:bg-[var(--app-muted)]",
+        nested ? "py-1.5" : "py-2.5",
+      )}
     >
       {body}
     </Menu.Item>
   );
 }
 
-/** Points left, because that is where the submenu opens: the profile chip is
- *  at the right edge of the window, so there is no room on the other side
- *  (user 2026-09-22). An arrow that disagrees with the motion is worse than no
- *  arrow. */
+/** Every row in the menu, whether it acts or navigates. */
 /** How many accounts this browser holds, counted the way the list above
  *  counts them: one per remembered organization, plus each linked personal
  *  address, which has no row in the backend's list but does have one here
@@ -347,26 +402,6 @@ function Chip({ children }: { children: ReactNode }) {
   );
 }
 
-function Chevron() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      className="size-4 shrink-0 text-[var(--app-dim)]"
-      aria-hidden
-    >
-      <path
-        d="m15 6-6 6 6 6"
-        stroke="currentColor"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** Every row in the menu, whether it acts or navigates. */
 const ITEM =
   "mx-1 flex h-11 cursor-pointer items-center gap-3 rounded-[12px] px-3 text-[0.9375rem] text-[#44403c] no-underline outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)] data-[highlighted]:text-[#1c1917]";
 

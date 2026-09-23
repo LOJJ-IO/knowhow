@@ -3,7 +3,7 @@ type: feature
 status: shipped
 tags: [area/frontend, area/backend, priority/high]
 created: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-22
 related: ["[[FEAT-doc-visibility-dashboard]]", "[[0001-mocked-data-first-prototype]]", "[[Current-Context]]"]
 ---
 
@@ -28,3 +28,8 @@ The demo needed the *solution moment* to be visible live: a team member creates 
 - Real Drive folder creation / permission API calls (ADR-0001 seam).
 - Full-text content search (title search only).
 - Form/Other tile (rendered disabled, deck parity only).
+
+## Locked create set (2026-09-22)
+User: topbar **New** creates **Doc · Sheet · Slide · Upload** only. Forms and other Workspace types
+stay out. Upload is first-class (not a disabled "Other"); it files into the same team/Company folder
+path and takes the same share choice as a blank Google file. Not rebuilt in the current app shell yet.

@@ -225,3 +225,48 @@ def test_forgetting_one_row_leaves_the_others(db):
     assert [r.email for r in remaining] == ["b@gmail.com"]
     # Forgetting a row must not touch the member or its organization.
     assert db.get(OrgMember, a.id) is not None
+
+
+def test_adding_an_account_with_no_member_row_links_it_anyway(db):
+    """"Add another account" from inside the app is the mirror of Log In's
+    "yes, I have an organization account" (user, 2026-09-22).
+
+    The address picked at Google usually has no Knohow member row — it is an
+    ordinary personal Gmail. In *signup* that is a question ("does your
+    company use Workspace?"); in linking it is not a question at all, because
+    someone already signed in is saying "this is also me". It attaches to
+    their person, and no organization is created for it.
+    """
+    work = _member(db, _org(db, "Acme", "acme.org"), "r@acme.org", "R", AuthType.DOMAIN_DELEGATED)
+    person = person_for(work, db)
+    orgs_before = db.query(Organization).count()
+
+    # What the callback does when `complete_login` raises MemberNotProvisioned.
+    attach_pending_personal_email(person.id, "r.personal@gmail.com", db)
+
+    assert db.query(Organization).count() == orgs_before
+    assert {e.email for e in db.query(PersonEmail).filter(PersonEmail.person_id == person.id)} == {
+        "r.personal@gmail.com"
+    }
+
+
+def test_linking_an_address_unhides_it_on_this_browser(db):
+    """Hiding is how "forget" works for a linked address, but linking it again
+    is the louder statement and must win (user, 2026-09-22: a freshly linked
+    account stayed invisible because it had been hidden here earlier)."""
+    from app.auth.remembered import hide_emails, list_remembered_orgs, remember_account, unhide_email
+
+    device = uuid.uuid4()
+    work = _member(db, _org(db, "Acme", "acme.org"), "r@acme.org", "R", AuthType.DOMAIN_DELEGATED)
+    person = person_for(work, db)
+    remember_account(device, work, db)
+    attach_pending_personal_email(person.id, "r.personal@gmail.com", db)
+    db.commit()
+
+    hide_emails(device, ["r.personal@gmail.com"], db)
+    assert list_remembered_orgs(device, db)[0].linked_personal_emails == []
+
+    unhide_email(device, "R.Personal@gmail.com", db)
+    assert list_remembered_orgs(device, db)[0].linked_personal_emails == [
+        "r.personal@gmail.com"
+    ]

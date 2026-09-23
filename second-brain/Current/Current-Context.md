@@ -114,12 +114,17 @@ owner-only in the backend, and shows the join link read-only.
 
 **Top band + sidebar foot (2026-09-21):** topbar matches the reference — panel toggle, page name, then
 search, alerts, New, and the person's generated avatar. The reference's grid icon was left out per the
-user. **Alerts and New are not wired to anything yet** (no notifications; nothing to create until
-documents exist) — open question in [[FEAT-core-app-screens]]. Sidebar foot is the organization's name (1.40625rem, and it stays in the collapsed rail at 0.75rem rather than disappearing with the labels — which org you are in is the one thing the rail can't say by shape); Help and Settings both live in the
-profile menu (2026-09-22). The chart is a **board** (2026-09-22): drag empty canvas to pan, pinch to zoom (a trackpad pinch
-arrives as ctrl+wheel; two-finger touch is tracked through pointer events), 0.4–2.5×, zooming about the
-point under the fingers. The dots pan and scale with it, and a card drag divides by the scale so it
-still tracks the pointer. Home is the chart alone — no summary panel, no stat pills — plus two
+user. **Alerts** still not wired (no notifications). **New** is decided but not built (2026-09-22):
+**Doc · Sheet · Slide · Upload** — [[FEAT-core-app-screens]] / [[FEAT-doc-creation-auto-share]].
+The topbar New control already shows that set as a **fanned icon stack** (white-rimmed squircles,
+user reference) in front of the label instead of a plus — Docs/Sheets/Slides use the Google product
+marks in `public/create/`; Upload is a matching tile. Sidebar foot is the organization's name
+(1.40625rem, and it stays in the collapsed rail at 0.75rem rather than disappearing with the labels —
+which org you are in is the one thing the rail can't say by shape); Help and Settings both live in the
+profile menu (2026-09-22). The chart is a **board** (2026-09-22): drag empty canvas to pan, pinch to zoom
+(a trackpad pinch arrives as ctrl+wheel; two-finger touch is tracked through pointer events), 0.4–2.5×,
+zooming about the point under the fingers. The dots pan and scale with it, and a card drag divides by
+the scale so it still tracks the pointer. Home is the chart alone — no summary panel, no stat pills — plus two
 `secondary` buttons top right (2026-09-22): **Recent updates**, which replays the pulses for the
 **narrowest recent window that holds anything** — last hour, else 6h, 12h, a day, a week (`RECENT_WINDOWS`,
 recomputed on each press because it reads the clock). It reads a **new** `recent_changes` feed on the
@@ -186,14 +191,23 @@ linked personal addresses, because they have rows in this list even though the b
 an org row. The account block is a **submenu trigger**: it opens "Switch accounts"
 to its left, listing the same `GET /auth/remembered-accounts` rows the Log In picker uses, a tick on the
 current one, then "Add another account" (`continueWithGoogle`) and "Manage accounts"
-(`manage-accounts-dialog.tsx` — per-row **Forget**, which is `DELETE /auth/remembered-accounts` and
-device-local: the member, the org and the linked identity are untouched, and the row returns on the next
-sign-in). **Switching is now instant** (user 2026-09-22, chosen over keeping the Google round trip): `POST
+(`manage-accounts-dialog.tsx` — the Log In picker's remove screen brought inside: **tick, then forget
+once**, as a tree where linked personal addresses branch under their org on a continuous trunk. Ticking
+an org takes its addresses with it; a child can be kept on its own; the signed-in row can't be ticked.
+`DELETE /auth/remembered-accounts`, device-local — the member, the org and the linked identity are
+untouched, and the row returns on the next sign-in). Its rows, the submenu caret, the team cards' carets
+and the add/manage icons all carry the family's hover gesture (`Swap`, `CaretIcon` in `nav-morph.tsx`:
+plus→person-plus, people→cog, and carets that lean the way they point). **Switching is now instant** (user 2026-09-22, chosen over keeping the Google round trip): `POST
 /auth/switch` issues session cookies for any account **remembered on this device** — the device cookie
 is the credential, the endpoint refuses anything not in this browser's list, and a linked personal
 address (which has no member row) still goes through Google. "Add another account" is the **identity
 linking** flow (`GET /auth/link-account/start`), not signup, and that callback now returns to `/home`
-instead of the landing — signup was asking a personal address whether its company uses Workspace and
+instead of the landing. Two dead ends were closed (2026-09-22): with **no session** the route redirects
+to sign-in rather than answering 401 to a top-level navigation, and an address with **no member row**
+(an ordinary personal Gmail) is attached to the person with `attach_pending_personal_email` rather than
+404ing — the mirror of Log In's "yes, I have an organization account". It is **identity only**: no Drive
+grant, because credentials hang off member rows and a linked address has none. Scanning a linked
+personal account is a separate step, still to be specced — signup was asking a personal address whether its company uses Workspace and
 stranding the person on the marketing page. Rows carry the Log In picker's Org / Personal chips (`POST /auth/logout`, then `/`; the backend keeps the device cookie so the
 picker still offers the account). The reference had teams, themes, plans and a desktop app; those are
 left out because Knohow has none of them.
@@ -225,8 +239,9 @@ foot is **empty**: the person's avatar, their name and the organization were all
 the person now lives only in the topbar's white profile chip (36px orb plus first name). The sidebar no
 longer reads the session at all. Home's topbar title is a **rotating greeting** (playful, time-of-day,
 weekday, season, short UI lines, favorites weighted), not the screen's name — every line includes the
-person's first name in a way that still reads naturally. Picked once per tab in
-`sessionStorage`, from the **browser's** clock, and therefore only after hydration. Rainy/cold/sunny
+person's first name in a way that still reads naturally. **Fresh on every page load / refresh**, and
+again after **10 minutes idle** (pointer/keyboard); avoids repeating the line just shown. From the
+**browser's** clock, and therefore only after hydration. Rainy/cold/sunny
 weather lines wait on a real weather signal. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL
 shader the user supplied): one colour per identity from `personColor`, which reuses the old gradient's
 seed so nobody's colour changed. The gradient it replaced is still rendered underneath as the fallback

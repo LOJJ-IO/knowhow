@@ -149,8 +149,11 @@ top-level paths and the landing at `/` is untouched:
   measured bezier connectors (`flow-canvas.tsx`, generic over rows/widths/edges).
 - **Settings is a dialog**, not a route — [[0017-dialogs-over-settings-screens]] records the dialog
   taxonomy (shell, `size`, `kind`, entrance, safe exit).
-- **Open question:** the topbar's **Alerts** and **New** are drawn but not wired. Knohow has no
-  notifications, and there is nothing to create until documents exist. What should each do?
+- **Open question:** the topbar's **Alerts** is drawn but not wired (Knohow has no notifications yet).
+- ~~**What does New create?**~~ **Answered 2026-09-22:** **Doc · Sheet · Slide · Upload**. Forms and
+  other Workspace types stay out. Not built yet — topbar New is still a dead control; when wired it
+  opens this set (same auto-share / auto-file idea as [[FEAT-doc-creation-auto-share]], plus upload
+  into the team/Company folder).
 
 ### Superseded: org chart + oversight merged (2026-09-22)
 `/org-chart` and `/oversight` no longer exist as screens. Both were folded into `/dashboard` —

@@ -129,6 +129,28 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
     ]
 
 
+def unhide_email(device_id: uuid.UUID | None, email: str, db: Session) -> None:
+    """Stops hiding one linked address on this browser.
+
+    Hiding is how "forget" works for a linked personal address - it has no
+    row of its own to forget (see `hide_emails`). But **linking an address is
+    a louder statement than hiding it was**: someone who has just gone to
+    Google and proved the address wants to see it (user, 2026-09-22, whose
+    freshly linked account stayed invisible because they had hidden it on
+    that browser earlier). So a link clears the hide on the device it was
+    made from, and nowhere else.
+    """
+    if device_id is None:
+        return
+    db.execute(
+        delete(HiddenRememberedEmail).where(
+            HiddenRememberedEmail.device_id == device_id,
+            HiddenRememberedEmail.email == email.lower(),
+        )
+    )
+    db.commit()
+
+
 def hide_emails(device_id: uuid.UUID, emails: list[str], db: Session) -> int:
     """Stops showing these linked personal addresses in this browser's picker.
 

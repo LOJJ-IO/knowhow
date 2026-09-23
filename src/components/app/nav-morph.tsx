@@ -2,7 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  ChevronDown,
+  ChevronLeft,
   CircleHelp,
+  Plus,
+  UserPlus,
+  UserRoundCog,
+  Users,
   MessageCircleQuestion,
   Settings,
   Folder,
@@ -169,5 +175,105 @@ export function LogOutIcon({
         <path d="M21 12H9" />
       </motion.g>
     </svg>
+  );
+}
+
+/** A pop-swap between two glyphs, which is the family's hover gesture. Used
+ *  by the profile menu's own rows the way `MorphIcon` is used by the nav's
+ *  (user 2026-09-22). */
+function Swap({
+  open,
+  size,
+  rest,
+  hover,
+}: {
+  open: boolean;
+  size: number;
+  rest: ReactNode;
+  hover: ReactNode;
+}) {
+  return (
+    <span
+      aria-hidden
+      className="relative inline-flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.span
+          key={open ? "hover" : "rest"}
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.5, opacity: 0 }}
+          transition={POP}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          {open ? hover : rest}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  );
+}
+
+/** "Add another account": a plus that becomes a person being added. */
+export function AddAccountIcon({
+  open,
+  size = 20,
+}: {
+  open: boolean;
+  size?: number;
+}) {
+  return (
+    <Swap
+      open={open}
+      size={size}
+      rest={<Plus size={size} strokeWidth={NAV_STROKE} />}
+      hover={<UserPlus size={size} strokeWidth={NAV_STROKE} />}
+    />
+  );
+}
+
+/** "Manage accounts": the accounts, then the cog that manages them. */
+export function ManageAccountsIcon({
+  open,
+  size = 20,
+}: {
+  open: boolean;
+  size?: number;
+}) {
+  return (
+    <Swap
+      open={open}
+      size={size}
+      rest={<Users size={size} strokeWidth={NAV_STROKE} />}
+      hover={<UserRoundCog size={size} strokeWidth={NAV_STROKE} />}
+    />
+  );
+}
+
+/** A caret that leans the way it points while the row is hovered: the same
+ *  gesture as the morphs, but a travel rather than a swap, because a caret
+ *  has nothing to become. `direction` is where it points. */
+export function CaretIcon({
+  open,
+  direction,
+  size = 16,
+}: {
+  open: boolean;
+  direction: "left" | "down";
+  size?: number;
+}) {
+  const Glyph = direction === "left" ? ChevronLeft : ChevronDown;
+  return (
+    <motion.span
+      aria-hidden
+      className="inline-flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+      animate={
+        direction === "left" ? { x: open ? -3 : 0 } : { y: open ? 3 : 0 }
+      }
+      transition={{ type: "spring", stiffness: 400, damping: 25 }}
+    >
+      <Glyph size={size} strokeWidth={NAV_STROKE + 0.25} />
+    </motion.span>
   );
 }

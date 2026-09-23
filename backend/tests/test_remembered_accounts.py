@@ -327,3 +327,15 @@ def test_switch_issues_session_cookies_for_a_remembered_account(monkeypatch):
     cookies = response.headers.get_list("set-cookie")
     assert any("knohow_access_token=" in c for c in cookies)
     assert any("knohow_refresh_token=" in c for c in cookies)
+
+
+def test_add_another_account_without_a_session_goes_to_sign_in(monkeypatch):
+    """The button is a top-level navigation, so a 401 would land the person on
+    a JSON error page. They pressed "Add another account"; send them to sign
+    in (user, 2026-09-22)."""
+    try:
+        response = _client().get("/auth/link-account/start")
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 302
+    assert response.headers["location"] == "/onboarding/signup"

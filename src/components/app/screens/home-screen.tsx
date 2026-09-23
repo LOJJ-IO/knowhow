@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
+import { CaretIcon } from "@/components/app/nav-morph";
 import {
   ManageTeamsButton,
   ReplayUpdatesButton,
@@ -98,6 +99,8 @@ export function HomeScreen() {
   /** True while a replay is actually travelling, which is what the button's
    *  green is tied to. */
   const [running, setRunning] = useState(false);
+  /** Which team's caret the pointer is on. */
+  const [caret, setCaret] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,6 +309,8 @@ export function HomeScreen() {
                         variant="ghost"
                         size="icon-sm"
                         aria-expanded={open}
+                        onMouseEnter={() => setCaret(team.id)}
+                        onMouseLeave={() => setCaret(null)}
                         aria-label={
                           open
                             ? `Hide ${team.name} members`
@@ -320,23 +325,20 @@ export function HomeScreen() {
                         }
                         className="size-9"
                       >
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
+                        {/* Leans down under the pointer; turns over while the
+                            members are showing. */}
+                        <span
                           className={cn(
-                            "size-5 transition-transform duration-200",
+                            "inline-flex transition-transform duration-200",
                             open && "rotate-180",
                           )}
-                          aria-hidden
                         >
-                          <path
-                            d="m6 9 6 6 6-6"
-                            stroke="currentColor"
-                            strokeWidth={2.2}
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
+                          <CaretIcon
+                            open={caret === team.id}
+                            direction="down"
+                            size={20}
                           />
-                        </svg>
+                        </span>
                       </Button>
                     </div>
 

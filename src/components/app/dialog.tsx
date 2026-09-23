@@ -103,7 +103,7 @@ export function AppDialog({
         <div className="pointer-events-none fixed inset-0 z-[500] flex items-center justify-center p-4">
           <DialogPrimitive.Popup
             className={cn(
-              "app-modal pointer-events-auto relative flex max-h-[min(42rem,calc(100dvh-4rem))] w-full flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] outline-none",
+              "app-modal pointer-events-auto relative flex max-h-[min(42rem,calc(100dvh-4rem))] w-full flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] outline-none",
               SIZE[size],
             )}
           >

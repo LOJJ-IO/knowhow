@@ -2,8 +2,8 @@
  *  and season. Weather-dependent lines are omitted until we have a weather
  *  signal; inventing rain would be worse than leaving them out.
  *
- *  Picked once per browser tab (sessionStorage) so the heading doesn't shuffle
- *  under the person while they work. Favorites are weighted when eligible. */
+ *  Picks fresh on every page load / refresh, and again after 10 minutes idle.
+ *  Favorites are weighted when eligible. */
 
 export type GreetingContext = {
   hour: number;
@@ -156,7 +156,7 @@ const LINES: Line[] = [
   { text: "Let's go, {name}.", favorite: true },
 ];
 
-const STORAGE_KEY = "knohow.home-greeting.v2";
+const IDLE_MS = 10 * 60 * 1000;
 
 function contextFrom(now: Date): GreetingContext {
   return {
@@ -175,37 +175,31 @@ function fill(template: string, name: string): string {
   return template.replaceAll("{name}", name);
 }
 
-function chooseTemplate(now: Date): string {
+function chooseTemplate(now: Date, avoid?: string): string {
   const pool = eligible(now);
   const favorites = pool.filter((line) => line.favorite);
   const useFavorite = favorites.length > 0 && Math.random() < 0.55;
-  const from = useFavorite ? favorites : pool;
+  let from = useFavorite ? favorites : pool;
+  if (avoid && from.length > 1) {
+    const without = from.filter((line) => line.text !== avoid);
+    if (without.length > 0) from = without;
+  }
   return from[Math.floor(Math.random() * from.length)]!.text;
 }
 
-/** One greeting for this tab session. Reuses the stored template so revisiting
- *  Home doesn't shuffle the title; a new tab (or cleared session) picks again. */
-export function pickGreeting(name: string, now = new Date()): string {
-  if (typeof sessionStorage !== "undefined") {
-    try {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const { template } = JSON.parse(raw) as { template?: string };
-        if (template) return fill(template, name);
-      }
-    } catch {
-      /* pick fresh */
-    }
-  }
-
-  const template = chooseTemplate(now);
-  try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ template }));
-  } catch {
-    /* private mode / quota — still return the pick */
-  }
-  return fill(template, name);
+/** Fresh pick. Call on load / refresh, and again after {@link IDLE_MS} of
+ *  inactivity. Pass `avoid` so idle re-picks don't repeat the line just shown. */
+export function pickGreeting(
+  name: string,
+  now = new Date(),
+  avoid?: string,
+): { text: string; template: string } {
+  const template = chooseTemplate(now, avoid);
+  return { text: fill(template, name), template };
 }
+
+/** How long without pointer/keyboard activity before Home picks a new greeting. */
+export { IDLE_MS as GREETING_IDLE_MS };
 
 /** What people call each other. Falls back to the whole string. */
 export function firstName(name: string): string {

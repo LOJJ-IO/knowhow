@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +8,7 @@ import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
 import { AppIcon } from "@/components/app/icon";
+import { NewCreateFan } from "@/components/app/new-create-fan";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { ProfileMenu } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
@@ -19,7 +20,11 @@ import {
   TooltipTrigger,
 } from "@/components/brand/tooltip";
 import { APP_HOME, APP_NAV, APP_SEARCH, APP_UTILITY } from "@/lib/app-nav";
-import { firstName, pickGreeting } from "@/lib/greeting";
+import {
+  firstName,
+  GREETING_IDLE_MS,
+  pickGreeting,
+} from "@/lib/greeting";
 import { useHydrated } from "@/lib/use-hydrated";
 
 /** The row above every screen, laid out off the reference (user 2026-09-21):
@@ -29,10 +34,9 @@ import { useHydrated } from "@/lib/use-hydrated";
  *  The reference's grid icon between search and the bell was left out at the
  *  user's request.
  *
- *  Two of these are **not wired to anything yet**: alerts (Knohow has no
- *  notifications) and New (nothing to create until documents exist). They are
- *  here because the band was asked for; what they do is still an open
- *  question, recorded in FEAT-core-app-screens. */
+ *  Alerts is not wired yet. New creates Doc · Sheet · Slide · Upload when built
+ *  ([[FEAT-doc-creation-auto-share]]); the control already shows that set as a
+ *  fanned mark in front of the label (user 2026-09-22). */
 export function Topbar({
   sidebarOpen,
   onToggleSidebar,
@@ -46,22 +50,62 @@ export function Topbar({
     (item) => item.href === pathname,
   );
   // Home greets the person instead of naming the screen (user 2026-09-22).
-  // The clock and the pick live in the browser, so the title only becomes the
-  // greeting after hydration — rendering it on the server would greet everyone
-  // in the server's timezone and then swap the heading under them.
+  // Fresh on every load / refresh; again after 10 minutes idle. The clock and
+  // the pick live in the browser, so the title only becomes the greeting after
+  // hydration.
   const hydrated = useHydrated();
   const name = firstName(chrome.viewer.name);
-  const greeting = useMemo(
-    () => (hydrated ? pickGreeting(name) : ""),
-    [hydrated, name],
-  );
+  const [greeting, setGreeting] = useState("");
+  const templateRef = useRef("");
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const next = pickGreeting(name);
+    templateRef.current = next.template;
+    setGreeting(next.text);
+  }, [hydrated, name]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let timer = 0;
+    const arm = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const next = pickGreeting(name, new Date(), templateRef.current);
+        templateRef.current = next.template;
+        setGreeting(next.text);
+        arm();
+      }, GREETING_IDLE_MS);
+    };
+    const onActivity = () => arm();
+    const events = [
+      "pointerdown",
+      "keydown",
+      "mousemove",
+      "scroll",
+      "touchstart",
+      "visibilitychange",
+    ] as const;
+    for (const event of events) {
+      window.addEventListener(event, onActivity, { passive: true });
+    }
+    arm();
+    return () => {
+      window.clearTimeout(timer);
+      for (const event of events) {
+        window.removeEventListener(event, onActivity);
+      }
+    };
+  }, [hydrated, name]);
+
   const title =
     pathname === APP_HOME && hydrated ? greeting : (current?.label ?? "");
 
   return (
     <TooltipProvider delay={0}>
-      {/* px-2 to line the toggle up with the page gutter below it. */}
-      <header className="flex h-16 shrink-0 items-center gap-5 px-2">
+      {/* Same gutters as the page below it, so the toggle sits on the
+          window's left edge and the profile chip on its right. */}
+      <header className="flex h-16 shrink-0 items-center gap-5 pr-3 pl-0">
         <PanelToggle open={sidebarOpen} onToggle={onToggleSidebar} />
         <h1
           className={`${sohne.className} m-0 min-w-0 truncate text-[1.5rem] leading-[1.3] tracking-tight text-[#1c1917]`}
@@ -98,8 +142,8 @@ export function Topbar({
             </TooltipContent>
           </Tooltip>
 
-          <Button className="pr-4 pl-3">
-            <AppIcon name="add" size={19} />
+          <Button className="h-[3.43rem] gap-[0.8575rem] pr-[1.47rem] pl-[0.8575rem] text-[1.041rem]">
+            <NewCreateFan />
             New
           </Button>
 

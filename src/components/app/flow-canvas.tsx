@@ -119,6 +119,10 @@ export function FlowCanvas({
   /** Live touch points, for the two-finger pinch. */
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const pinch = useRef<{ distance: number; scale: number } | null>(null);
+  /** The shape the board last fitted itself to, and whether the person has
+   *  since taken the zoom into their own hands. */
+  const fittedRef = useRef("");
+  const zoomedByHand = useRef(false);
   /** The zoom as it stands this render, for the native wheel listener below:
    *  that listener is bound once and would otherwise close over a stale
    *  scale. */
@@ -272,6 +276,36 @@ export function FlowCanvas({
     return PAD_X + before + gap * index + widths[index] / 2;
   };
 
+  /** The width the widest row needs at scale 1: every card at its own width,
+   *  `MIN_COL_GAP` between them, plus the gutters. */
+  const neededW = Math.max(
+    ...rows.map((r) => {
+      const peers = nodes.filter((n) => n.row === r);
+      const total = peers.reduce((sum, n) => sum + widthOf(n), 0);
+      return total + MIN_COL_GAP * Math.max(peers.length - 1, 0) + PAD_X * 2;
+    }),
+    0,
+  );
+
+  /** Fit the board to the chart when there are more teams than fit across it
+   *  (user 2026-09-22 asked what happens as teams are added). Zoom out far
+   *  enough that the widest row is whole, down to `MIN_SCALE`; past that the
+   *  cards would be unreadable and panning is the better answer, which the
+   *  board now supports.
+   *
+   *  It fits **once per shape**: the row's requirement and the canvas's width
+   *  together. Zooming by hand afterwards sticks, because a view that keeps
+   *  correcting itself is a view you can't steer. */
+  const fitSignature = `${Math.round(neededW)}:${Math.round(cw)}`;
+  useLayoutEffect(() => {
+    if (!cw || !neededW) return;
+    if (fittedRef.current === fitSignature) return;
+    fittedRef.current = fitSignature;
+    if (zoomedByHand.current) return;
+    setScale(Math.min(1, Math.max(MIN_SCALE, cw / neededW)));
+    setPan({ x: 0, y: 0 });
+  }, [cw, neededW, fitSignature]);
+
   const place = (n: FlowNode) => {
     const off = offsets[n.id];
     return {
@@ -350,6 +384,7 @@ export function FlowCanvas({
   const zoomAt = (next: number, clientX: number, clientY: number) => {
     const box = canvasRef.current?.getBoundingClientRect();
     if (!box) return;
+    zoomedByHand.current = true;
     const clamped = Math.min(Math.max(next, MIN_SCALE), MAX_SCALE);
     const x = clientX - box.left;
     const y = clientY - box.top;
