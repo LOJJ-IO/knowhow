@@ -6,6 +6,7 @@ import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
 import { GoogleG } from "@/components/ui/icons";
+import { PersonAvatar } from "@/components/identity/person-avatar";
 import { FooterStubLink } from "@/components/landing/footer-stub-link";
 import {
   Tooltip,
@@ -26,17 +27,16 @@ import {
  *  linked personal addresses, and the tree for forgetting them. Keyed to a
  *  device, never to a person. */
 
-/** Initial-circle tints. Google gives us no profile picture (`/auth/me`
- *  returns a name and an email only), so a row's avatar is the initial on a
- *  tint picked deterministically from the email — same person, same colour
- *  every visit. PLACEHOLDER palette. */
-const AVATAR_TINTS = ["#2F6F4E", "#8E3B8E", "#2F6F8E", "#8E5A2F", "#4A3F8E"];
-
-function avatarTint(email: string) {
-  let hash = 0;
-  for (const ch of email) hash = (hash * 31 + ch.charCodeAt(0)) % 100003;
-  return AVATAR_TINTS[hash % AVATAR_TINTS.length];
-}
+/** Rows wear the app's own generated avatar (`PersonAvatar` — the fluid orb,
+ *  seeded from the address), not the initial-on-a-tint circles this screen
+ *  used to draw (user 2026-09-22). Google gives us no profile picture, so the
+ *  avatar is generated either way; the point is that it is the **same**
+ *  generated avatar on both sides of sign-in, so an account you recognise in
+ *  the picker is the one you recognise in the app.
+ *
+ *  Seeded by address, never by the organization's name: an org row shows the
+ *  person who signs in with it.
+ */
 
 /** Black chip beside the org name, saying which kind of account this row
  *  signs in with. The address itself lives in the tooltip, so the row stays
@@ -66,7 +66,11 @@ function AccountBadge({
       </TooltipTrigger>
       {/* Portaled to <body>, so it inherits nothing from the picker: the
           font has to be named here or it falls back to the browser's sans. */}
-      <TooltipContent side="bottom" sideOffset={6} className={satoshi.className}>
+      <TooltipContent
+        side="bottom"
+        sideOffset={6}
+        className={satoshi.className}
+      >
         {emails.map((email) => (
           <span key={email} className="block">
             {email}
@@ -96,7 +100,6 @@ type RemovableAccount = {
   title: string;
   subtitle: string;
   tintEmail: string;
-  avatarLetter: string;
   children: RemovableChild[];
 };
 
@@ -115,7 +118,6 @@ function removableAccounts(organizations: RememberedOrg[]): RemovableAccount[] {
     title: org.organization_name,
     subtitle: org.email,
     tintEmail: org.email,
-    avatarLetter: org.organization_name.charAt(0).toUpperCase(),
     children: org.linked_personal_emails.map((email) => ({
       key: `member:${org.member_id}:personal:${email}`,
       email,
@@ -179,7 +181,9 @@ function RemoveAccountsScreen({
     setRemoving(true);
     const memberIds = [
       ...new Set(
-        accounts.filter((row) => isSelected(row.key)).map((row) => row.memberId),
+        accounts
+          .filter((row) => isSelected(row.key))
+          .map((row) => row.memberId),
       ),
     ];
     const emails = [
@@ -252,13 +256,11 @@ function RemoveAccountsScreen({
                 )}
               >
                 {tick(checked, () => toggleParent(row), `Remove ${row.title}`)}
-                <span
-                  aria-hidden
-                  style={{ backgroundColor: avatarTint(row.tintEmail) }}
-                  className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
-                >
-                  {row.avatarLetter}
-                </span>
+                <PersonAvatar
+                  identity={row.tintEmail}
+                  label={row.title}
+                  size={40}
+                />
                 <span className="min-w-0">
                   <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
                     {row.title}
@@ -314,13 +316,11 @@ function RemoveAccountsScreen({
                             () => toggleChild(child.key),
                             `Remove ${child.title}`,
                           )}
-                          <span
-                            aria-hidden
-                            style={{ backgroundColor: avatarTint(child.email) }}
-                            className="flex size-7 shrink-0 items-center justify-center rounded-full text-[0.8rem] font-bold text-white"
-                          >
-                            {child.email.charAt(0).toUpperCase()}
-                          </span>
+                          <PersonAvatar
+                            identity={child.email}
+                            label={child.title}
+                            size={28}
+                          />
                           <span className="min-w-0">
                             <span className="block truncate text-[0.9rem] font-bold text-[#1c1917]">
                               {child.title}
@@ -394,7 +394,9 @@ export function AccountPicker({
       >
         Pick up where you left off or continue as another user.
       </p>
-      <ul className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-0.5 p-0`}>
+      <ul
+        className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-0.5 p-0`}
+      >
         {organizations.map((row) => (
           <li
             key={row.member_id}
@@ -407,13 +409,11 @@ export function AccountPicker({
               onClick={() => continueWithGoogle(null, row.email)}
               className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]"
             >
-              <span
-                aria-hidden
-                style={{ backgroundColor: avatarTint(row.email) }}
-                className="flex size-10 shrink-0 items-center justify-center rounded-full text-[1rem] font-bold text-white"
-              >
-                {row.organization_name.charAt(0).toUpperCase()}
-              </span>
+              <PersonAvatar
+                identity={row.email}
+                label={row.organization_name}
+                size={40}
+              />
               <span className="min-w-0 leading-tight">
                 <span className="block truncate text-[1rem] font-bold text-[#1c1917]">
                   {row.organization_name}
@@ -445,7 +445,9 @@ export function AccountPicker({
       </ul>
       {/* Half width, centred (user 2026-09-20) — a full-width rule made the
           modal read as two stacked panels. */}
-      <div className={`${satoshi.className} mx-auto mt-3 flex w-1/2 items-center gap-3`}>
+      <div
+        className={`${satoshi.className} mx-auto mt-3 flex w-1/2 items-center gap-3`}
+      >
         <span className="h-px flex-1 bg-[#d9d9de]" />
         <span className="text-[0.75rem] text-[#1c1917]/70">OR</span>
         <span className="h-px flex-1 bg-[#d9d9de]" />
