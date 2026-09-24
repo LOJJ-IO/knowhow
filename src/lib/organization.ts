@@ -16,7 +16,15 @@ export type OrganizationChrome = {
   name: string;
   domain: string | null;
   viewer: { name: string; email: string; isOwner: boolean };
+  /** Unread alerts for the topbar bell. **Mocked** — `/auth/me` carries no
+   *  notification count and there is no notifications store in the tree yet
+   *  (CLAUDE.md invariant 2: the seam stays simulated here until it is real).
+   *  When a real source lands, this field is where it plugs in. */
+  unreadNotifications: number;
 };
+
+/** Stands in for the unread count until notifications exist. */
+const MOCK_UNREAD_NOTIFICATIONS = 0;
 
 /** What the chrome needs, out of what `/auth/me` already returned. No second
  *  request: the session response carries all of it. */
@@ -32,6 +40,7 @@ export function chromeFromMe(me: Me): OrganizationChrome {
       email: me.email,
       isOwner: me.is_owner,
     },
+    unreadNotifications: MOCK_UNREAD_NOTIFICATIONS,
   };
 }
 

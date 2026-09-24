@@ -9,6 +9,31 @@ related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landin
 
 # Current Context
 
+## Topbar bell is a real control now (2026-09-23)
+
+The topbar's "not wired yet" alerts button (`Button variant="secondary"` + `AppIcon name="bell"`) was
+replaced by [`src/components/app/notification-bell.tsx`](../../src/components/app/notification-bell.tsx)
+— a component the user brought in. It swings the bell from its hanging point when the count goes up
+(spring, low damping, impulse scaled by how many arrived at once), drags a clapper behind it off the
+swing's own velocity, and rolls the badge digits in per-place columns with a velocity-driven fade mask.
+Reduced motion drops the ring, the roll and the badge's layout animation.
+
+Three things changed on the way in:
+
+- Imports retargeted from `motion/react` to `framer-motion` (already a dependency, same API) and the
+  `asChild` / `@radix-ui/react-slot` path removed, so nothing new was installed. See [[Lessons-Learned]].
+- `focus-visible:ring-ring` named a token this repo doesn't define, so it emitted nothing and the button
+  had no focus state. Swapped for the app's own `outline-[#1c1917]` treatment. See [[Lessons-Learned]].
+- Its default press is `active:scale-90`; the topbar overrides that to `active:translate-y-px`, the 1px
+  nudge every other app control uses after the click-swallowing bug (see `button.tsx` and
+  [[Lessons-Learned]]).
+
+It kept the tooltip and `size={40}`, so the row's rhythm is unchanged. **The count is mocked at 0**:
+`OrganizationChrome.unreadNotifications` in [`src/lib/organization.ts`](../../src/lib/organization.ts) is
+a constant, because `/auth/me` carries no notification count and there is no notifications store in the
+tree. That field is the seam a real source plugs into. Until then the badge never renders and the bell
+never rings — set the constant to a non-zero number to see either.
+
 ## Repo root cleanup (2026-09-20)
 Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Root [`README.md`](../../README.md) replaced the create-next-app boilerplate with a short Knohow + frontend/backend run guide (backend section split into safer copy-paste blocks 2026-09-20 after a `cd`→`d` paste failure at repo root).
 

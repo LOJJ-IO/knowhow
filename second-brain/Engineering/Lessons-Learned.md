@@ -492,3 +492,20 @@ the browser's own page-zoom ran alongside the app's. Fixed with a real `addEvent
 passive: false })` in a `useEffect`, closing over a ref rather than the handler itself so it doesn't need
 rebinding on every render. Any gesture meant to *replace* a native browser behaviour (pinch-zoom,
 some scroll-locking) needs the non-passive listener, not the React prop.
+
+## A Tailwind class naming a token this repo doesn't have emits nothing (2026-09-23)
+A component dropped in from elsewhere focused with `focus-visible:ring-2 focus-visible:ring-ring`. Knohow
+defines no `--ring` / `--color-ring` in `globals.css`, so Tailwind v4 generated no rule for `ring-ring` —
+no error, no warning, nothing in the build. Paired with the `outline-none` the same class list carried,
+the control ended up with *no visible focus state at all*. Rewrote it to the app's own
+`focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]`. Generally: a
+missing design token in Tailwind v4 fails silently, so any pasted-in component's classes have to be read
+against this repo's token set, and `outline-none` plus a dead ring class is the failure that actually
+hurts.
+
+## `motion/react` and `framer-motion` are the same library under two package names (2026-09-23)
+Components copied off the web now import from `motion/react` (the renamed package). This repo has
+`framer-motion@13`, which exports the identical surface — `animate`, `useMotionValue`, `useVelocity`,
+`useSpring`, `useTransform`, `AnimatePresence`, `useReducedMotion`, `AnimationPlaybackControls`,
+`MotionValue`. Retarget the import rather than installing `motion` beside it; two motion runtimes in one
+tree means two copies of the animation loop and `AnimatePresence` contexts that don't see each other.

@@ -7,8 +7,8 @@ import { usePathname } from "next/navigation";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
-import { AppIcon } from "@/components/app/icon";
 import { NewCreateFan } from "@/components/app/new-create-fan";
+import { NotificationBell } from "@/components/app/notification-bell";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { ProfileMenu } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
@@ -34,7 +34,9 @@ import { useHydrated } from "@/lib/use-hydrated";
  *  The reference's grid icon between search and the bell was left out at the
  *  user's request.
  *
- *  Alerts is not wired yet. New creates Doc · Sheet · Slide · Upload when built
+ *  Alerts is the [[NotificationBell]] — it rings and rolls its badge when the
+ *  count climbs. The count itself is still mocked at 0 in `chromeFromMe`.
+ *  New creates Doc · Sheet · Slide · Upload when built
  *  ([[FEAT-doc-creation-auto-share]]); the control already shows that set as a
  *  fanned mark in front of the label (user 2026-09-22). */
 export function Topbar({
@@ -125,18 +127,26 @@ export function Topbar({
             </kbd>
           </Link>
 
+          {/* The bell is its own control rather than an icon Button: it owns
+              the swing it does when the count goes up and the badge that rolls
+              with it. `size={40}` keeps the 2.5rem the icon Button held in this
+              row. Its default press is a `scale-90`, swapped here for the 1px
+              nudge the rest of the app's controls use — a control that shrinks
+              under the pointer can finish its press outside its own box and
+              swallow the click (see the note in `button.tsx`).
+
+              Count is mocked at 0 for now (`chromeFromMe`), so the badge is
+              hidden until a real notifications source exists. */}
           <Tooltip>
             <TooltipTrigger
               render={
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  aria-label="Notifications"
+                <NotificationBell
+                  count={chrome.unreadNotifications}
+                  size={40}
+                  className="cursor-pointer transition-[background-color,translate] duration-150 active:translate-y-px active:scale-100"
                 />
               }
-            >
-              <AppIcon name="bell" size={22} />
-            </TooltipTrigger>
+            />
             <TooltipContent side="bottom" sideOffset={8}>
               Notifications
             </TooltipContent>
