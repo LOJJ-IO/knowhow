@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/frontend, status/in-progress]
 created: 2026-09-21
-updated: 2026-09-22
+updated: 2026-09-23
 related: ["[[Current-Context]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-org-chart-builder]]", "[[Lessons-Learned]]", "[[0001-mocked-data-first-prototype]]"]
 ---
 <!-- Filename convention: Product/Features/FEAT-short-title.md -->
@@ -154,6 +154,13 @@ top-level paths and the landing at `/` is untouched:
   other Workspace types stay out. Not built yet — topbar New is still a dead control; when wired it
   opens this set (same auto-share / auto-file idea as [[FEAT-doc-creation-auto-share]], plus upload
   into the team/Company folder).
+
+### Workspace empty state gets its action (2026-09-23)
+`/workspace`'s empty state now carries a **primary button: "Connect your Google Drive"** (user copy;
+"Google Drive" written the way the landing writes "Google Workspace"). `EmptyScreen` gained an optional
+`action` prop that it forwards to `EmptyState`'s existing `action` slot, so any screen can pass its one
+action. The button is **not wired to anything yet** — no handler, no backend call; `src/` stays mocked
+per [[0001-mocked-data-first-prototype]].
 
 ### Superseded: org chart + oversight merged (2026-09-22)
 `/org-chart` and `/oversight` no longer exist as screens. Both were folded into `/dashboard` —

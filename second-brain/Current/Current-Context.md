@@ -3,8 +3,7 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-22
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]"]
+updated: 2026-09-23
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
 ---
 
@@ -44,214 +43,256 @@ Contractors' work is company-owned by being **created as the org through Knohow*
 - **Signed-in screen** — nothing shows after Continue with Google returns (user designs it) — [[0008-continue-with-google-via-backend]].
 - **Personal-OAuth callback fix** — same shared-callback bug as signup ([[Known-Issues]]).
 
-## Signed-in app shell built (2026-09-21)
-The first logged-in UI exists: route group **`src/app/(app)/`** with a persistent sidebar and one route
-per landing-deck feature — `/workspace`, `/oversight`, `/ownership`, `/sharing`, `/org-chart`,
-`/offboarding`, `/search`. Decisions the user made by picking: **sidebar + 7 routes** (ElevenLabs /
-banking references), **quiet neutral** look (not the soft-card Elera/Hamed look), **mocked fixtures in
-`src/`**, and **shell + nav only this pass, then screen by screen**. Empty states follow the **Sage_v1
-pattern** at the user's request — one canonical `EmptyState` (icon disc, title, one line, optional
-single action) — rebuilt Knohow-native, no Sage code/deps/tokens, so invariant 5 holds. New app-chrome
-tokens in `globals.css` (`--app-sidebar-w`, `--app-border`, `--app-muted`, `--app-active`, `--app-dim`).
-All screen copy is **draft** (written from each feature's Goal line); the user owns final copy.
-`next build` prerenders all 7, eslint clean, **not yet opened in a browser**. Nothing links into it yet:
-after `setup_step = done` the founder still lands on the landing page. Full detail in
-[[FEAT-core-app-screens]]; the RSC gotcha it cost is in [[Lessons-Learned]].
+## Signed-in app shell (2026-09-21 → 2026-09-23) — restructured 2026-09-23
 
-**Wired in (2026-09-21, after the user reported clicking an account did nothing):** the landing now
-sends a signed-in member whose setup is finished to `APP_HOME` (`/workspace`, `src/lib/app-nav.ts`), and
-`setup_step === "done"` no longer reopens the setup sheet on its empty branch. Root cause and the full
-chain in [[Known-Issues]]. `/workspace` as the post-setup home is still an **assumption** the user
-hasn't confirmed.
+The wall-of-text version of this section was hard to use as memory, and had gone stale in three places
+(the profile menu, the board, and Manage accounts each got another pass after their entries were
+written). Split into topics below; dates mark when each fact became true, not when the app shell
+started.
 
-**Shell restyled (2026-09-21):** sidebar sized off the **X** reference then cut twice at the user's request
-(17.5rem → 14rem → 12.6rem → **11.34rem**, 3rem rows, 22px icons; brand row is the landing's full lockup at
-1.92rem), layout and type off **Elera** (shared ground with no divider, `--app-ground: #f4f2ee`,
-sentence-case section labels, pill active row, page name in a new `Topbar` with search moved there from
-the sidebar). Icons are now **Google Material Symbols**, self-hosted and **subsetted to the 7 in use**
-(2KB) and addressed by codepoint — details and the re-fetch caveat in [[FEAT-core-app-screens]].
-Still not opened in a browser.
+### Shell, routes, chrome (2026-09-21)
+Route group **`src/app/(app)/`**, persistent sidebar, one route per landing-deck feature. Decided by the
+user picking: **sidebar + 7 routes** (ElevenLabs / banking references), **quiet neutral** look, **mocked
+fixtures in `src/`** at the time (since replaced, see below), **shell + nav only this pass, then screen
+by screen**. Empty states follow the **Sage_v1 pattern** — one canonical `EmptyState` (icon disc, title,
+one line, optional single action) — rebuilt Knohow-native, no Sage code/deps/tokens (invariant 5). New
+app-chrome tokens in `globals.css`. All screen copy is **draft**.
 
-**Identities + real data (2026-09-21):** teams and people now have **seeded generative SVG identities**
-— [[0015-seeded-generative-identity-system]]. Team icons are abstract geometric compositions from a
-fixed vocabulary; people get gradient fields; the name is **only a seed** (no letters, initials or
-meaning), and the same name always renders the same icon. Visible in the setup teams-naming step (icon
-appears per slot as you type), the "Which teams are you in?" pills, the sidebar's person avatar and the
-`/org-chart` cards. The user chose a **deterministic renderer over an image model** for consistency and
-cost; the image-model prompt they wrote stays an exploration tool, not the product path.
+Wired in after the user reported clicking an account did nothing: a signed-in member whose setup is
+finished lands on `APP_HOME`, not the landing page.
 
-The app also **no longer uses a fixture** — [[0016-app-reads-the-backend-not-fixtures]]. `/auth/me` and
-`/org-chart/{org_id}` are read in the browser (session cookies live on the backend's origin, so a Server
-Component can't see them), fetched once in `AppSessionProvider` and handed down by context; signed-out
-bounces to `/`. `MOCK_ORGANIZATION_ID` is deleted. `/org-chart` is the first screen on real data.
-**Invariant 2 still holds:** nothing in `src/` touches a Google API.
+Sidebar sized off the **X** reference then cut down at the user's request; layout and type off
+**Elera** (shared ground with no divider, `--app-ground: #f4f2ee`, sentence-case section labels, pill
+active row, page name in `Topbar`). Icons were Google Material Symbols, self-hosted and subsetted — see
+"Icons" below for what replaced most of them.
 
-Shell also gained a **sidebar toggle** matching Sage_v1's control: white pill, glyph flips with
-state (`left_panel_close` / `left_panel_open`), tooltip Collapse/Expand. Notifications bell has a
-tooltip too. Descenders were being clipped by `leading-none` under
-`truncate` — fixed on the page title, the org-chart card title and the sidebar section labels.
+### Real data, no fixture (2026-09-21)
+The app reads the backend, not a mock — [[0016-app-reads-the-backend-not-fixtures]]. `/auth/me` and the
+overview endpoint are read in the browser (session cookies live on the backend's origin), fetched once
+in `AppSessionProvider` and handed down by context; signed-out bounces to `/`. Invariant 2 still holds:
+nothing in `src/` touches a Google API.
 
-**Known dev-server wrinkle (2026-09-21):** `/search` 404s on the long-running `next dev` while every
-other app route serves; `next build` lists the route and the file is correct, so it is stale dev state.
-Restart `next dev` if it shows up.
+Teams and people have **seeded generative SVG identities** — [[0015-seeded-generative-identity-system]].
+Team icons are abstract geometric compositions from a fixed vocabulary; the name is only a seed, never
+read for meaning. People's avatars started as gradient fields and are now **fluid orbs** (see "Identity"
+below).
 
-**Dashboard + org chart graph (2026-09-21):** the user reported that onboarding work wasn't reflected
-in the app, then asked that **every onboarding function seed the dashboard**. Done —
-[[0018-dashboard-reflects-onboarding]]. New backend read `GET /organizations/{org_id}/overview`
-(`org_overview`, plus `list_members`) assembles every answer setup collects in one round trip; new
-`/home` screen (now `APP_HOME`, first nav row) shows the org, setup state, owner, Super Admin
-confirmation, teams with their generated icons, everyone including people waiting for approval, linked
-accounts counted as *people* not accounts, join link state and open invitations. `tests/test_org_overview.py`
-covers it (3 tests); backend suite 112 passing. `/org-chart` is now a **graph** — owner on top, teams
-spread beneath on a dotted draggable canvas, from a flowchart component the user supplied
-(`src/components/app/flow-canvas.tsx`, generic).
+### Home (was Dashboard, was /org-chart + /oversight)
+Three renames in sequence, latest wins:
+- **2026-09-21**: `GET /organizations/{org_id}/overview` (`org_overview` + `list_members`) assembles
+  every answer setup collects in one round trip — [[0018-dashboard-reflects-onboarding]].
+  `/org-chart` becomes a **graph**: owner on top, teams spread beneath on a dotted draggable canvas
+  (`flow-canvas.tsx`, generic, from a component the user supplied).
+- **2026-09-22**: `/org-chart` and `/oversight` merge into one screen —
+  [[0019-dashboard-absorbs-chart-and-oversight]]. A caret on each team card enumerates its members
+  inline; a team that changed since the viewer last opened it carries a badge and a pulse up to the
+  owner. Changes read from the **audit log** (`app/activity/changes.py`); attribution to a team is four
+  rules, anything unattributable stays org-wide. `org_members.dashboard_seen_at` (migration
+  `0016_dashboard_seen`) stamps **after** the screen draws, never before.
+- **2026-09-22**: the screen is renamed **Home** (not "Dashboard"): route `/home`, `HomeScreen` in
+  `screens/home-screen.tsx`, `APP_HOME = "/home"`. The backend keeps `dashboard-seen` /
+  `dashboard_seen_at` — renaming those is a migration, not a label.
+- **2026-09-23**: the summary panel (org name, "signed in from…", stat pills) is **gone**. The
+  organization's name moved to the sidebar foot. Home is the chart plus two buttons — see "Home's grid
+  buttons" below.
 
-**Dialogs (2026-09-21):** Settings is a **dialog**, not a route — [[0017-dialogs-over-settings-screens]],
-which also records the dialog taxonomy borrowed from Sage_v1 (one shell; `size` sm/lg/xl; `kind`
-form/confirm; scale+fade entrance off Base UI's data-attributes; always-available safe exit). It writes
-the two settings that actually have endpoints (org name, auto-accept Workspace accounts), both
-owner-only in the backend, and shows the join link read-only.
+**Sizing and fit:** canvas rows no longer stretch to fill the window — the owner/team gap caps at
+`MAX_ROW_GAP` (240px), spare height stays empty. Owner and team cards run 30% bigger than the first pass
+(`OWNER_W` 348, `TEAM_W` 302). Windows (any surface content sits on — the canvas, empty screens, the
+loading placeholder) are `rounded-[32px]`, measured off a user-supplied reference rather than eyeballed.
 
-**Top band + sidebar foot (2026-09-21):** topbar matches the reference — panel toggle, page name, then
-search, alerts, New, and the person's generated avatar. The reference's grid icon was left out per the
-user. **Alerts** still not wired (no notifications). **New** is decided but not built (2026-09-22):
-**Doc · Sheet · Slide · Upload** — [[FEAT-core-app-screens]] / [[FEAT-doc-creation-auto-share]].
-The topbar New control already shows that set as a **fanned icon stack** (white-rimmed squircles,
-user reference) in front of the label instead of a plus — Docs/Sheets/Slides use the Google product
-marks in `public/create/`; Upload is a matching tile. Sidebar foot is the organization's name
-(1.40625rem, and it stays in the collapsed rail at 0.75rem rather than disappearing with the labels —
-which org you are in is the one thing the rail can't say by shape); Help and Settings both live in the
-profile menu (2026-09-22). The chart is a **board** (2026-09-22): drag empty canvas to pan, pinch to zoom
-(a trackpad pinch arrives as ctrl+wheel; two-finger touch is tracked through pointer events), 0.4–2.5×,
-zooming about the point under the fingers. The dots pan and scale with it, and a card drag divides by
-the scale so it still tracks the pointer. Home is the chart alone — no summary panel, no stat pills — plus two
-`secondary` buttons top right (2026-09-22): **Recent updates**, which replays the pulses for the
-**narrowest recent window that holds anything** — last hour, else 6h, 12h, a day, a week (`RECENT_WINDOWS`,
-recomputed on each press because it reads the clock). It reads a **new** `recent_changes` feed on the
-overview — a week of activity regardless of who has seen it — because `changes` is scoped to the viewer
-and `dashboard_seen_at` is stamped on every visit, so from the second visit on there was nothing left
-to pulse and the chart looked broken. One pass: the icon shows Pause while it travels
-and returns to Play when the last pulse lands, and the **icon alone** goes `--app-play` green
-(`#15803d`) for exactly that long. `pulseKey` on `FlowCanvas` remounts every pulse, stagger and all,
-and **Manage teams**, whose team marks overlap into a stack and which is **disabled on purpose** until
-the screen behind it is specified. Both sit **on** the grid (absolute, top right of a wrapper around
-`FlowCanvas` — inside the canvas they would scroll away with the chart) and rest at `--app-active`, the
-fill `secondary` normally reaches on hover, because `--app-muted` disappears against the dots. Hover is
-a 1.02 lift instead of a colour change. Manage accounts is a **tree** like the Log In picker's remove
-screen: linked personal addresses branch under their org, joined by a trunk, because forgetting an org
-row and hiding a linked address are different acts and the nesting is what says so.
+**The chart is a board (2026-09-22–23).** Drag empty canvas to pan; pinch to zoom, 0.4×–2.5×
+(`MIN_SCALE`/`MAX_SCALE` in `flow-canvas.tsx`), about the point under the fingers. A trackpad pinch
+arrives as `ctrl+wheel`; because React's `onWheel` is passive it can't call `preventDefault`, so the
+**whole browser window zoomed along with the board** until the listener was rebound natively
+(`addEventListener("wheel", …, { passive: false })`) — see Lessons-Learned. Two-finger touch is tracked
+through pointer events. The board also **fits itself** to the widest row's natural width when there are
+more teams than fit on screen, down to the 0.4× floor, past which panning is the answer instead of
+unreadable cards; it fits once per shape (row requirement × canvas width) and a manual zoom, once taken,
+overrides the auto-fit permanently — a view that keeps correcting itself can't be steered. Card dragging
+divides pointer deltas by the current scale so a card still tracks the cursor at any zoom.
 
-**Dashboard absorbs the chart and oversight (2026-09-22):** `/org-chart` and `/oversight` are **gone** —
-one screen now, [[0019-dashboard-absorbs-chart-and-oversight]]. Owner on top, teams beneath; a caret on
-each team card enumerates its members inline (the canvas re-measures, so connectors re-route on their
-own); a team that changed since **you** last opened the dashboard carries a count badge and a
-highlighted border; its connector sends a **pulse** up to the owner. Changes are read from the
-**audit log** (`app/activity/changes.py`), so any action type counts without being enumerated;
-attribution to a team is four rules, and anything unattributable stays visible as an org-wide change.
-`org_members.dashboard_seen_at` (migration `0016_dashboard_seen`) is stamped **after** the dashboard is
-drawn, never before. Pulses fire on **real events only** — quiet is correct when nothing happened, which
-is everything today. Backend suite **116 passing**. Canvas rows no longer stretch to the full window
-height — the gap between owner and teams caps at `MAX_ROW_GAP` (240px in `FlowCanvas`), so the tree
-sits near the top the way the user positioned it by hand, and spare height is left empty. Both cards
-run **30% bigger** than the first pass (`OWNER_W` 348, `TEAM_W` 302, padding/avatar/type scaled with
-them), so the chart stays one scale. The sidebar toggle keeps **Sage's codicon pair**
-(`layout-sidebar-left` / `-off`): lucide's `panel-left` pair was tried so the topbar would match the
-sidebar's icon set and rejected — this control is Sage's, and its two states have to differ by a whole
-filled pane, not an arrow. The bell beside it is lucide (Sage has no equivalent). The toggle is
-otherwise the same control as the topbar's
-Notifications button — grey disc, 40px, 20px glyph, `--app-active` on hover — with the white ringed
-pill it used to sit in removed. The screen is **Home** now, not "Dashboard" (user
-2026-09-22): route `/home`, label "Home", `HomeScreen` in `screens/home-screen.tsx`, `APP_HOME =
-"/home"`. The backend keeps its `dashboard-seen` endpoint and `org_members.dashboard_seen_at` column —
-renaming those is a migration, not a label. Its nav icon is codicon **home**, whose doorway fills in while the sidebar row is hovered
-(`HomeMorph` — the whole glyph pop-swaps on the folder's 600/25 spring, colour unchanged). Every nav row's icon now morphs on hover, one
-pattern in `nav-morph.tsx` (`NAV_MORPH`, `AnimatePresence` `popLayout`, scale 0.5↔1, spring 600/25,
-supplied by the user): Home's house lights its doorway, Workspace's folder opens, Ownership's shield
-gains its check, Sharing's link becomes a send, Offboarding's user gains an X. No row changes
-colour: red on Offboarding was tried and taken back out (user 2026-09-22), so the glyph carries the
-meaning on its own.
-Resting icons are lucide so the still icon is the same drawing that animates (`LUCIDE` in `icon.tsx`),
-at `NAV_STROKE` 1.75 to sit with the 400-weight labels. Rows are `px-4` with a `gap-3`, section labels
-aligned to the same left edge, and the sidebar's scroll area is `.app-scroll-plain` so macOS's always-on
-scrollbar stops painting a divider down its right edge. Windows (the surfaces content sits on: the summary panel, the dotted canvas, empty screens, the loading
-placeholder) are **`rounded-[32px]`**, measured off a reference the user supplied rather than eyeballed
-— its corner arc traces to ~55px in the image and its type sizes put that image at ~1.6×. Cards *on* a
-window keep their own 14px. Every app button now carries the landing's press
-feedback (`active:scale-95`, 150ms). Settings turns its gear 180° on hover (spring 400/25) and Help
-swaps `CircleHelp` for `MessageCircleQuestion`, both from the same family.
+**Recent updates & badges (2026-09-22).** `changesByTeam` (badges) empties every time the viewer opens
+Home, because `dashboard_seen_at` stamps on every visit — fine for a badge, useless for a replay. A
+second feed, `recent_changes` (last 7 days regardless of who has seen it), backs the chart's pulses and
+the **New** chip on a card's name row (quiet grey, `rounded-[5px]`, matched to a user reference; sits
+next to the label, not floated to the card's edge). "Recent updates" (top-right, on-canvas) plays the
+**narrowest window that holds anything** — 1h → 6h → 12h → day → week → whole history
+(`RECENT_WINDOWS`), recomputed on each press since it reads the clock. One pass: `pulseKey` remounts
+every `EdgePulse`, the icon shows Pause while it travels and returns to Play when the last one lands
+(driven by the run, not hover — an earlier version tied it to hover and it never left Play), and the
+**icon only** turns `--app-play` (`#15803d`) for exactly that duration. Pulse dots are ink (`#1c1917`),
+not `--app-change` blue — blue read as a status colour on the dotted grey canvas rather than something
+moving.
 
-**The profile chip opens a menu (2026-09-22):** `profile-menu.tsx`, a Base UI `Menu` anchored under the
-topbar chip and aligned to its right edge so it opens leftward. It holds who you are (orb, name, email
-— not a row, there is nothing to switch to), **Settings** (moved out of the sidebar, taking its gear
-turn with it), **Help** (a `Menu.LinkItem` on a Next `Link`, since it is a route — still in the sidebar
-too) and **Log out**, whose arrow steps through its doorway on hover (`LogOutIcon` — only the arrow
-moves, so the icon is drawn from lucide's geometry rather than used as a component) and whose copy
-becomes "Log out of all accounts" only when more than one account is remembered. That count includes
-linked personal addresses, because they have rows in this list even though the backend carries them on
-an org row. The account block is a **submenu trigger**: it opens "Switch accounts"
-to its left, listing the same `GET /auth/remembered-accounts` rows the Log In picker uses, a tick on the
-current one, then "Add another account" (`continueWithGoogle`) and "Manage accounts"
-(`manage-accounts-dialog.tsx` — the Log In picker's remove screen brought inside: **tick, then forget
-once**, as a tree where linked personal addresses branch under their org on a continuous trunk. Ticking
-an org takes its addresses with it; a child can be kept on its own; the signed-in row can't be ticked.
-`DELETE /auth/remembered-accounts`, device-local — the member, the org and the linked identity are
-untouched, and the row returns on the next sign-in). Its rows, the submenu caret, the team cards' carets
-and the add/manage icons all carry the family's hover gesture (`Swap`, `CaretIcon` in `nav-morph.tsx`:
-plus→person-plus, people→cog, and carets that lean the way they point). **Switching is now instant** (user 2026-09-22, chosen over keeping the Google round trip): `POST
-/auth/switch` issues session cookies for any account **remembered on this device** — the device cookie
-is the credential, the endpoint refuses anything not in this browser's list, and a linked personal
-address (which has no member row) still goes through Google. "Add another account" is the **identity
-linking** flow (`GET /auth/link-account/start`), not signup, and that callback now returns to `/home`
-instead of the landing. Two dead ends were closed (2026-09-22): with **no session** the route redirects
-to sign-in rather than answering 401 to a top-level navigation, and an address with **no member row**
-(an ordinary personal Gmail) is attached to the person with `attach_pending_personal_email` rather than
-404ing — the mirror of Log In's "yes, I have an organization account". It is **identity only**: no Drive
-grant, because credentials hang off member rows and a linked address has none. Scanning a linked
-personal account is a separate step, still to be specced — signup was asking a personal address whether its company uses Workspace and
-stranding the person on the marketing page. Rows carry the Log In picker's Org / Personal chips (`POST /auth/logout`, then `/`; the backend keeps the device cookie so the
-picker still offers the account). The reference had teams, themes, plans and a desktop app; those are
-left out because Knohow has none of them.
+### Home's grid buttons (2026-09-22–23)
+Two `secondary`-variant buttons, absolute top-right of a wrapper around `FlowCanvas` (inside the canvas
+they'd scroll away with the chart): **Recent updates** (above) and **Manage teams** (team marks
+overlapped into a stack, **disabled on purpose** — the screen behind it isn't specced).
 
-**Overlay mechanics and layering (2026-09-22):** one motion for every overlay — `.app-modal` in
-globals.css, the Transitions.dev curve the user supplied: scale 0.96 → 1 over **250ms** in,
-**150ms** out, `cubic-bezier(0.22, 1, 0.36, 1)`, off under `prefers-reduced-motion`. Driven by Base UI's
-`data-starting-style` / `data-ending-style`, not an `.is-open` class and a timer. The dialog is centred
-by a wrapper rather than a translate, because a scale and a translate on one element fight over
-`transform`. Layers: **menus 450 · dialogs 500 · tooltips 600**, and the z-index goes on the
-**positioner**, never the popup — that was the "z index is all wrong" bug: a portalled popup whose
-positioner has no z-index sits in the body's default layer, where a canvas card painted over it.
+**Noted for Manage Teams v2 (2026-09-23, not built, not designed):** sub-teams — a team nested inside
+another team, not just the flat owner→teams the chart currently draws. Nothing decided yet: whether a
+sub-team is its own row on the chart or only visible from within Manage Teams, whether it can have its
+own lead distinct from the parent team's, whether membership in a sub-team implies membership in the
+parent, or how deep nesting is allowed to go. Recorded here so it isn't lost before Manage Teams itself
+is specced; needs its own pass with the user before any of it is built.
 
-**Buttons have a taxonomy (2026-09-22):** [[0020-button-taxonomy]] — one `Button`
-(`src/components/app/button.tsx`) on two axes, the same shape as the dialog system's: `variant`
+**Noted (2026-09-23, not built):** a `-` control after each team box on the chart itself, for removing
+a team without going into Manage Teams. Undecided: whether it's inline on the card (like the caret) or
+only appears on hover, what happens to a team's members and its sub-teams (see above) when it's
+removed, and whether removal needs a confirm dialog — `ConfirmDialog` already exists for exactly this
+shape of decision.
+
+**Noted (2026-09-23, not built):** a **Leader badge** in the team card's caret dropdown (the inline
+member list). Today the lead is a plain text label — `{member.id === leaderId ? "Lead" : null}` in
+`TeamDetail`, `home-screen.tsx` — not a badge. Undecided: whether it reuses `ChangeBadge`'s chip shape
+or something new, and its colour/placement relative to the member's name.
+
+Both rest at
+`--app-active` rather than `secondary`'s default `--app-muted`, because the lighter fill disappeared
+against the dotted canvas; hover is a 1.02 scale lift instead of a colour change, since the fill has
+nowhere lighter to go.
+
+### Dialogs, buttons, overlays (2026-09-21–22)
+Settings is a **dialog**, not a route — [[0017-dialogs-over-settings-screens]], which records the
+taxonomy borrowed from Sage_v1 (one shell; `size` sm/lg/xl; `kind` form/confirm; scale+fade entrance;
+always-available safe exit). **Buttons have the matching taxonomy** — [[0020-button-taxonomy]]: one
+`Button` (`src/components/app/button.tsx`) on `variant`
 (`default`/`outline`/`secondary`/`ghost`/`destructive`/`link`) and `size`
-(`default`/`xs`/`sm`/`lg` plus the `icon-*` mirror), taken from Sage_v1's taxonomy and rendered on
-Knohow's own ink and rounding. Adopted by the dialog footers, the settings dialog, the topbar's New and
-notifications, the sidebar toggle and the team caret. `FormDialog` now exists beside `ConfirmDialog`, so
-both are compositions of `AppDialog`.
+(`default`/`xs`/`sm`/`lg`/`icon-*`), Sage's axis names on Knohow's own ink and rounding. `FormDialog`
+now exists beside `ConfirmDialog`, both compositions of `AppDialog`.
 
-**Collapse is a rail, and the sidebar no longer resizes (2026-09-22):** the toggle takes the sidebar to
-`RAIL_W` 64px instead of 0, and the drag-to-resize handle is **gone** — two widths, 208 and 64, no
-stored preference. In the rail the section groups lose their `mt-6` (there are no captions left for it
-to separate, and it read as a hole in the column) and the nav starts `pt-2` under the mark — icons only, centred, labels moved into right-side tooltips, section captions dropped, and
-the lockup reduced to the bare `LogoMark` at 18px (the reference puts its mark at ~0.29 of the rail's
-width; measured 37px of 129px). One `Row` component renders every entry in both states. The sidebar's
-foot is **empty**: the person's avatar, their name and the organization were all removed from it, and
-the person now lives only in the topbar's white profile chip (36px orb plus first name). The sidebar no
-longer reads the session at all. Home's topbar title is a **rotating greeting** (playful, time-of-day,
-weekday, season, short UI lines, favorites weighted), not the screen's name — every line includes the
-person's first name in a way that still reads naturally. **Fresh on every page load / refresh**, and
-again after **10 minutes idle** (pointer/keyboard); avoids repeating the line just shown. From the
-**browser's** clock, and therefore only after hydration. Rainy/cold/sunny
-weather lines wait on a real weather signal. Person avatars are **fluid orbs** now (`FluidOrb`, a WebGL
-shader the user supplied): one colour per identity from `personColor`, which reuses the old gradient's
-seed so nobody's colour changed. The gradient it replaced is still rendered underneath as the fallback
-and fades out once the orb reports it is painted — an orb holds a live WebGL context, a page gets ~16,
-so past a budget of 10 the avatar is simply the gradient — `AppIcon` now resolves a
-small inlined `CODICONS` set as well as the Material Symbols subset, so a route's icon can come from
-either set by name.
+**Overlay mechanics (2026-09-22):** `.app-modal` in globals.css is the Transitions.dev curve the user
+supplied — scale 0.96→1, 250ms in / 150ms out, `cubic-bezier(0.22, 1, 0.36, 1)`, off under
+`prefers-reduced-motion` — driven by Base UI's `data-starting-style`/`data-ending-style`, used by every
+dialog and menu. The dialog is centred by a wrapper, not a translate, because scale and translate on one
+element fight over the same `transform` property. Layers: **menus 450 · dialogs 500 · tooltips 600**,
+z-index on the **positioner**, never the popup (a positioner with no z-index lands in the body's default
+layer regardless of its child's).
+
+**Press feedback (2026-09-22, revised 2026-09-23).** Every app control first got the landing's
+`active:scale-95`. That turned out to **intermittently swallow clicks**: a `click` only fires when
+pointerdown and pointerup share a target, and a button shrinking under the pointer can finish a press
+outside its own (now smaller) box — worse on small icon buttons. All app buttons and the sidebar/topbar
+rows now press with `active:translate-y-px` (matching Sage's own buttons) instead of a scale, which
+keeps the hit area under the finger. See Lessons-Learned.
+
+**Manage accounts dialog (2026-09-22, redesigned 2026-09-23):** matches the Log In picker's remove
+screen exactly rather than approximating it — `size="sm"` (was `lg`; the login modal is 420px, and a
+wide/short box read as a different kind of surface), `28px` corners to match the login modal's computed
+radius, **tick-then-forget-once** (was one Forget button per row — removing three accounts meant three
+confirmations of one decision), rows with **no outline/card**, just a `--app-active` fill when picked
+and `--app-muted` on hover (a border per row fought the branch lines, the only structure that means
+anything here). Linked personal addresses branch under their org on a continuous trunk — org rows are
+**forgotten**, linked addresses are only **hidden** (no row of their own to forget).
+
+### Icons and micro-interactions (2026-09-22)
+`AppIcon` resolves a name against three sets in turn — `APP_ICONS` (subsetted Material Symbols),
+`CODICONS` (inlined VS Code paths), `LUCIDE` — so `NAV_ICONS` stays a flat route→name map. The sidebar
+toggle kept **Sage's codicon pair** (`layout-sidebar-left`/`-off`) after a lucide `panel-left` pair was
+tried (to match the sidebar's own icon set) and rejected — this control is Sage's, and its two states
+must differ by a whole filled pane, not an arrow (Material's `left_panel_close`/`-open` failed the same
+test first). The bell beside it is lucide, since Sage has no equivalent.
+
+Every nav row's icon morphs on hover, one pattern in `nav-morph.tsx` (`NAV_MORPH`, `AnimatePresence`
+`popLayout`, scale 0.5↔1, spring 600/25, pattern supplied by the user): Home's house lights its doorway,
+Workspace's folder opens, Ownership's shield gains its check, Sharing's link becomes a send,
+Offboarding's user gains an X. **No row changes colour** — red on Offboarding was tried and taken back
+out. Settings turns its gear 180° on hover (spring 400/25, travel not swap — a gear's own affordance is
+rotation). Help swaps `CircleHelp` for `MessageCircleQuestion`. The profile menu's own rows carry the
+same family: "Add another account" (plus → person-plus), "Manage accounts" (people → cog), and every
+caret (switch-accounts submenu, team card expand) leans the way it points on hover instead of swapping,
+since a caret has nothing to become.
+
+Resting icons are lucide so the still icon is the same drawing that animates, at `NAV_STROKE` 1.75 to
+sit with 400-weight labels. Rows are `px-4`/`gap-3`; the sidebar's scroll area is `.app-scroll-plain` so
+macOS's always-on scrollbar stops painting a divider down its right edge.
+
+### Sidebar: rail, foot, gutters (2026-09-22–23)
+Collapse is a **rail**, not a disappearance: `RAIL_W` 64px, icons only, centred, labels moved into
+right-side tooltips, section captions dropped, lockup reduced to the bare `LogoMark` at 18px (measured
+off a reference: mark is ~0.29 of the rail's width). One `Row` component renders every nav entry in both
+states. The sidebar **no longer resizes** — the drag handle and stored width are gone; two fixed widths,
+208 and 64, is what visibility toggles between.
+
+The sidebar foot has moved through three states: the person's avatar+name+org (original) → nothing
+(2026-09-22, person moved to the topbar's profile chip) → **the organization's name alone**
+(2026-09-23), 1.40625rem (50% bigger than body text), persisting into the collapsed rail at 0.75rem
+centred — which org you're in is the one thing a 64px rail can't say by shape otherwise. The sidebar no
+longer reads the session at all for its own sake — only for that one name.
+
+**Gutter balance (2026-09-23):** the page's left padding (`AppPage`, was `px-6` then `px-2`) is now
+**zero**. The sidebar column already ends with its own 12px gutter (the space right of a nav pill), so
+any left padding on the page was *added* to that, putting the window further from the pills than the
+pills sit from the sidebar's left edge — the row read as pushed right. With the page's left gutter at
+zero, the window sits exactly 12px from the pills, matching the 12px on their other side; the right
+gutter is `pr-3` to keep the page symmetric. `Topbar` uses the same `pr-3 pl-0` so the panel toggle lines
+up with the window's left edge and the profile chip with its right.
+
+### Topbar & New (2026-09-21–22)
+Topbar matches the reference — panel toggle, page name/greeting, then search, alerts, New, person.
+**Alerts** still not wired. **New** creates Doc · Sheet · Slide · Upload when built
+([[FEAT-doc-creation-auto-share]]); the control already shows that set as a fanned icon stack
+(white-rimmed squircles, Google product marks from `public/create/`, Upload a matching tile) in front of
+the label instead of a plus.
+
+Home's title is a **rotating greeting** (`src/lib/greeting.ts`, `pickGreeting`), not the screen's name:
+playful, time-of-day/weekday/season-aware, short UI lines, every line includes the first name and
+weights toward favourites. Fresh on every load/refresh and again after `GREETING_IDLE_MS` (10 min) of
+idle (pointer/keyboard), avoiding an immediate repeat. Computed from the **browser's** clock, so it only
+resolves after hydration. Weather-flavoured lines wait on a real weather signal — none wired yet.
+
+### Profile menu (2026-09-22, extended through 2026-09-23)
+`profile-menu.tsx`: a Base UI `Menu` anchored under the topbar chip, aligned to its right edge so it
+opens leftward. Holds: the account block (orb, name, email — not a row, nothing to switch to from
+*itself*), **Settings** (moved out of the sidebar, gear turn came with it), **Help** (`Menu.LinkItem` on
+a `Link`, since it's a route — still also in the sidebar), and **Log out** ("…of all accounts" only when
+more than one account is remembered, counting linked personal addresses even though the backend carries
+them on an org row).
+
+The account block is a **submenu trigger** opening "Switch accounts" to its left. Its list **branches**
+like the Log In picker and Manage accounts do (fixed 2026-09-23 — it was flat, "You forgot the branching
+look"): linked personal addresses hang under their organization's row on a continuous trunk, at a
+smaller scale (28px orb) so the nesting reads without needing the line. "Add another account" and
+"Manage accounts" sit below the tree.
+
+**Switching is instant (2026-09-22):** `POST /auth/switch` issues session cookies for any account
+**remembered on this device** — the device cookie is the credential, the endpoint refuses anything not
+in this browser's list, and a linked personal address (no member row) still goes through Google.
+"Add another account" is **identity linking** (`GET /auth/link-account/start`), not signup, and its
+callback returns to `/home` instead of the landing.
+
+Three dead ends closed in this flow, in order found:
+1. **No session** → the route now redirects to sign-in instead of answering 401 to a top-level
+   navigation (which lands on a raw JSON error page).
+2. **No member row** for the address picked at Google (an ordinary personal Gmail) → attached to the
+   person via `attach_pending_personal_email` instead of 404ing. This is the mirror of Log In's "yes, I
+   have an organization account" — a question worth asking someone arriving cold, not someone already
+   signed in saying "this is also me". **Identity only, deliberately**: no Drive grant, because
+   `OAuthCredential` hangs off member rows and a linked address has none — scanning a linked personal
+   account is a separate step, still to be specced.
+3. **A stale hide** — Manage accounts' "Forget" on a linked address writes a per-device hide (it has no
+   row to delete). Re-linking the same address didn't clear that hide, so a freshly linked account
+   stayed invisible in both the picker and the profile menu. Linking now calls `unhide_email` on the
+   device it was linked from — proving an address at Google is a louder statement than an earlier hide.
+
+### Identity (2026-09-22–23)
+Person avatars are **fluid orbs** (`FluidOrb`, `src/components/identity/fluid-orb.tsx`, a WebGL shader
+the user supplied verbatim): one colour per identity via `personColor`, reusing the old gradient's seed
+so nobody's colour changed in the swap. A context budget (10 live orbs, then the gradient fallback) and
+a fade-out handoff from the gradient once the orb reports it's painted — both detailed in
+Lessons-Learned. **The Log In account picker's avatars were still the old initial-on-a-tint circles**
+until 2026-09-23 ("still use the old type of pictures") — swapped to the same `PersonAvatar` everywhere
+it draws a row (picker, remove screen, remove screen's linked-address children), seeded by **address**
+even on an org row, so the orb recognised in the picker is the one seen in the app afterwards.
+`avatarTint`/`avatarLetter` are gone.
+
+### Workspace (2026-09-23)
+`/workspace`'s empty state has a primary action button, **"Connect your Google Drive"** (user copy).
+`EmptyScreen` gained an optional `action` prop forwarding to `EmptyState`'s existing slot. **Not wired**
+— no handler, no backend call; `src/` stays mocked per [[0001-mocked-data-first-prototype]].
 
 **Next:** user picks which screen to build first.
-
 ## Account picker — Remove link icon (2026-09-21)
 Lucide `UserRoundX` before the picker's "Remove account(s)" link only (`gap-[4px]`, same
 size/color as the label, underline spans icon + text). Second-screen heading unchanged. Remove
@@ -398,10 +439,10 @@ state with a resume route don't exist yet.
 
 ## ⏭ Next + a standing reminder (2026-09-21)
 
-**✅ Done 2026-09-21 (user asked for the full reset).** `knohow` was dropped and rebuilt: 24 tables, at
-`0015_join_links (head)`, **zero rows** — no org, member, team or remembered account. The pre-reset dump is
-in the session scratchpad as `knohow-before-reset.sql`. Next sign-in with Google creates the org fresh and
-runs setup from "What's your organization called?".
+**✅ Done 2026-09-21, repeated 2026-09-23 (user asked for the full reset again).** `knohow` dropped and
+rebuilt: 24 tables, now at `0016_dashboard_seen (head)`, **zero rows** — no org, member, team or
+remembered account. Next sign-in with Google creates the org fresh and runs setup from "What's your
+organization called?".
 
 **Gotcha worth keeping:** `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` run from a shell psql leaves
 `public` owned by the **shell's** role, so Alembic (connecting as `knohow`) fails with *"no schema has been

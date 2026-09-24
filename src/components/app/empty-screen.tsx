@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
 import { NAV_ICONS } from "@/components/app/nav-icons";
@@ -12,10 +14,13 @@ export function EmptyScreen({
   href,
   title,
   description,
+  action,
 }: {
   href: string;
   title: string;
   description: string;
+  /** The screen's one action, if there is something the person can do now. */
+  action?: ReactNode;
 }) {
   return (
     <AppPage>
@@ -24,6 +29,7 @@ export function EmptyScreen({
           icon={NAV_ICONS[href]}
           title={title}
           description={description}
+          action={action}
         />
       </div>
     </AppPage>

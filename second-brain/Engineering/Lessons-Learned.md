@@ -475,3 +475,20 @@ The dialog was centred with `top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2`
 of the screen. Centring moved to a `fixed inset-0 flex items-center justify-center` wrapper
 (`pointer-events-none`, so the backdrop still gets the outside click) and the popup now only ever
 scales. Verified in a browser: 214px of margin either side at 1100px wide.
+
+## `active:scale-95` can silently swallow clicks (2026-09-22)
+Every app button pressed with the landing's `active:scale-95`, and buttons started intermittently not
+firing ("sometimes when i click on buttons they dont fire"). A `click` event only fires when
+`pointerdown` and `pointerup` land on the same target; a button that shrinks under the pointer on press
+can end the gesture outside its own (now smaller) box, especially on small icon buttons near an edge.
+Switched every app control to `active:translate-y-px` — a 1px nudge, which is also what Sage's own
+buttons do — keeping the hit area under the finger for the whole gesture. Worth remembering generally:
+any `active:` transform that shrinks the target is a click-reliability risk, not just a visual choice.
+
+## React's `onWheel` is passive; a trackpad pinch needs a native listener (2026-09-22)
+Zooming the org chart on a trackpad pinch (which arrives as `ctrl+wheel`) also zoomed the whole browser
+window. React binds `onWheel` passively, so a handler attached that way cannot call `preventDefault()` —
+the browser's own page-zoom ran alongside the app's. Fixed with a real `addEventListener("wheel", fn, {
+passive: false })` in a `useEffect`, closing over a ref rather than the handler itself so it doesn't need
+rebinding on every render. Any gesture meant to *replace* a native browser behaviour (pinch-zoom,
+some scroll-locking) needs the non-passive listener, not the React prop.
