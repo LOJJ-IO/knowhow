@@ -1,227 +1,115 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import {
-  SETUP_CHOICE_CLASS,
-  SetupAction,
-  SetupChoices,
-  SetupError,
-  SetupField,
-  SetupHeading,
-  clearSetupFieldError,
-  shakeSetupField,
-} from "./shell";
+import { useEffect, useState } from "react";
 import { OrgNameStep } from "./org-name-step";
 import { TeamsStep } from "./teams-step";
 import { OwnTeamStep } from "./own-team-step";
 import { InviteLinkStep } from "./invite-link-step";
-import { AdminLinkStep } from "./admin-link-step";
+import { InviteOwnerStep } from "./invite-owner-step";
+import { ConnectWorkspaceStep } from "./connect-workspace-step";
 import type { SetupTeam } from "./types";
 import {
   backendError,
   backendFetch,
   recordSetupStep,
-  startAdminProof,
   type Me,
 } from "@/lib/backend";
 
 type SetupStep =
-  | "owner"
-  | "knowOwnerEmail"
-  | "ownerEmail"
-  | "superAdmin"
   | "orgName"
   | "teams"
   | "ownTeam"
   | "inviteLink"
-  | "adminCheck"
+  | "inviteOwner"
+  | "connectWorkspace"
   | "done";
 
-/** First sign-in for a new organization: who owns it, what it's called, its
- *  teams, and the link that brings everyone else in.
- *
- *  This file is the order of the screens and nothing else — each screen owns
- *  its own behaviour, and all of them compose `./shell`. */
-export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
-  // Resume where they stopped; "owner" only when setup hasn't started.
-  const [step, setStep] = useState<SetupStep>(
-    (me.setup_step as SetupStep | null) ?? "owner",
-  );
-  const [isOwner, setIsOwner] = useState(true);
-  const [ownerEmail, setOwnerEmail] = useState("");
-  // Starts as whatever the org is called now (its domain, until the naming
-  // screen replaces it) so the teams heading always has something to say.
+const LEGACY_STEPS = new Set([
+  "owner",
+  "knowOwnerEmail",
+  "ownerEmail",
+  "superAdmin",
+  "adminCheck",
+]);
+
+function initialStep(me: Me, startAt?: SetupStep): SetupStep {
+  if (startAt) return startAt;
+  const raw = me.setup_step;
+  if (raw === "done") return "connectWorkspace";
+  if (!raw || LEGACY_STEPS.has(raw)) return "orgName";
+  if (
+    raw === "orgName" ||
+    raw === "teams" ||
+    raw === "ownTeam" ||
+    raw === "inviteLink" ||
+    raw === "inviteOwner"
+  )
+    return raw;
+  return "orgName";
+}
+
+/** Founder setup per ADR-0021: name → teams → own teams → join link →
+ *  invite owner → connect Workspace. Founder is never assumed to be owner. */
+export function OrgSetupForm({
+  me,
+  onDone,
+  startAt,
+  connectInitialPhase = "check",
+}: {
+  me: Me;
+  onDone: () => void;
+  startAt?: SetupStep;
+  connectInitialPhase?: "check" | "knowWho";
+}) {
+  const [step, setStep] = useState<SetupStep>(() => initialStep(me, startAt));
   const [orgName, setOrgName] = useState(me.organization_name);
   const [teams, setTeams] = useState<SetupTeam[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-  const ownerEmailRef = useRef<HTMLInputElement>(null);
+  const [chartReady, setChartReady] = useState(!me.needs_org_setup);
+  const [bootError, setBootError] = useState("");
 
   useEffect(() => {
-    if (step === "ownerEmail") ownerEmailRef.current?.focus();
-  }, [step]);
-
-  async function answerSuperAdmin(answer: "yes" | "no" | "unsure") {
-    const isSuperAdmin = answer === "yes";
-    setSubmitting(true);
-    setError("");
-    try {
-      const res = await backendFetch(
-        `/organizations/${me.organization_id}/org-chart`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            is_owner: isOwner,
-            is_super_admin: isSuperAdmin,
-            owner_email: isOwner || !ownerEmail ? null : ownerEmail,
-          }),
-        },
-      );
-      if (!res.ok) throw new Error(await backendError(res));
-      if (isSuperAdmin) {
-        // "Yes" is only a claim — Google confirms it before Knohow treats
-        // them as Super Admin.
-        startAdminProof();
-        return;
+    if (chartReady) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await backendFetch(
+          `/organizations/${me.organization_id}/org-chart`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              is_owner: false,
+              is_super_admin: false,
+              owner_email: null,
+              super_admin_email: null,
+            }),
+          },
+        );
+        if (!res.ok) throw new Error(await backendError(res));
+        if (!cancelled) {
+          setChartReady(true);
+          void recordSetupStep("orgName");
+        }
+      } catch (e) {
+        if (!cancelled)
+          setBootError(e instanceof Error ? e.message : String(e));
       }
-      // "No" and "I don't know" carry straight on. Proving admin is not a
-      // gate on setting up an organization, so it waits until the end.
-      void recordSetupStep("orgName");
-      setStep("orgName");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chartReady, me.organization_id, me.needs_org_setup]);
 
-  if (step === "owner")
+  if (bootError)
     return (
-      <div>
-        <SetupHeading>Are you the owner of the organization?</SetupHeading>
-        <SetupChoices>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={() => {
-              setIsOwner(true);
-              setOwnerEmail("");
-              setStep("superAdmin");
-            }}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={() => {
-              setIsOwner(false);
-              setStep("knowOwnerEmail");
-            }}
-          >
-            No
-          </button>
-        </SetupChoices>
-      </div>
+      <p className="m-0 text-[0.95rem] text-[#EA4335]" aria-live="polite">
+        {bootError}
+      </p>
     );
 
-  if (step === "knowOwnerEmail")
+  if (!chartReady)
     return (
-      <div>
-        <SetupHeading>Do you know the owner&rsquo;s email?</SetupHeading>
-        <SetupChoices>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={() => setStep("ownerEmail")}
-          >
-            Yes
-          </button>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={() => {
-              setOwnerEmail("");
-              setStep("superAdmin");
-            }}
-          >
-            No
-          </button>
-        </SetupChoices>
-      </div>
-    );
-
-  function validateOwnerEmail() {
-    const input = ownerEmailRef.current;
-    if (!input?.checkValidity()) {
-      shakeSetupField(input);
-      setError(input?.validationMessage || "Enter a work email.");
-      return false;
-    }
-    clearSetupFieldError(input);
-    setError("");
-    return true;
-  }
-
-  if (step === "ownerEmail")
-    return (
-      <div>
-        <SetupHeading>Owner&rsquo;s work email</SetupHeading>
-        <div className="mt-6">
-          <SetupField
-            inputRef={ownerEmailRef}
-            type="email"
-            required
-            aria-label="Owner's work email"
-            value={ownerEmail}
-            onChange={(e) => {
-              setOwnerEmail(e.target.value);
-              clearSetupFieldError(ownerEmailRef.current);
-              setError("");
-            }}
-            onKeyDown={(e) => {
-              if (e.key !== "Enter") return;
-              e.preventDefault();
-              if (validateOwnerEmail()) setStep("superAdmin");
-            }}
-          />
-        </div>
-        <SetupError>{error}</SetupError>
-        <SetupAction
-          label="Continue"
-          onClick={() => {
-            if (validateOwnerEmail()) setStep("superAdmin");
-          }}
-        />
-      </div>
-    );
-
-  if (step === "superAdmin")
-    return (
-      <div>
-        <SetupHeading>Are you a Google Workspace Super Admin?</SetupHeading>
-        <SetupChoices>
-          {[
-            { label: "Yes", value: "yes" as const },
-            { label: "No", value: "no" as const },
-            { label: "I don’t know", value: "unsure" as const },
-          ].map((answer) => (
-            <button
-              key={answer.label}
-              type="button"
-              className={SETUP_CHOICE_CLASS}
-              onClick={() => {
-                if (submitting) return;
-                void answerSuperAdmin(answer.value);
-              }}
-            >
-              {answer.label}
-            </button>
-          ))}
-        </SetupChoices>
-        <SetupError>{error}</SetupError>
-      </div>
+      <p className="m-0 text-[0.95rem] text-[#1c1917]/70">Getting ready…</p>
     );
 
   if (step === "orgName")
@@ -266,21 +154,33 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
       <InviteLinkStep
         me={me}
         onDone={() => {
-          // Setup is finished at the link; the Super Admin link that follows
-          // is an offer, not a step, so closing on it must not reopen setup.
-          // Only a Super Admin Google confirmed skips it: a Yes that Google
-          // turned down needs the link as much as a No does.
-          void recordSetupStep("done");
-          if (me.is_super_admin) onDone();
-          else setStep("adminCheck");
+          void recordSetupStep("inviteOwner");
+          setStep("inviteOwner");
         }}
       />
     );
 
-  // Everyone Google hasn't confirmed as Super Admin: No, I don't know, or a
-  // Yes that Google turned down. They get the link for whoever is.
-  if (step === "adminCheck") return <AdminLinkStep me={me} onDone={onDone} />;
+  if (step === "inviteOwner")
+    return (
+      <InviteOwnerStep
+        me={me}
+        onDone={() => {
+          // Setup complete before Workspace connect — closing there must not
+          // reopen the founder flow.
+          void recordSetupStep("done");
+          setStep("connectWorkspace");
+        }}
+      />
+    );
 
-  // "done" — the signed-in screen isn't designed yet (user will describe it).
+  if (step === "connectWorkspace")
+    return (
+      <ConnectWorkspaceStep
+        me={me}
+        initialPhase={connectInitialPhase}
+        onDone={onDone}
+      />
+    );
+
   return null;
 }

@@ -21,11 +21,15 @@ from app.onboarding.service import (
     approve_member,
     list_invitations,
     list_pending_members,
+    list_pending_team_join_requests,
+    decide_team_join_request,
     mark_dashboard_seen,
     org_overview,
     reassign_owner,
     set_auto_accept_workspace_members,
     complete_signup,
+    complete_join_placement,
+    TeamPlacementChoice,
     create_domainless_org,
     create_org_chart,
     invite_to_org,
@@ -47,9 +51,16 @@ def signup(
     switch_account: bool = False,
     invite: str | None = None,
     email: str | None = None,
+    join: str | None = None,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
-    result = start_signup(switch_account=switch_account, invite_token=invite, db=db, email_hint=email)
+    result = start_signup(
+        switch_account=switch_account,
+        invite_token=invite,
+        db=db,
+        email_hint=email,
+        join_token=join,
+    )
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
 
@@ -103,7 +114,12 @@ def create_join_link_route(
     db: Session = Depends(get_db),
     member: OrgMember = Depends(require_same_org_any_standing),
 ) -> dict:
-    link = create_join_link(org_id, body.lifetime, member, db)
+    try:
+        link = create_join_link(org_id, body.lifetime, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     return {
         "url": join_link_url(link),
         "expires_at": link.expires_at.isoformat() if link.expires_at else None,
@@ -116,7 +132,10 @@ def revoke_join_link_route(
     db: Session = Depends(get_db),
     member: OrgMember = Depends(require_same_org_any_standing),
 ) -> dict:
-    return {"revoked": revoke_join_link(org_id, member, db)}
+    try:
+        return {"revoked": revoke_join_link(org_id, member, db)}
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
 
 
 class SetupStepRequest(BaseModel):
@@ -368,3 +387,84 @@ def invite_route(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
+class JoinPlacementTeam(BaseModel):
+    team_id: uuid.UUID
+    claim_lead: bool = False
+
+
+class JoinPlacementRequest(BaseModel):
+    teams: list[JoinPlacementTeam] = []
+    claim_owner: bool = False
+
+
+@router.post("/organizations/{org_id}/join-placement")
+def join_placement_route(
+    org_id: uuid.UUID,
+    body: JoinPlacementRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """After Google via the org join link: pick teams, claim lead or request,
+    optionally claim owner (ADR-0021)."""
+    try:
+        return complete_join_placement(
+            org_id,
+            member,
+            [TeamPlacementChoice(team_id=t.team_id, claim_lead=t.claim_lead) for t in body.teams],
+            body.claim_owner,
+            db,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@router.get("/organizations/{org_id}/team-join-requests")
+def team_join_requests_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> list[dict]:
+    """Pending team joins for this lead (or owner / Super Admin backup)."""
+    try:
+        pending = list_pending_team_join_requests(org_id, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    out = []
+    for req in pending:
+        joiner = db.get(OrgMember, req.member_id)
+        out.append(
+            {
+                "id": str(req.id),
+                "team_id": str(req.team_id),
+                "member_id": str(req.member_id),
+                "email": joiner.email if joiner else None,
+                "display_name": joiner.display_name if joiner else None,
+                "created_at": req.created_at.isoformat(),
+            }
+        )
+    return out
+
+
+class TeamJoinDecisionRequest(BaseModel):
+    approve: bool
+
+
+@router.post("/organizations/{org_id}/team-join-requests/{request_id}")
+def decide_team_join_route(
+    org_id: uuid.UUID,
+    request_id: uuid.UUID,
+    body: TeamJoinDecisionRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    try:
+        req = decide_team_join_request(org_id, request_id, body.approve, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    return {"id": str(req.id), "status": req.status.value}

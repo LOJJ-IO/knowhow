@@ -17,6 +17,7 @@ from app.models.hidden_remembered_email import HiddenRememberedEmail
 from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
+from app.models.team_join_request import TeamJoinRequest, TeamJoinRequestStatus
 from app.models.transfer_batch import (
     TransferBatch,
     TransferBatchItem,
@@ -53,6 +54,8 @@ __all__ = [
     "SuggestedShare",
     "SuggestedShareStatus",
     "Team",
+    "TeamJoinRequest",
+    "TeamJoinRequestStatus",
     "TransferBatch",
     "TransferBatchItem",
     "TransferBatchType",

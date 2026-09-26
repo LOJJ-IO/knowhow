@@ -18,9 +18,10 @@ from app.models.join_link import JoinLink
 from app.models.invitation import Invitation, InvitationKind
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
-from app.models.org_membership import OrgMembership
+from app.models.org_membership import OrgMembership, OrgRole
 from app.models.organization import Organization
 from app.models.team import Team
+from app.models.team_join_request import TeamJoinRequest, TeamJoinRequestStatus
 from app.security.jwt import issue_access_token, issue_refresh_token
 
 # Common personal-email providers, used only as a heuristic default for a
@@ -115,20 +116,16 @@ def create_org_chart(
     owner_email: str | None = None,
     super_admin_email: str | None = None,
 ) -> OrgChartCreationResult:
-    """The first user to log in for a new organization initiates org chart
-    creation, auto-approved as having created it. Two independent
-    questions, deliberately not conflated (they are frequently different
-    people): (a) are you at the top of the org chart (owner/CEO/ED)? — sets
-    OrgChart.owner_member_id directly if yes, otherwise a single-use
-    confirmation link must be sent to whoever is. (b) are you the Google
-    Workspace super-admin for this domain? — only this kicks off domain-wide
-    delegation (via the auth module's initiate_delegation, imported not
-    duplicated).     Any combination of yes/no is valid. Owner email may be omitted when
-    the initiator isn't the owner and doesn't know who to nominate yet.
+    """Founder creates the org chart to unlock setup (ADR-0021). Founder ≠ owner:
+    calling with is_owner=False leaves owner_member_id unset until an owner invite
+    is accepted or someone claims owner. is_super_admin is only a nomination/
+    routing hint — Google admin proof grants Super Admin, never this flag.
+    Idempotent: if a chart already exists, return it (setup may call this on
+    resume without re-asking ownership).
     """
     existing = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
     if existing is not None:
-        raise ValueError(f"organization {org_id} already has an org chart")
+        return OrgChartCreationResult(org_chart=existing)
 
     initiator = db.get(OrgMember, initiator_member_id)
     if initiator is None:
@@ -237,7 +234,7 @@ def create_join_link(org_id: uuid.UUID, lifetime: str, actor: OrgMember, db: Ses
     People who already joined are unaffected ([[0014-org-setup-and-join-link]])."""
     if lifetime not in JOIN_LINK_LIFETIMES:
         raise ValueError(f"unknown link lifetime: {lifetime}")
-    _require_setup_role(org_id, actor, db)
+    _require_join_link_role(org_id, actor, db)
 
     now = datetime.now(timezone.utc)
     for live in db.execute(
@@ -270,7 +267,7 @@ def create_join_link(org_id: uuid.UUID, lifetime: str, actor: OrgMember, db: Ses
 
 def revoke_join_link(org_id: uuid.UUID, actor: OrgMember, db: Session) -> int:
     """Kills the org's live link. People already in stay in."""
-    _require_setup_role(org_id, actor, db)
+    _require_join_link_role(org_id, actor, db)
     now = datetime.now(timezone.utc)
     killed = 0
     for live in db.execute(
@@ -453,6 +450,31 @@ def _require_setup_role(org_id: uuid.UUID, member: OrgMember, db: Session) -> No
         raise PermissionError("only the organization's first member, owner or verified Super Admin can do this")
 
 
+def is_team_lead(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
+    return (
+        db.execute(
+            select(Team.id).where(Team.org_id == org_id, Team.team_leader_id == member.id).limit(1)
+        ).first()
+        is not None
+    )
+
+
+def _require_join_link_role(org_id: uuid.UUID, member: OrgMember, db: Session) -> None:
+    """Who may mint/reissue the org-wide join link (ADR-0021): team lead,
+    founder, owner, or verified Super Admin."""
+    if member.organization_id != org_id:
+        raise PermissionError("not a member of this organization")
+    if not (
+        is_founding_member(org_id, member.id, db)
+        or is_owner(org_id, member, db)
+        or is_verified_super_admin(org_id, member)
+        or is_team_lead(org_id, member, db)
+    ):
+        raise PermissionError(
+            "only a team lead, the organization's first member, owner or verified Super Admin can manage the join link"
+        )
+
+
 SIGNUP_STATE_PURPOSE = "signup"
 PENDING_PERSONAL_SIGNUP_PURPOSE = "pending_personal_signup"
 PENDING_PERSONAL_SIGNUP_TTL = timedelta(minutes=15)
@@ -469,6 +491,7 @@ def start_signup(
     invite_token: str | None = None,
     db: Session | None = None,
     email_hint: str | None = None,
+    join_token: str | None = None,
 ) -> SignupStart:
     """Google OAuth, same as app/auth/login.py's login flow (same scopes,
     same PKCE primitives — imported, not reimplemented) but with its own
@@ -483,6 +506,9 @@ def start_signup(
     Google account; the invitation is still only accepted by signing in as
     that account.
 
+    join_token (from `/join/{token}`) is carried through OAuth state so the
+    callback can domain-lock the joiner to that org (ADR-0021).
+
     email_hint comes from picking a row in the Log In account picker. Like
     the invite hint it only pre-selects the account at Google — it proves
     nothing and grants nothing, and Google still decides who signs in. An
@@ -490,12 +516,12 @@ def start_signup(
     invitation = find_invitation(invite_token, db) if invite_token and db is not None else None
     code_verifier = generate_code_verifier()
     code_challenge = derive_code_challenge(code_verifier)
-    invite_extra = None
+    extra: dict | None = None
     if invitation is not None:
-        invite_extra = (
-            {"invite_email": invitation.email} if invitation.email else {"open_admin_invite": invitation.token}
-        )
-    state = build_state_token(code_verifier, purpose=SIGNUP_STATE_PURPOSE, extra=invite_extra)
+        extra = {"invite_email": invitation.email} if invitation.email else {"open_admin_invite": invitation.token}
+    elif join_token:
+        extra = {"join_token": join_token}
+    state = build_state_token(code_verifier, purpose=SIGNUP_STATE_PURPOSE, extra=extra)
     url = build_authorization_url(
         LOGIN_SCOPES,
         state=state,
@@ -535,7 +561,10 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     """The domain check (onboarding spec, "Domain check = two independent
     checks"): (1) Google's `hd` claim on the verified ID token says whether
     this is a Workspace account — never the email string; (2) for a Workspace
-    account, whether Knohow already has an org for that domain."""
+    account, whether Knohow already has an org for that domain.
+
+    With a `join_token` in state (ADR-0021): the link must be live, and `hd`
+    must match the org's domain — personal accounts cannot use the org link."""
     state_payload = decode_state_token(state, expected_purpose=SIGNUP_STATE_PURPOSE)
     tokens = exchange_code_for_tokens(code, state_payload["code_verifier"])
     id_token_claims = verify_id_token(tokens["id_token"])
@@ -549,16 +578,31 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     # login, not a second bootstrap.
     invite_email = state_payload.get("invite_email")
     wrong_account = invite_email is not None and invite_email != email
+    join_token = state_payload.get("join_token")
+    join_org: Organization | None = None
+    if join_token:
+        join_org = _org_for_valid_join_token(join_token, db)
 
     member = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
     if member is None:
         hosted_domain = id_token_claims.get("hd")
-        if not hosted_domain:
+        if join_org is not None:
+            _assert_join_domain_lock(join_org, hosted_domain)
+            member = _join_existing_org(
+                email, id_token_claims.get("name"), join_org, hosted_domain.lower() if hosted_domain else None, db
+            )
+        elif not hosted_domain:
             return SignupResult(
                 pending_personal_token=issue_pending_personal_signup_token(email, id_token_claims.get("name")),
                 invite_wrong_account=wrong_account,
             )
-        member = join_or_create_domain_org(email, id_token_claims.get("name"), hosted_domain.lower(), db)
+        else:
+            member = join_or_create_domain_org(email, id_token_claims.get("name"), hosted_domain.lower(), db)
+    elif join_org is not None:
+        hosted_domain = id_token_claims.get("hd")
+        _assert_join_domain_lock(join_org, hosted_domain)
+        if member.organization_id != join_org.id:
+            raise ValueError("this Google account already belongs to another organization")
 
     needs_admin_proof = accept_invitations_on_sign_in(member, db)
     open_invite = find_invitation(state_payload["open_admin_invite"], db) if "open_admin_invite" in state_payload else None
@@ -573,6 +617,56 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     return SignupResult(
         login=_login_result(member), needs_admin_proof=needs_admin_proof, invite_wrong_account=wrong_account
     )
+
+
+def _org_for_valid_join_token(token: str, db: Session) -> Organization:
+    link = db.execute(select(JoinLink).where(JoinLink.token == token)).scalar_one_or_none()
+    if link is None:
+        raise ValueError("join link not found")
+    now = datetime.now(timezone.utc)
+    if link.revoked_at is not None or (link.expires_at is not None and link.expires_at <= now):
+        raise ValueError("this invite link has expired")
+    org = db.get(Organization, link.organization_id)
+    if org is None:
+        raise ValueError("join link not found")
+    return org
+
+
+def _assert_join_domain_lock(org: Organization, hosted_domain: str | None) -> None:
+    if not hosted_domain:
+        raise ValueError("join links are for work Google accounts only")
+    org_domain = (org.observed_domain or org.verified_domain or "").lower()
+    if org_domain and hosted_domain.lower() != org_domain:
+        raise ValueError(f"sign in with a {org_domain} account to join")
+
+
+def _join_existing_org(
+    email: str, display_name: str | None, org: Organization, hosted_domain: str | None, db: Session
+) -> OrgMember:
+    """Place a new Workspace account into an org that already exists (join link)."""
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=email,
+        display_name=display_name,
+        auth_type=AuthType.DOMAIN_DELEGATED,
+        standing=(
+            MemberStanding.APPROVED if org.auto_accept_workspace_members else MemberStanding.AUTO_AFFILIATED
+        ),
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    record_audit_entry(
+        org_id=org.id,
+        actor_user_id=member.id,
+        action_type="onboarding.joined_via_link",
+        target_resource_id=str(member.id),
+        details={"email": email, "observed_domain": hosted_domain},
+        db=db,
+    )
+    return member
+
 
 
 def join_or_create_domain_org(email: str, display_name: str | None, hosted_domain: str, db: Session) -> OrgMember:
@@ -719,7 +813,9 @@ def is_owner(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
 SETUP_DONE = "done"
 # The screens setup can stop on, in order. Anything else is refused rather
 # than stored, so a typo can't strand a founder on a step that doesn't exist.
-SETUP_STEPS = ("orgName", "teams", "ownTeam", "inviteLink", SETUP_DONE)
+# inviteOwner is after the join link; connectWorkspace is offer-only (not stored —
+# closing there must not reopen setup).
+SETUP_STEPS = ("orgName", "teams", "ownTeam", "inviteLink", "inviteOwner", SETUP_DONE)
 
 
 def record_setup_step(org_id: uuid.UUID, step: str, db: Session) -> Organization:
@@ -1027,3 +1123,197 @@ def approve_member(org_id: uuid.UUID, approver: OrgMember, target_member_id: uui
         db=db,
     )
     return target
+
+
+def needs_join_placement(member: OrgMember, db: Session) -> bool:
+    """True when a joiner still owes the team-pick wizard (ADR-0021)."""
+    if member.join_placement_completed_at is not None:
+        return False
+    if needs_org_setup(member, db) or resume_setup_step(member, db) is not None:
+        return False
+    team_count = db.execute(
+        select(func.count()).select_from(Team).where(Team.org_id == member.organization_id)
+    ).scalar_one()
+    if team_count == 0:
+        return False
+    # Founder who finished setup without join placement still doesn't need it.
+    if is_founding_member(member.organization_id, member.id, db):
+        org = db.get(Organization, member.organization_id)
+        if org is not None and org.setup_step == SETUP_DONE:
+            return False
+    return True
+
+
+def owner_claim_available(org_id: uuid.UUID, db: Session) -> bool:
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
+    return chart is not None and chart.owner_member_id is None
+
+
+@dataclass
+class TeamPlacementChoice:
+    team_id: uuid.UUID
+    claim_lead: bool
+
+
+def complete_join_placement(
+    org_id: uuid.UUID,
+    member: OrgMember,
+    placements: list[TeamPlacementChoice],
+    claim_owner: bool,
+    db: Session,
+) -> dict:
+    """Apply team pick + lead claims/requests + optional owner claim (ADR-0021)."""
+    if member.organization_id != org_id:
+        raise PermissionError("not a member of this organization")
+
+    from app.org_chart.service import upsert_membership
+
+    outcomes: list[dict] = []
+    for choice in placements:
+        team = db.execute(
+            select(Team).where(Team.id == choice.team_id, Team.org_id == org_id).with_for_update()
+        ).scalar_one_or_none()
+        if team is None:
+            raise ValueError(f"no team {choice.team_id} in organization {org_id}")
+
+        if choice.claim_lead and team.team_leader_id is None:
+            team.team_leader_id = member.id
+            upsert_membership(org_id, team.id, member.id, OrgRole.TEAM_LEADER, db, _skip_audit=True)
+            if member.standing != MemberStanding.APPROVED:
+                member.standing = MemberStanding.APPROVED
+            outcomes.append({"team_id": str(team.id), "result": "lead_claimed"})
+            record_audit_entry(
+                org_id=org_id,
+                actor_user_id=member.id,
+                action_type="onboarding.team_lead_claimed",
+                target_resource_id=str(team.id),
+                details={},
+                db=db,
+            )
+        elif choice.claim_lead and team.team_leader_id == member.id:
+            outcomes.append({"team_id": str(team.id), "result": "already_lead"})
+        elif team.team_leader_id is None:
+            upsert_membership(org_id, team.id, member.id, OrgRole.MEMBER, db, _skip_audit=True)
+            outcomes.append({"team_id": str(team.id), "result": "joined_member"})
+        elif team.team_leader_id == member.id:
+            outcomes.append({"team_id": str(team.id), "result": "already_lead"})
+        else:
+            existing = db.execute(
+                select(TeamJoinRequest).where(
+                    TeamJoinRequest.team_id == team.id,
+                    TeamJoinRequest.member_id == member.id,
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                db.add(
+                    TeamJoinRequest(
+                        id=uuid.uuid4(),
+                        org_id=org_id,
+                        team_id=team.id,
+                        member_id=member.id,
+                        status=TeamJoinRequestStatus.PENDING,
+                    )
+                )
+                outcomes.append({"team_id": str(team.id), "result": "requested"})
+            elif existing.status == TeamJoinRequestStatus.PENDING:
+                outcomes.append({"team_id": str(team.id), "result": "request_pending"})
+            else:
+                outcomes.append({"team_id": str(team.id), "result": existing.status.value})
+
+    owner_result = None
+    if claim_owner:
+        owner_result = claim_pending_owner(org_id, member, db, commit=False)
+
+    member.join_placement_completed_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(member)
+    return {"placements": outcomes, "owner_claim": owner_result, "join_placement_completed": True}
+
+
+def claim_pending_owner(
+    org_id: uuid.UUID, member: OrgMember, db: Session, *, commit: bool = True
+) -> str:
+    """Joiner said "I'm the owner" while owner unset — records a pending claim."""
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id).with_for_update()).scalar_one_or_none()
+    if chart is None:
+        raise ValueError("organization has no org chart yet")
+    if chart.owner_member_id is not None:
+        if chart.owner_member_id == member.id:
+            return "already_owner"
+        raise ValueError("this organization already has an owner")
+    chart.pending_owner_member_id = member.id
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=member.id,
+        action_type="onboarding.owner_claimed_pending",
+        target_resource_id=str(chart.id),
+        details={},
+        db=db,
+    )
+    if commit:
+        db.commit()
+    return "pending"
+
+
+def list_pending_team_join_requests(org_id: uuid.UUID, actor: OrgMember, db: Session) -> list[TeamJoinRequest]:
+    """Pending team joins visible to this actor: leads see their teams;
+    owner and verified Super Admin see all."""
+    if actor.organization_id != org_id:
+        raise PermissionError("not a member of this organization")
+    q = select(TeamJoinRequest).where(
+        TeamJoinRequest.org_id == org_id,
+        TeamJoinRequest.status == TeamJoinRequestStatus.PENDING,
+    )
+    if not (is_owner(org_id, actor, db) or is_verified_super_admin(org_id, actor)):
+        led = list(
+            db.execute(select(Team.id).where(Team.org_id == org_id, Team.team_leader_id == actor.id)).scalars()
+        )
+        if not led:
+            return []
+        q = q.where(TeamJoinRequest.team_id.in_(led))
+    return list(db.execute(q.order_by(TeamJoinRequest.created_at)).scalars())
+
+
+def decide_team_join_request(
+    org_id: uuid.UUID,
+    request_id: uuid.UUID,
+    approve: bool,
+    actor: OrgMember,
+    db: Session,
+) -> TeamJoinRequest:
+    from app.org_chart.service import upsert_membership
+
+    req = db.get(TeamJoinRequest, request_id)
+    if req is None or req.org_id != org_id:
+        raise ValueError("join request not found")
+    if req.status != TeamJoinRequestStatus.PENDING:
+        return req
+
+    team = db.get(Team, req.team_id)
+    if team is None:
+        raise ValueError("team not found")
+    can_decide = (
+        team.team_leader_id == actor.id
+        or is_owner(org_id, actor, db)
+        or is_verified_super_admin(org_id, actor)
+    )
+    if not can_decide:
+        raise PermissionError("only this team's lead, the owner, or a verified Super Admin can decide")
+
+    req.status = TeamJoinRequestStatus.APPROVED if approve else TeamJoinRequestStatus.REJECTED
+    if approve:
+        upsert_membership(org_id, req.team_id, req.member_id, OrgRole.MEMBER, db, _skip_audit=True)
+        joiner = db.get(OrgMember, req.member_id)
+        if joiner is not None and joiner.standing != MemberStanding.APPROVED:
+            joiner.standing = MemberStanding.APPROVED
+    db.commit()
+    db.refresh(req)
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="onboarding.team_join_request." + ("approved" if approve else "rejected"),
+        target_resource_id=str(req.id),
+        details={"team_id": str(req.team_id), "member_id": str(req.member_id)},
+        db=db,
+    )
+    return req

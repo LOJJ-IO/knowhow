@@ -30,6 +30,11 @@ class OrgChart(Base):
     owner_member_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
     )
+    # Joiner claimed "I'm the owner" while owner was unset (ADR-0021) — pending
+    # until owner invite confirm or Super Admin confirms/reassigns.
+    pending_owner_member_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
+    )
     # Who the initiator named as the Workspace Super Admin, when it isn't
     # them. A nomination only — Super Admin authority comes from admin proof
     # (a Google admin-only call), never from this field.

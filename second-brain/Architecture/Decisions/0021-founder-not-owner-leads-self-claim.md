@@ -10,7 +10,7 @@ related: ["[[0014-org-setup-and-join-link]]", "[[FEAT-workspace-onboarding-flow]
 # ADR-0021: Founder ≠ owner; leads self-claim; team lead is the daily approver
 
 ## Status
-`active` — locked with the user 2026-09-26 (checklist A–I all yes). **Not built.** Supersedes [[0014-org-setup-and-join-link]] on ownership, lead assignment, join approval, and who may reissue the join link. Parts of 0014 that still hold (domain-locked org-wide link, teams-only chart, resume/save-as-you-go, wrong-account switch, contractors off this link) are restated below so this ADR is the single source.
+`active` — locked with the user 2026-09-26 (checklist A–I all yes). **Built on `main` 2026-09-26** (Phases 1–4): founder setup without owner gate, Workspace-connect step, join-token OAuth + placement wizard, lead claim/request, join-link ACL includes leads, settings reissue + pending team requests. Supersedes [[0014-org-setup-and-join-link]] on ownership, lead assignment, join approval, and who may reissue the join link. Parts of 0014 that still hold (domain-locked org-wide link, teams-only chart, resume/save-as-you-go, wrong-account switch, contractors off this link) are restated below so this ADR is the single source.
 
 ## Context
 ADR-0014 made the first person from the domain **own the org outright** and named team leads only when the owner approved a joiner. The user corrected that: the first joiner is only the **founder** (runs setup). Owner is a separate claim. Team leads should self-nominate on join so owner/Super Admin are not the daily bottleneck. Super Admin (Google-proven) remains the undo button for bad claims and the key to Workspace connect.
@@ -71,7 +71,7 @@ Jargon in UI: if **Owner** or **Super Admin** appears, underline + short tooltip
 ## Consequences
 - Supersedes 0014’s ownership, lead-naming, and “always request” rules — implementers must follow this ADR.
 - Needs: founder vs owner distinction in product copy and data; lead claim vs member join; request state only when a lead exists; multi-lead later; join-link ACL including team leads; owner claim + confirm; SA exception inbox (not a full join queue by default).
-- Live product still follows older UI (owner/Super Admin Yes/No questions, etc.) until built — see [[FEAT-workspace-onboarding-flow]].
+- **Implemented on `main` 2026-09-26** — see [[FEAT-workspace-onboarding-flow]]. Multi-lead per team and owner-claim confirmation UX remain later polish.
 
 ## Related
 - Supersedes [[0014-org-setup-and-join-link]]

@@ -9,8 +9,12 @@ related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landin
 
 # Current Context
 
-## Org onboarding model locked (2026-09-26)
-User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes [[0014-org-setup-and-join-link]] on ownership / leads / join approval / who reissues the link. Summary: **founder ≠ owner**; SA > owner > team lead; first **lead claim** wins; join is a **request only if a lead exists**; later multi-leads; **one org-wide link** (team leads can reissue); owner-on-join is a **claim**; SA is undo/exceptions; multi-team + per-team lead Y/N → app. Workspace connect: Google-check → Connect, or know-who → email / don’t-know → copy open link. Tooltips for Owner + Super Admin. **Not built** — live UI still has the old Yes/No Super Admin / owner-as-founder shape. Spec: [[FEAT-workspace-onboarding-flow]].
+## Org onboarding model locked + built (2026-09-26)
+User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes [[0014-org-setup-and-join-link]] on ownership / leads / join approval / who reissues the link. Summary: **founder ≠ owner**; SA > owner > team lead; first **lead claim** wins; join is a **request only if a lead exists**; later multi-leads; **one org-wide link** (team leads can reissue); owner-on-join is a **claim**; SA is undo/exceptions; multi-team + per-team lead Y/N → app. Workspace connect: Google-check → Connect, or know-who → email / don’t-know → copy open link. Tooltips for Owner + Super Admin.
+
+**Shipped on `main` 2026-09-26 (Phases 0–4):** privacy FileIndex fixes landed; founder `OrgSetupForm` rewritten; `create_org_chart` no longer requires `is_owner`; join token in OAuth state + domain lock; `JoinPlacementForm`; migration `0018` (`team_join_requests`, `pending_owner_member_id`, `join_placement_completed_at`); Settings reissue + team-join approvals; tests in `backend/tests/test_join_placement.py`. Spec: [[FEAT-workspace-onboarding-flow]].
+
+Active work is on **`main`** (synced with origin after Phase 0).
 
 ## Windows dev machine + privacy fixes (2026-09-25, branch `fix/signin-and-privacy`)
 **Second dev machine is Windows** (the setup notes below are the Mac). There, Postgres 16 is the EnterpriseDB **portable zip** at `%LOCALAPPDATA%\pgsql` (winget's installer needs a UAC prompt an agent can't approve). Trust auth, port 5432, role/DBs `knohow` + `knohow_test`, both at `0017`. It is **not a service**, so start it after a reboot:

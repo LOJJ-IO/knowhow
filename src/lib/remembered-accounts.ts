@@ -11,6 +11,7 @@ import { BACKEND_API_URL, backendFetch, type Me } from "@/lib/backend";
 export function continueWithGoogle(
   inviteToken?: string | null,
   emailHint?: string | null,
+  joinToken?: string | null,
 ) {
   if (!BACKEND_API_URL) {
     console.error(
@@ -23,6 +24,7 @@ export function continueWithGoogle(
   const params = new URLSearchParams();
   if (inviteToken) params.set("invite", inviteToken);
   if (emailHint) params.set("email", emailHint);
+  if (joinToken) params.set("join", joinToken);
   const query = params.size ? `?${params}` : "";
   // External origin (the backend), not a Next.js route — a router push can't leave the app.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination
@@ -101,7 +103,15 @@ export async function fetchMe(): Promise<Me | null> {
   if (!BACKEND_API_URL) return null;
   try {
     const res = await backendFetch("/auth/me");
-    return res.ok ? ((await res.json()) as Me) : null;
+    if (!res.ok) return null;
+    const me = (await res.json()) as Me;
+    return {
+      ...me,
+      is_founding_member: Boolean(me.is_founding_member),
+      is_team_lead: Boolean(me.is_team_lead),
+      needs_join_placement: Boolean(me.needs_join_placement),
+      owner_claim_available: Boolean(me.owner_claim_available),
+    };
   } catch {
     return null; // backend not running — the landing works without it
   }

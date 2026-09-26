@@ -45,8 +45,8 @@ export function InviteLinkStep({
         <SetupHeading>Ready to bring everyone in?</SetupHeading>
         <SetupBody>
           {domain
-            ? `One link works for everyone at ${domain}. They pick their team, you approve.`
-            : "One link works for everyone. They pick their team, you approve."}
+            ? `One link works for everyone at ${domain}. They pick their team; that team's lead approves when needed.`
+            : "One link works for everyone. They pick their team; that team's lead approves when needed."}
         </SetupBody>
         <SetupAction
           label="Create invite link"

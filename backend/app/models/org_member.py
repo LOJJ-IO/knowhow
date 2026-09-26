@@ -60,6 +60,11 @@ class OrgMember(Base):
     # measured against it, so it is per person, not per device.
     dashboard_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Join wizard finished (ADR-0021) — including "not on any team".
+    join_placement_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = created_at_col()
 
     organization: Mapped["Organization"] = relationship(back_populates="members")

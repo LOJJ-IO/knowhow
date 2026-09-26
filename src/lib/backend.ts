@@ -14,12 +14,18 @@ export type Me = {
   display_name: string | null;
   standing: "approved" | "auto_affiliated";
   is_owner: boolean;
+  is_founding_member: boolean;
+  is_team_lead: boolean;
   needs_org_setup: boolean;
   /** Where setup stopped, if it did. Null when there's nothing to resume. */
   setup_step: string | null;
   is_super_admin: boolean;
   /** Google already answered the Super Admin check (yes or no). */
   admin_proof_attempted: boolean;
+  /** Joiner still needs the team-pick wizard (ADR-0021). */
+  needs_join_placement: boolean;
+  /** Owner unset on the chart — join wizard may offer an owner claim. */
+  owner_claim_available: boolean;
 };
 
 /** Calls the backend with its session cookies (they live on its origin). */

@@ -97,6 +97,13 @@ const OrgSetupForm = dynamic(
   () => import("@/components/setup/org-setup-form").then((m) => m.OrgSetupForm),
   { ssr: false },
 );
+const JoinPlacementForm = dynamic(
+  () =>
+    import("@/components/setup/join-placement-form").then(
+      (m) => m.JoinPlacementForm,
+    ),
+  { ssr: false },
+);
 const SignInResultPanel = dynamic(
   () =>
     import("@/components/setup/sign-in-result").then(
@@ -236,10 +243,16 @@ function LandingHero({
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which modal the sheet shows — kept after Close so it slides down intact. */
   const [sheetKind, setSheetKind] = useState<
-    "login" | "demo" | "setup" | "result"
+    "login" | "demo" | "setup" | "join" | "result"
   >("login");
   /** What came back from a Google round trip, shown in the sheet. */
   const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
+  const [setupStartAt, setSetupStartAt] = useState<
+    "connectWorkspace" | undefined
+  >(undefined);
+  const [connectInitialPhase, setConnectInitialPhase] = useState<
+    "check" | "knowWho"
+  >("check");
   /** Who's signed in (backend `/auth/me`), once known. */
   const [me, setMe] = useState<Me | null>(null);
   const router = useRouter();
@@ -369,6 +382,9 @@ function LandingHero({
         // "done" is a finished marker, not a screen to resume: resuming it
         // opened the sheet on `OrgSetupForm`'s empty "done" branch.
         setSheetKind("setup");
+        setSheetOpen(true);
+      } else if (result?.needs_join_placement) {
+        setSheetKind("join");
         setSheetOpen(true);
       } else if (joinToken) {
         // Arrived from the org's join link: open Log In on the join screen.
@@ -881,7 +897,9 @@ function LandingHero({
                 {joinToken && joinPreview && !joinPreview.valid ? null : (
                   <button
                     type="button"
-                    onClick={() => continueWithGoogle(readInviteToken())}
+                    onClick={() =>
+                      continueWithGoogle(readInviteToken(), null, joinToken)
+                    }
                     className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
                   >
                     <GoogleG className="absolute left-[13px] size-5" />
@@ -907,6 +925,19 @@ function LandingHero({
             ) : sheetKind === "setup" && me ? (
               <OrgSetupForm
                 me={me}
+                startAt={setupStartAt}
+                connectInitialPhase={connectInitialPhase}
+                onDone={() => {
+                  setSetupStartAt(undefined);
+                  setConnectInitialPhase("check");
+                  setSheetAtTop(false);
+                  setSheetOpen(false);
+                  router.push(APP_HOME);
+                }}
+              />
+            ) : sheetKind === "join" && me ? (
+              <JoinPlacementForm
+                me={me}
                 onDone={() => {
                   setSheetAtTop(false);
                   setSheetOpen(false);
@@ -917,14 +948,33 @@ function LandingHero({
               <SignInResultPanel
                 result={signInResult}
                 onDone={() => {
+                  if (
+                    signInResult === "admin_not_verified" ||
+                    signInResult === "admin_error"
+                  ) {
+                    setSignInResult(null);
+                    setConnectInitialPhase("knowWho");
+                    setSetupStartAt("connectWorkspace");
+                    setSheetKind("setup");
+                    return;
+                  }
                   // Mid-setup admin check: after the result, keep going.
-                  if (me?.needs_org_setup || me?.setup_step) {
+                  if (
+                    me?.needs_org_setup ||
+                    (me?.setup_step && me.setup_step !== "done")
+                  ) {
                     setSignInResult(null);
                     setSheetKind("setup");
                     return;
                   }
+                  if (me?.needs_join_placement) {
+                    setSignInResult(null);
+                    setSheetKind("join");
+                    return;
+                  }
                   setSheetAtTop(false);
                   setSheetOpen(false);
+                  if (me) router.push(APP_HOME);
                 }}
               />
             ) : (

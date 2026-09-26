@@ -44,8 +44,12 @@ from app.onboarding.service import (
     SignupResult,
     complete_signup,
     accept_invitations_on_sign_in,
+    is_founding_member,
     is_owner,
+    is_team_lead,
+    needs_join_placement,
     needs_org_setup,
+    owner_claim_available,
     resume_setup_step,
 )
 from app.security.jwt import (
@@ -401,6 +405,8 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "auth_type": member.auth_type.value,
         "standing": member.standing.value,
         "is_owner": is_owner(member.organization_id, member, db),
+        "is_founding_member": is_founding_member(member.organization_id, member.id, db),
+        "is_team_lead": is_team_lead(member.organization_id, member, db),
         "needs_org_setup": needs_org_setup(member, db),
         # Where setup stopped, if it did. `needs_org_setup` only covers the
         # very first questions: it goes false as soon as an org chart row
@@ -408,6 +414,8 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "setup_step": resume_setup_step(member, db),
         "is_super_admin": member.super_admin_verified_at is not None,
         "admin_proof_attempted": admin_proof_attempted,
+        "needs_join_placement": needs_join_placement(member, db),
+        "owner_claim_available": owner_claim_available(member.organization_id, db),
     }
 
 

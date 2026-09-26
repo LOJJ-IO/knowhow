@@ -6,20 +6,28 @@ import { satoshi } from "@/components/brand/fonts";
 import { Button } from "@/components/app/button";
 import { AppDialog, DialogSection } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
+import { ChoicePill } from "@/components/ui/choice-pill";
 import { backendError, backendFetch } from "@/lib/backend";
 import { fetchOrgOverview, type OrgOverview } from "@/lib/organization";
 
-/** Settings, as a dialog over whatever you were looking at (user 2026-09-21,
- *  following Sage_v1) rather than a screen you navigate away to. Settings is
- *  something you adjust and come back from, so it shouldn't cost you your
- *  place.
- *
- *  Only settings that actually exist are here. The org's name and the
- *  auto-accept rule both have endpoints; the join link is shown because
- *  onboarding created it, and is read-only until the app has a place to
- *  reissue it. Both writes are **owner-only in the backend**
- *  (`_require_owner`), so a non-owner sees them as read-only rather than
- *  getting a 403 on save. */
+type TeamJoinRequest = {
+  id: string;
+  team_id: string;
+  member_id: string;
+  email: string | null;
+  display_name: string | null;
+  created_at: string;
+};
+
+const LIFETIMES = [
+  { value: "24h", label: "24 hours" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "forever", label: "No end date" },
+];
+
+/** Settings dialog — org name, auto-accept, join-link reissue (ADR-0021),
+ *  and pending team join approvals for leads. */
 export function SettingsDialog({
   open,
   onOpenChange,
@@ -34,14 +42,22 @@ export function SettingsDialog({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [joinUrl, setJoinUrl] = useState("");
+  const [reissueLifetime, setReissueLifetime] = useState("7d");
+  const [reissuing, setReissuing] = useState(false);
+  const [requests, setRequests] = useState<TeamJoinRequest[]>([]);
+  const [deciding, setDeciding] = useState<string | null>(null);
 
-  // Read on open, not on mount: the settings a person sees must be the ones
-  // that are true now, not the ones that were true when the app loaded.
+  const canEdit = me.is_owner;
+  const canManageJoinLink =
+    me.is_owner ||
+    me.is_super_admin ||
+    me.is_team_lead ||
+    me.is_founding_member;
+
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    // Resets live in the callbacks, not the effect body: setting state
-    // synchronously inside an effect cascades renders.
     fetchOrgOverview(chrome.organizationId)
       .then((result) => {
         if (cancelled) return;
@@ -50,16 +66,22 @@ export function SettingsDialog({
         setAutoAccept(result.autoAcceptWorkspaceMembers);
         setError("");
         setSaved(false);
+        setJoinUrl("");
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       });
+    void backendFetch(`/organizations/${chrome.organizationId}/team-join-requests`)
+      .then(async (res) => {
+        if (!res.ok || cancelled) return;
+        setRequests((await res.json()) as TeamJoinRequest[]);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [open, chrome.organizationId]);
 
-  const canEdit = me.is_owner;
   const dirty =
     overview !== null &&
     (name.trim() !== overview.name ||
@@ -105,6 +127,54 @@ export function SettingsDialog({
     }
   }
 
+  async function reissueLink() {
+    if (reissuing) return;
+    setReissuing(true);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${chrome.organizationId}/join-link`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lifetime: reissueLifetime }),
+        },
+      );
+      if (!res.ok) throw new Error(await backendError(res));
+      const body = (await res.json()) as { url: string };
+      setJoinUrl(body.url);
+      if (overview) setOverview({ ...overview, joinLinkActive: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setReissuing(false);
+    }
+  }
+
+  async function decide(requestId: string, approve: boolean) {
+    setDeciding(requestId);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${chrome.organizationId}/team-join-requests/${requestId}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ approve }),
+        },
+      );
+      if (!res.ok) throw new Error(await backendError(res));
+      setRequests((cur) => cur.filter((r) => r.id !== requestId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeciding(null);
+    }
+  }
+
+  const teamName = (teamId: string) =>
+    overview?.teams.find((t) => t.id === teamId)?.name ?? "a team";
+
   return (
     <AppDialog
       open={open}
@@ -113,7 +183,7 @@ export function SettingsDialog({
       description={
         canEdit
           ? "How Knohow behaves for your organization."
-          : "How Knohow behaves for your organization. Only the owner can change these."
+          : "How Knohow behaves for your organization. Only the owner can change some of these."
       }
       size="lg"
       footer={
@@ -193,8 +263,8 @@ export function SettingsDialog({
           label="Join link"
           hint={
             overview?.joinLinkActive
-              ? "A live link from setup lets people join this organization."
-              : "No live join link."
+              ? "A live link lets people join this organization."
+              : "No live join link — reissue one below if you can."
           }
         >
           <span
@@ -203,7 +273,79 @@ export function SettingsDialog({
             {overview?.joinLinkActive ? "Live" : "Off"}
           </span>
         </Row>
+        {canManageJoinLink ? (
+          <div className={`${satoshi.className} mt-3 flex flex-col gap-2`}>
+            <p className="m-0 text-[0.8125rem] text-[var(--app-dim)]">
+              How long should a new link last?
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {LIFETIMES.map((opt) => (
+                <ChoicePill
+                  key={opt.value}
+                  label={opt.label}
+                  selected={reissueLifetime === opt.value}
+                  onClick={() => setReissueLifetime(opt.value)}
+                />
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              disabled={reissuing}
+              onClick={() => void reissueLink()}
+            >
+              {reissuing ? "Creating…" : "Create new join link"}
+            </Button>
+            {joinUrl ? (
+              <input
+                readOnly
+                value={joinUrl}
+                onFocus={(e) => e.currentTarget.select()}
+                className="h-10 w-full rounded-[10px] border border-[var(--app-border)] bg-white px-3 text-[0.8125rem] text-[#1c1917]"
+              />
+            ) : null}
+          </div>
+        ) : null}
       </DialogSection>
+
+      {requests.length > 0 ? (
+        <DialogSection
+          title="Team join requests"
+          hint="People waiting for a lead to approve their team."
+        >
+          <ul className={`${satoshi.className} m-0 flex list-none flex-col gap-3 p-0`}>
+            {requests.map((req) => (
+              <li
+                key={req.id}
+                className="flex flex-wrap items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <p className="m-0 text-[0.875rem] text-[#1c1917]">
+                    {req.display_name || req.email || "Someone"}
+                  </p>
+                  <p className="m-0 text-[0.8125rem] text-[var(--app-dim)]">
+                    wants to join {teamName(req.team_id)}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={deciding === req.id}
+                    onClick={() => void decide(req.id, false)}
+                  >
+                    Decline
+                  </Button>
+                  <Button
+                    disabled={deciding === req.id}
+                    onClick={() => void decide(req.id, true)}
+                  >
+                    Approve
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </DialogSection>
+      ) : null}
     </AppDialog>
   );
 }

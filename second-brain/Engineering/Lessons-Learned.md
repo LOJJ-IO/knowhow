@@ -9,6 +9,9 @@ related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"
 
 # Lessons Learned
 
+## 2026-09-26 — Alembic against `knohow` does not upgrade `knohow_test`
+`conftest` points pytest at `knohow_test` while local `alembic upgrade head` uses `DATABASE_URL` → `knohow`. A new migration can succeed on the app DB and still leave tests failing with `UndefinedColumn`. After adding a migration, run alembic once with `DATABASE_URL=…/knohow_test` (or document a dual-upgrade habit) before trusting the suite.
+
 ## 2026-09-21 — A ResizeObserver on a container holding a third-party iframe will blink on every interaction inside the iframe
 `LoginModal`'s `ResizeObserver` re-measured its body whenever the Cal.com embed's iframe resized internally (date pick, time select, form focus). Each observation called `setHeights` → React re-render → the `.t-resize` CSS transition tweened the modal's height, producing a visible flash/"blink". The `.t-demo-booking` slot already had a fixed CSS height (538px) to prevent double-tween on mount, but the observer still fired on sub-pixel layout shifts from the iframe. Fix: track the last-set full height in a ref and skip `setHeights` when the new height differs by less than 2px. General rule: when a `ResizeObserver` feeds a CSS-transitioned dimension, always debounce or threshold the state update — a third-party iframe can resize itself on any user interaction, and each resize triggers a visible transition even if the height change is imperceptible.
 

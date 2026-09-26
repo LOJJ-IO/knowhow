@@ -10,7 +10,7 @@ related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth
 # FEAT: Workspace onboarding flow (sign-in → org → authority)
 
 ## Status
-`draft` — direction agreed 2026-09-16; **org model + Workspace-connect path locked 2026-09-26** ([[0021-founder-not-owner-leads-self-claim]]). The Log In panel ([[FEAT-landing-login-panel]]) is the intended entry point. **Not built** — live UI still asks owner/Super Admin Yes/No questions and still treats the founder like an owner in places.
+`in-progress` — org model + Workspace-connect path locked 2026-09-26 ([[0021-founder-not-owner-leads-self-claim]]). **Core ADR-0021 flows built on `main` 2026-09-26:** founder setup (name→teams→link→invite owner→connect, no Super Admin Yes/No), join-token OAuth + placement wizard (lead claim / request / optional owner claim), team-lead join-link reissue + pending requests in Settings, wrong-SA recovery into invite-someone-else. Still open: multi-lead per team, owner-claim confirm UX polish, contractor path, classification.
 
 ## Locked org model (2026-09-26 — A–I all yes)
 Authoritative detail: [[0021-founder-not-owner-leads-self-claim]]. Short form:

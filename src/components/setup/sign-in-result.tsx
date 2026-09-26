@@ -159,13 +159,23 @@ export function SignInResultPanel({
         </div>
       );
     case "admin_not_verified":
-      // One action per screen (user): inviting the Super Admin happens later
-      // in the app, not here.
+      // Wrong person tried Connect — recover by inviting someone else, or
+      // continue into the app limited (ADR-0021 / Phase 4).
       return (
         <div>
-          {heading("Google didn’t confirm you as a Super Admin")}
-          {body("You can keep using Knohow. You can invite your Super Admin later.")}
-          {choices([{ label: "Skip for now", onClick: onDone }])}
+          {heading("Google didn’t confirm you can connect Workspace")}
+          {body(
+            "That’s fine — invite someone who can, or keep using Knohow with limited access.",
+          )}
+          {choices([
+            { label: "Invite someone else", onClick: onDone },
+            {
+              label: "Continue to the app",
+              onClick: () => {
+                window.location.assign("/home");
+              },
+            },
+          ])}
         </div>
       );
     case "admin_error":
