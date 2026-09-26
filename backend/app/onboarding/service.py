@@ -142,10 +142,9 @@ def create_org_chart(
         nominated_super_admin_email=None if is_super_admin else super_admin_email,
     )
     db.add(org_chart)
-    if is_owner:
-        # Owner is self-declared (onboarding spec) — claiming it gives the
-        # initiator standing; a proven Super Admin can reassign it later.
-        initiator.standing = MemberStanding.APPROVED
+    # The founder starts the org, so nobody is above them to approve them
+    # (ADR-0021: founder is not the owner, but is never left waiting).
+    initiator.standing = MemberStanding.APPROVED
     db.commit()
     db.refresh(org_chart)
 
@@ -1194,6 +1193,10 @@ def complete_join_placement(
             outcomes.append({"team_id": str(team.id), "result": "already_lead"})
         elif team.team_leader_id is None:
             upsert_membership(org_id, team.id, member.id, OrgRole.MEMBER, db, _skip_audit=True)
+            # No lead exists, so nobody could approve this person: placing
+            # them directly is the approval. Only a pending request waits.
+            if member.standing != MemberStanding.APPROVED:
+                member.standing = MemberStanding.APPROVED
             outcomes.append({"team_id": str(team.id), "result": "joined_member"})
         elif team.team_leader_id == member.id:
             outcomes.append({"team_id": str(team.id), "result": "already_lead"})

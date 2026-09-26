@@ -14,6 +14,10 @@ User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes
 
 **Shipped on `main` 2026-09-26 (Phases 0–4):** privacy FileIndex fixes landed; founder `OrgSetupForm` rewritten; `create_org_chart` no longer requires `is_owner`; join token in OAuth state + domain lock; `JoinPlacementForm`; migration `0018` (`team_join_requests`, `pending_owner_member_id`, `join_placement_completed_at`); Settings reissue + team-join approvals; tests in `backend/tests/test_join_placement.py`. Spec: [[FEAT-workspace-onboarding-flow]].
 
+**Standing fix (2026-09-26):** the 403 "membership not yet approved by the organization's owner" was hitting people ADR-0021 never approves. Now the **founder is `approved` when the org chart is created** (owner or not), and a joiner placed directly on a lead-less team is approved. Only a joiner with a **pending team request** stays `auto_affiliated`; Home shows a dark grey "not approved by the founder yet" note for them instead of the raw API error (founder never sees it). Old test assertion in `test_domain_check.py` updated. 3 `test_team_setup.py` link tests were already failing (stub actor lacks `organization_id`, `service.py:464`), not touched.
+
+**Connect + join-team list (2026-09-26):** Connect Workspace only offers **Check with Google** (removed pre-check “Someone else needs to do this”; invite-someone remains after a failed check). `GET /org-chart/{id}` uses any-standing so joiners see team pills instead of a standing 403 on the join wizard.
+
 Active work is on **`main`** (synced with origin after Phase 0).
 
 ## Windows dev machine + privacy fixes (2026-09-25, branch `fix/signin-and-privacy`)
@@ -468,10 +472,10 @@ org, pick a team, enter the app. Then locked in [[0014-org-setup-and-join-link]]
 
 ## ⏭ Next + a standing reminder (2026-09-21)
 
-**✅ Done 2026-09-21, repeated 2026-09-23 (user asked for the full reset again).** `knohow` dropped and
-rebuilt: 24 tables, now at `0016_dashboard_seen (head)`, **zero rows** — no org, member, team or
-remembered account. Next sign-in with Google creates the org fresh and runs setup from "What's your
-organization called?".
+**✅ Done 2026-09-21, repeated 2026-09-23, repeated 2026-09-26 (user: "clear the db!").** `knohow`
+dropped and rebuilt on the Windows portable Postgres: 25 tables, at `0018_team_join_requests (head)`,
+**zero rows** — no org, member, team or remembered account. Next sign-in with Google creates the org
+fresh and runs setup from the start.
 
 **Gotcha worth keeping:** `DROP SCHEMA public CASCADE; CREATE SCHEMA public;` run from a shell psql leaves
 `public` owned by the **shell's** role, so Alembic (connecting as `knohow`) fails with *"no schema has been

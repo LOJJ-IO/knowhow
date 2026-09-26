@@ -159,10 +159,11 @@ def test_unapproved_member_is_limited_to_own_identity(db, monkeypatch):
     client = _client_as(sarah)
 
     me = client.get("/auth/me")
-    org_chart = client.get(f"/org-chart/{sarah.organization_id}")
+    # The chart itself is readable (join wizard); the overview is not.
+    overview = client.get(f"/organizations/{sarah.organization_id}/overview")
 
     assert me.status_code == 200 and me.json()["standing"] == "auto_affiliated"
-    assert org_chart.status_code == 403
+    assert overview.status_code == 403
 
 
 def test_only_founding_member_can_set_up_org_chart(db, monkeypatch):
@@ -212,7 +213,7 @@ def _setup_founder_and_coworker(db, monkeypatch, founder_is_owner: bool, **chart
 
 def test_nominated_owner_becomes_owner_by_signing_in(db, monkeypatch):
     sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
-    assert sarah.standing == MemberStanding.AUTO_AFFILIATED
+    assert sarah.standing == MemberStanding.APPROVED  # founder is never left waiting (ADR-0021)
 
     nominee = db.execute(select(OrgMember).where(OrgMember.email == "boss@acme.com")).scalar_one()
     assert nominee.standing == MemberStanding.AUTO_AFFILIATED  # limited until they sign in

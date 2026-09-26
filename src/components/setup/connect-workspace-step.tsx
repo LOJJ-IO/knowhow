@@ -20,8 +20,9 @@ import {
   type Me,
 } from "@/lib/backend";
 
-/** After setup: Google checks this account, or invite whoever can connect
- *  company Google (ADR-0021). No "are you a Super Admin?" question. */
+/** After setup: always check this account with Google first (ADR-0021).
+ *  Invite-someone-else only appears after Google says this account cannot
+ *  connect — never as a skip before the check. */
 export function ConnectWorkspaceStep({
   me,
   onDone,
@@ -229,7 +230,8 @@ export function ConnectWorkspaceStep({
       <SetupHeading>Connect Knohow to Google.</SetupHeading>
       <SetupBody>
         Google will check whether this account can connect your company&rsquo;s
-        Workspace, and may ask for one extra permission.
+        Workspace, and may ask for one extra permission. This is how we know if
+        you can finish setup fully.
       </SetupBody>
       <SetupChoices>
         <button
@@ -238,13 +240,6 @@ export function ConnectWorkspaceStep({
           onClick={startAdminProof}
         >
           Check with Google
-        </button>
-        <button
-          type="button"
-          className={SETUP_CHOICE_CLASS}
-          onClick={() => setPhase("knowWho")}
-        >
-          Someone else needs to do this
         </button>
       </SetupChoices>
     </div>

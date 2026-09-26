@@ -33,9 +33,16 @@ export function backendFetch(path: string, init?: RequestInit) {
   return fetch(`${BACKEND_API_URL}${path}`, { ...init, credentials: "include" });
 }
 
+/** Shown wherever a screen can't load because the person isn't approved yet. */
+export const LIMITED_ACCESS_MESSAGE =
+  "Your access is limited until the founder approves you. You can still explore the app.";
+
 /** A readable message from a failed response. FastAPI sends `detail` as a
  *  string for our own errors and as a list of field errors for a 422. */
 export async function backendError(res: Response): Promise<string> {
+  // A 403 is the backend's own wording ("membership not yet approved by the
+  // organization's owner"), written for developers and wrong under ADR-0021.
+  if (res.status === 403) return LIMITED_ACCESS_MESSAGE;
   const body = await res.json().catch(() => null);
   const detail = body?.detail;
   if (typeof detail === "string") return detail;

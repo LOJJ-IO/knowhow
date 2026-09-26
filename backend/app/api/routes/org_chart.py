@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_approved_member, get_db, require_same_org, require_same_org_for_setup
+from app.api.deps import get_approved_member, get_db, require_same_org, require_same_org_any_standing, require_same_org_for_setup
 from app.models.org_member import OrgMember
 from app.models.org_membership import OrgRole
 from app.org_chart.service import (
@@ -24,8 +24,12 @@ router = APIRouter(tags=["org-chart"])
 
 @router.get("/org-chart/{org_id}")
 def read_org_chart(
-    org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
 ) -> dict:
+    """Readable by any org member, including auto-affiliated joiners who still
+    need the team list for the join wizard (ADR-0021)."""
     return get_org_chart(org_id, db)
 
 

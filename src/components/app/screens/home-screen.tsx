@@ -27,6 +27,7 @@ import {
   type OrgOverview,
   type OverviewMember,
 } from "@/lib/organization";
+import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 
 /** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
@@ -102,7 +103,13 @@ export function HomeScreen() {
   /** Which team's caret the pointer is on. */
   const [caret, setCaret] = useState<string | null>(null);
 
+  /** Joined through the link but not approved yet. The founder is never in
+   *  this state, and the org's data stays closed to everyone in it. */
+  const awaitingApproval =
+    me.standing !== "approved" && !me.is_founding_member;
+
   useEffect(() => {
+    if (awaitingApproval) return;
     let cancelled = false;
     fetchOrgOverview(chrome.organizationId)
       .then((result) => {
@@ -118,7 +125,7 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [chrome.organizationId]);
+  }, [chrome.organizationId, awaitingApproval]);
 
   const owner = overview?.members.find((m) => m.id === overview.ownerMemberId);
   const membersById = useMemo(
@@ -166,6 +173,19 @@ export function HomeScreen() {
       })),
     };
   }, [overview, recent]);
+
+  if (awaitingApproval)
+    return (
+      <AppPage>
+        <Panel>
+          <div className="flex flex-1 items-center justify-center p-6">
+            <p className="max-w-md rounded-[16px] bg-[#44403c] px-5 py-4 text-center text-[0.9375rem] text-white">
+              {LIMITED_ACCESS_MESSAGE}
+            </p>
+          </div>
+        </Panel>
+      </AppPage>
+    );
 
   if (error)
     return (

@@ -15,7 +15,7 @@ import { backendError, backendFetch, type Me } from "@/lib/backend";
 
 type Team = { id: string; name: string; team_leader_id: string | null };
 
-type Phase = "teams" | "leads" | "owner" | "done";
+type Phase = "teams" | "leads" | "owner";
 
 /** After Google from an org join link: pick teams, claim lead or request,
  *  optionally claim owner (ADR-0021). */
@@ -28,6 +28,7 @@ export function JoinPlacementForm({
 }) {
   const [phase, setPhase] = useState<Phase>("teams");
   const [teams, setTeams] = useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
   const [selected, setSelected] = useState<string[]>([]);
   const [leadClaims, setLeadClaims] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
@@ -37,6 +38,7 @@ export function JoinPlacementForm({
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      setLoadingTeams(true);
       try {
         const res = await backendFetch(`/org-chart/${me.organization_id}`);
         if (!res.ok) throw new Error(await backendError(res));
@@ -51,8 +53,11 @@ export function JoinPlacementForm({
             }),
           ),
         );
+        setError("");
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoadingTeams(false);
       }
     })();
     return () => {
@@ -189,32 +194,85 @@ export function JoinPlacementForm({
       </div>
     );
 
+  if (loadingTeams)
+    return (
+      <div>
+        <SetupHeading>Which teams are you on?</SetupHeading>
+        <SetupBody>Loading the teams for {me.organization_name}…</SetupBody>
+      </div>
+    );
+
   return (
     <div>
       <SetupHeading>Which teams are you on?</SetupHeading>
       <SetupBody>
-        Pick one or more. Teams that already have a lead will ask them to
-        approve you.
+        {teams.length > 0
+          ? "Pick one or more. Teams that already have a lead will ask them to approve you."
+          : "No teams have been set up yet. You can continue and join one later."}
       </SetupBody>
-      <div className="mt-6 flex flex-wrap gap-2">
-        {teams.map((t) => (
-          <ChoicePill
-            key={t.id}
-            label={t.name}
-            selected={selected.includes(t.id)}
-            leading={<TeamIcon name={t.name} size={22} />}
-            onClick={() => toggleTeam(t.id)}
-          />
-        ))}
-      </div>
+      {teams.length > 0 ? (
+        <div className="mt-6 flex flex-wrap gap-2">
+          {teams.map((t) => (
+            <ChoicePill
+              key={t.id}
+              label={t.name}
+              selected={selected.includes(t.id)}
+              leading={<TeamIcon name={t.name} size={22} />}
+              onClick={() => toggleTeam(t.id)}
+            />
+          ))}
+        </div>
+      ) : null}
       <SetupError>{error}</SetupError>
-      <SetupAction
-        label={selected.length === 0 ? "Not on a team yet" : "Continue"}
-        onClick={() => {
-          if (selected.length === 0) void submit(false);
-          else afterTeams();
-        }}
-      />
+      {error && teams.length === 0 ? (
+        <SetupAction
+          label="Try again"
+          onClick={() => {
+            setError("");
+            setLoadingTeams(true);
+            void (async () => {
+              try {
+                const res = await backendFetch(
+                  `/org-chart/${me.organization_id}`,
+                );
+                if (!res.ok) throw new Error(await backendError(res));
+                const chart = await res.json();
+                setTeams(
+                  (chart.teams ?? []).map(
+                    (t: {
+                      id: string;
+                      name: string;
+                      team_leader_id: string | null;
+                    }) => ({
+                      id: t.id,
+                      name: t.name,
+                      team_leader_id: t.team_leader_id,
+                    }),
+                  ),
+                );
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+              } finally {
+                setLoadingTeams(false);
+              }
+            })();
+          }}
+        />
+      ) : (
+        <SetupAction
+          label={
+            selected.length === 0
+              ? teams.length === 0
+                ? "Continue"
+                : "Not on a team yet"
+              : "Continue"
+          }
+          onClick={() => {
+            if (selected.length === 0) void submit(false);
+            else afterTeams();
+          }}
+        />
+      )}
     </div>
   );
 }

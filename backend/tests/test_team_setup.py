@@ -257,6 +257,7 @@ class _JoinLinkSession:
 @pytest.fixture
 def _setup_role(monkeypatch):
     monkeypatch.setattr(onboarding_service, "_require_setup_role", lambda *a, **k: None)
+    monkeypatch.setattr(onboarding_service, "_require_join_link_role", lambda *a, **k: None)
     monkeypatch.setattr(onboarding_service, "record_audit_entry", lambda **kwargs: None)
 
 
