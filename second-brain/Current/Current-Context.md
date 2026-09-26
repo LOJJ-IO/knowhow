@@ -419,6 +419,10 @@ revises [[0012-identity-linking-one-person-many-accounts]]'s one-org rule and ro
   `oauth_credentials` existed, so nothing needs re-consenting with Google. **Signing in again
   starts the new flow from scratch**, which is the point: the old personal org was auto-named
   "Ronald Wopara" by the pre-0013 code, and the new path asks the person to name it.
+- **`knohow` cleared again 2026-09-26** at the user's request (same truncate, every table but
+  `alembic_version`, which stays at `0016_dashboard_seen`). Removed 1 org, 1 member, 6 teams, 1 join
+  link, 14 audit entries and the remembered-account rows; no `oauth_credentials` existed. `knohow_test`
+  not touched. Next sign-in starts setup from scratch.
 - To see the picker without signing in, re-run `seed-picker.py` from the session scratchpad
   (device `11111111-1111-1111-1111-111111111111`). Nothing is seeded right now.
 
