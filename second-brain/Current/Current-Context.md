@@ -3,36 +3,48 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-23
+updated: 2026-09-25
 related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
 ---
 
 # Current Context
 
-## Topbar bell is a real control now (2026-09-23)
+## Topbar bell is a real control now (2026-09-23, restyled 2026-09-25)
 
-The topbar's "not wired yet" alerts button (`Button variant="secondary"` + `AppIcon name="bell"`) was
-replaced by [`src/components/app/notification-bell.tsx`](../../src/components/app/notification-bell.tsx)
-— a component the user brought in. It swings the bell from its hanging point when the count goes up
-(spring, low damping, impulse scaled by how many arrived at once), drags a clapper behind it off the
-swing's own velocity, and rolls the badge digits in per-place columns with a velocity-driven fade mask.
-Reduced motion drops the ring, the roll and the badge's layout animation.
+The topbar's "not wired yet" alerts button was replaced by
+[`src/components/app/notification-bell.tsx`](../../src/components/app/notification-bell.tsx) — a
+component the user brought in. It swings the bell from its crown when the count goes up (spring, low
+damping, impulse scaled by how many arrived at once), drags a clapper behind it off the swing's own
+velocity, and rolls the badge digits in per-place columns with a velocity-driven fade mask. Reduced
+motion silences all of it.
 
-Three things changed on the way in:
+**2026-09-25 — put back on the app's own button.** As pasted it shipped its own cool-grey surface
+(`#F4F4F9` / `#868593`) and **no hover state at all**, so it read as a foreign control in a warm-stone
+row (user: "the notification bells style got changed from how it looked and behaved in hover ... So its
+old feel but the new functionality"). It now *renders* [[Button]] `variant="secondary" size="icon"`
+rather than restyling itself, so `--app-muted` → `--app-active` hover, the 1px press, the focus outline
+and the 150ms curve all come from one place and can't drift again. The glyph went back to **lucide
+`Bell`'s own geometry** at `NAV_STROKE`, inlined as two paths (dome+rim, and the clapper arc) because
+the two have to move independently — same viewBox, stroke and caps lucide renders, so it is the same
+bell that was there before, just articulated.
 
-- Imports retargeted from `motion/react` to `framer-motion` (already a dependency, same API) and the
-  `asChild` / `@radix-ui/react-slot` path removed, so nothing new was installed. See [[Lessons-Learned]].
-- `focus-visible:ring-ring` named a token this repo doesn't define, so it emitted nothing and the button
-  had no focus state. Swapped for the app's own `outline-[#1c1917]` treatment. See [[Lessons-Learned]].
-- Its default press is `active:scale-90`; the topbar overrides that to `active:translate-y-px`, the 1px
-  nudge every other app control uses after the click-swallowing bug (see `button.tsx` and
-  [[Lessons-Learned]]).
+**Micro-interactions (2026-09-25, user asked for them).** One spring at three strengths, so the bell
+reads as one object: a new notification is loudest (0.7–1.3 × impulse, scaled by burst size), a press
+is 0.5, a mouse arriving is 0.26. Hover is gated to `pointerType === "mouse"` so touch doesn't ring it
+twice on the way to a tap. The clapper is never animated directly — it lags the body's velocity, so all
+three swing it for free. The badge carries a 2px ring in the button's own surface colour that follows
+the button's hover, so it reads as sitting *on* the control instead of butting into the glyph.
 
-It kept the tooltip and `size={40}`, so the row's rhythm is unchanged. **The count is mocked at 0**:
-`OrganizationChrome.unreadNotifications` in [`src/lib/organization.ts`](../../src/lib/organization.ts) is
-a constant, because `/auth/me` carries no notification count and there is no notifications store in the
-tree. That field is the seam a real source plugs into. Until then the badge never renders and the bell
-never rings — set the constant to a non-zero number to see either.
+Two fixes from the first pass, both worth remembering ([[Lessons-Learned]]): imports retargeted
+`motion/react` → `framer-motion` (already a dependency, same API, so nothing was installed), and
+`focus-visible:ring-ring` named a token this repo doesn't define — it emitted nothing, leaving the
+control with no focus state next to its `outline-none`.
+
+**The count is mocked at 0**: `OrganizationChrome.unreadNotifications` in
+[`src/lib/organization.ts`](../../src/lib/organization.ts) is a constant, because `/auth/me` carries no
+notification count and there is no notifications store in the tree. That field is the seam a real source
+plugs into. Until then the badge never renders and only hover/press ring the bell — set the constant to
+a non-zero number to see the badge and the roll.
 
 ## Repo root cleanup (2026-09-20)
 Removed ~15MB of tracked root duplicates of assets already under `public/deck/` and `public/hero/` (`blue/green/red/yellow/folder.png`, `signinbg.png`), deleted unused Create-Next-App SVGs in `public/`, deleted root `LOGO.otf` (identical to `src/fonts/logo/LOGO.otf`), and moved business/scratch media into `docs/business/` (projections PDF + PNG, BCW proposal, `V1-Draft.mp4`). App paths unchanged (`/deck/…`, `/hero/…`). Font trial folders remain gitignored at root. Root [`README.md`](../../README.md) replaced the create-next-app boilerplate with a short Knohow + frontend/backend run guide (backend section split into safer copy-paste blocks 2026-09-20 after a `cd`→`d` paste failure at repo root).
@@ -559,6 +571,15 @@ an **action plus a bail-out** ("Check with Google" / "Do this later") is **two a
   "Connect Knohow to Google." / "Only a Workspace admin can do this. Google will check whether that's you,
   and ask for one extra permission." → **Check with Google**. Setup is recorded `done` *before* it, so
   closing there doesn't reopen setup. Skipped entirely when `is_super_admin`.
+  **2026-09-25 — the end screen now answers what they said** (user: a "No" / "I don't know" got the
+  "one extra permission" screen and then Google's "Skip for now", which felt confusing). The answer is
+  held in local state (`superAdminAnswer`) and picks the screen:
+  - **No** → "Your admin connects Knohow to Google." / "Only a Google Workspace Super Admin can do this.
+    You can invite yours from the app later." → **Done** (no Google check, it could only fail).
+  - **I don't know** → "Not sure if you're the admin?" / "Google can check for you. If you're not, nothing
+    changes and you can invite your admin later." → **Check with Google**.
+  - Resumed past the question (answer not persisted; backend only audit-logs it) → the old generic screen.
+  Copy drafted by me from the option the user picked; unverified in a browser.
 - **Teams is now two screens** (user's call, after I argued against one-name-per-screen):
   1. **"How many teams are in {Org}?"** / "Drag to set the number." — a **`DragStepper`**: one control, drag
      horizontally to set the value, arrow keys for the keyboard, `role="spinbutton"`. The user referenced a

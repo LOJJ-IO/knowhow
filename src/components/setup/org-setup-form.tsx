@@ -48,6 +48,11 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
     (me.setup_step as SetupStep | null) ?? "owner",
   );
   const [isOwner, setIsOwner] = useState(true);
+  // What they said to the Super Admin question, so the Google check at the
+  // end can speak to it. Null when setup resumed past that question.
+  const [superAdminAnswer, setSuperAdminAnswer] = useState<
+    "no" | "unsure" | null
+  >(null);
   const [ownerEmail, setOwnerEmail] = useState("");
   // Starts as whatever the org is called now (its domain, until the naming
   // screen replaces it) so the teams heading always has something to say.
@@ -61,7 +66,8 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
     if (step === "ownerEmail") ownerEmailRef.current?.focus();
   }, [step]);
 
-  async function answerSuperAdmin(isSuperAdmin: boolean) {
+  async function answerSuperAdmin(answer: "yes" | "no" | "unsure") {
+    const isSuperAdmin = answer === "yes";
     setSubmitting(true);
     setError("");
     try {
@@ -86,6 +92,7 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
       }
       // "No" and "I don't know" carry straight on. Proving admin is not a
       // gate on setting up an organization, so it waits until the end.
+      setSuperAdminAnswer(answer);
       void recordSetupStep("orgName");
       setStep("orgName");
     } catch (e) {
@@ -202,9 +209,9 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
         <SetupHeading>Are you a Google Workspace Super Admin?</SetupHeading>
         <SetupChoices>
           {[
-            { label: "Yes", value: true },
-            { label: "No", value: false },
-            { label: "I don’t know", value: false },
+            { label: "Yes", value: "yes" as const },
+            { label: "No", value: "no" as const },
+            { label: "I don’t know", value: "unsure" as const },
           ].map((answer) => (
             <button
               key={answer.label}
@@ -272,6 +279,44 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
           else setStep("adminCheck");
         }}
       />
+    );
+
+  // "No": they've told us they aren't the admin, so don't send them to a
+  // Google check that can only fail. Their admin connects Knohow later.
+  if (step === "adminCheck" && superAdminAnswer === "no")
+    return (
+      <div>
+        <SetupHeading>Your admin connects Knohow to Google.</SetupHeading>
+        <SetupBody>
+          Only a Google Workspace Super Admin can do this. You can invite
+          yours from the app later.
+        </SetupBody>
+        <SetupChoices>
+          <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
+            Done
+          </button>
+        </SetupChoices>
+      </div>
+    );
+
+  if (step === "adminCheck" && superAdminAnswer === "unsure")
+    return (
+      <div>
+        <SetupHeading>Not sure if you&rsquo;re the admin?</SetupHeading>
+        <SetupBody>
+          Google can check for you. If you&rsquo;re not, nothing changes and
+          you can invite your admin later.
+        </SetupBody>
+        <SetupChoices>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            onClick={startAdminProof}
+          >
+            Check with Google
+          </button>
+        </SetupChoices>
+      </div>
     );
 
   if (step === "adminCheck")

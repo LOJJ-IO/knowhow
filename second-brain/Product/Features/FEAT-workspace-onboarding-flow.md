@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-21
+updated: 2026-09-25
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
@@ -427,6 +427,11 @@ Now:
 
 It states their standing before asking anything, and the two choices are answers to one question — the same
 shape as the Yes / No screens, not two competing actions.
+
+Superseded 2026-09-21 (the check moved to the end of setup) and refined 2026-09-25: the end screen now
+depends on the answer. "No" gets an acknowledgement and **Done** (their admin connects Google later);
+"I don't know" gets "Not sure if you're the admin?" and **Check with Google**. Details in
+[[Current-Context]].
 
 ### Teams field placeholder
 After the first pill the field went blank, so nothing invited a second team. The placeholder is now

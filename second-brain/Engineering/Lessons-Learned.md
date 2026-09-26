@@ -509,3 +509,24 @@ Components copied off the web now import from `motion/react` (the renamed packag
 `useSpring`, `useTransform`, `AnimatePresence`, `useReducedMotion`, `AnimationPlaybackControls`,
 `MotionValue`. Retarget the import rather than installing `motion` beside it; two motion runtimes in one
 tree means two copies of the animation loop and `AnimatePresence` contexts that don't see each other.
+
+## A component that restyles itself instead of rendering the app's button drifts (2026-09-25)
+A bell brought in from outside carried its own surface and glyph colours and no hover state. Dropped into
+the topbar it looked *nearly* right — same size, same rounding, same position — so the regression read as
+"something feels off in hover" rather than as an obviously wrong control. The fix was not to copy
+`--app-muted` / `--app-active` into it, which is the same mistake one layer down; it was to have it
+render `Button variant="secondary" size="icon"` and contribute only the parts that are actually new (the
+swing, the badge). Rule of thumb for anything pasted in: if the app already has a control of that shape,
+the newcomer renders it rather than matching it, and keeps only the behaviour that doesn't exist yet.
+Where a glyph has to articulate — a bell body and its clapper moving separately — inline the *same*
+icon's path data (lucide exposes it; render the icon once and read the `d` attributes) instead of
+substituting a different bell, so the silhouette is unchanged.
+
+## One spring at several strengths beats several animations (2026-09-25)
+The bell reacts to three things: a new notification, a press, and a mouse arriving. Giving each its own
+keyframes would have made three different objects. Instead one `ring(strength)` drives the same spring at
+0.26 (hover), 0.5 (press) and 0.7–1.3 (arrival, scaled by how many landed at once), and the clapper is
+never animated at all — it's a `useSpring` over the body's own `useVelocity`, so every impulse swings it
+for free. Cheaper, and it reads as one physical thing. Gate pointer-driven impulses on
+`event.pointerType === "mouse"`: touch fires `pointerenter` before `pointerdown`, so an ungated hover
+rings the bell twice on the way to a single tap.

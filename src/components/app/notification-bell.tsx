@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import type { ComponentProps } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import {
   animate,
   AnimatePresence,
@@ -14,21 +14,37 @@ import {
   type AnimationPlaybackControls,
   type MotionValue,
 } from "framer-motion";
+
+import { Button } from "@/components/app/button";
+import { NAV_STROKE } from "@/components/app/icon";
 import { cn } from "@/lib/utils";
 
-const SURFACE = "bg-[#F4F4F9] dark:bg-[#262626]";
-const GLYPH = "text-[#868593] dark:text-[#9B9AA7]";
-
-const COLORS = {
-  red: "bg-[#FF3B30] dark:bg-[#FF453A]",
-  orange: "bg-[#FF9500] dark:bg-[#FF9F0A]",
-  green: "bg-[#34C759] dark:bg-[#30D158]",
-  blue: "bg-[#007AFF] dark:bg-[#0A84FF]",
-  violet: "bg-[#AF52DE] dark:bg-[#BF5AF2]",
-} as const;
+/** The topbar's alerts control: the app's own icon button, plus a bell that
+ *  rings and a badge that rolls.
+ *
+ *  **The shell is [[Button]] `variant="secondary" size="icon"`, not a styling of
+ *  its own.** The component this grew out of shipped its own cool-grey surface
+ *  (`#F4F4F9` / `#868593`) and no hover state at all, which read as a different
+ *  control from everything beside it in the row (user 2026-09-25: "the
+ *  notification bells style got changed from how it looked and behaved in
+ *  hover"). Rendering the real Button instead means the warm `--app-muted` →
+ *  `--app-active` hover, the 1px press, the focus outline and the 150ms curve
+ *  all come from one place and cannot drift again. Only the bell and the badge
+ *  live here.
+ *
+ *  **The glyph is lucide `Bell`'s own geometry**, the icon this control had
+ *  before, inlined as two paths rather than drawn with `<AppIcon name="bell">`
+ *  because the body and the clapper have to move independently. Same viewBox,
+ *  stroke, width and caps lucide renders, so it is the same bell on screen.
+ *
+ *  **Three things make it ring**, all the same spring at different strengths so
+ *  they read as one object: a new notification (hardest, scaled by how many
+ *  arrived at once), a press, and a mouse arriving on it. The clapper is never
+ *  animated directly — it lags the body's own velocity, so every one of the
+ *  three swings it for free. Reduced motion silences all of them. */
 
 // all sizes are a fraction of the size prop
-const ICON = 0.56;
+const ICON = 0.55;
 const BADGE = 0.38;
 const DOT = 0.22;
 const FONT = 0.21;
@@ -56,6 +72,13 @@ const BURST = 5;
 const CLAPPER_SWEEP = 13;
 const CLAPPER_VELOCITY = 450;
 
+/** How hard each thing hits the bell, as a fraction of `IMPULSE`. A new
+ *  notification is the loudest because it is the only one the person did not
+ *  do themselves; hover is barely a nudge, so passing the pointer across the
+ *  row doesn't feel like the app shouting. */
+const RING_HOVER = 0.26;
+const RING_PRESS = 0.5;
+
 // how many digits to keep above and below, and how far behind the spring can get
 const WINDOW = 3;
 const LAG = 2;
@@ -63,6 +86,21 @@ const LAG = 2;
 // a taller window would show the next digit at rest, so the fade rides velocity instead
 const ROLL_FADE = 34;
 const ROLL_VELOCITY = 9;
+
+const COLORS = {
+  red: "bg-[#FF3B30]",
+  orange: "bg-[#FF9500]",
+  green: "bg-[#34C759]",
+  blue: "bg-[#007AFF]",
+  violet: "bg-[#AF52DE]",
+} as const;
+
+/** lucide `Bell` at `strokeWidth={NAV_STROKE}`, split in two. `body` is the
+ *  dome and its rim; `clapper` is the small arc under it. */
+const BELL = {
+  body: "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326",
+  clapper: "M10.268 21a2 2 0 0 0 3.464 0",
+} as const;
 
 const clamp = (value: number, limit: number) =>
   Math.max(-limit, Math.min(limit, value));
@@ -92,25 +130,30 @@ function useBellRing(total: number, reduced: boolean) {
   const previous = useRef(total);
   const ringing = useRef<AnimationPlaybackControls | null>(null);
 
+  const ring = useCallback(
+    (strength: number) => {
+      if (reduced) return;
+      const moving = swing.getVelocity();
+      // push it the way it is already moving so it swings harder
+      const along = moving > 1 ? 1 : -1;
+      ringing.current = animate(swing, 0, {
+        ...SWING_SPRING,
+        velocity: clamp(moving + along * IMPULSE * strength, MAX_VELOCITY),
+      });
+    },
+    [reduced, swing],
+  );
+
   useEffect(() => {
     const delta = total - previous.current;
     previous.current = total;
-    if (delta <= 0 || reduced) return;
-
-    const weight = 0.7 + (0.6 * Math.min(delta, BURST)) / BURST;
-    const moving = swing.getVelocity();
-    // push it the way it is already moving so it swings harder
-    const along = moving > 1 ? 1 : -1;
-
-    ringing.current = animate(swing, 0, {
-      ...SWING_SPRING,
-      velocity: clamp(moving + along * IMPULSE * weight, MAX_VELOCITY),
-    });
-  }, [total, reduced, swing]);
+    if (delta <= 0) return;
+    ring(0.7 + (0.6 * Math.min(delta, BURST)) / BURST);
+  }, [total, ring]);
 
   useEffect(() => () => ringing.current?.stop(), []);
 
-  return { swing, clapper };
+  return { swing, clapper, ring };
 }
 
 function BellIcon({
@@ -124,27 +167,29 @@ function BellIcon({
 }) {
   return (
     <motion.svg
-      viewBox="0 0 18 18"
-      fill="currentColor"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={NAV_STROKE}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       aria-hidden
       width={side}
       height={side}
-      // the bell hangs from the top, spinning from the middle looks wrong
-      style={{ rotate: swing, transformOrigin: "50% 12%" }}
+      className="shrink-0 overflow-visible"
+      // the bell hangs from its crown, spinning from the middle looks wrong
+      style={{ rotate: swing, transformOrigin: "50% 8.5%" }}
     >
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        fillOpacity={0.55}
-        d="M3.5 6.5C3.5 3.46279 5.96279 1 9 1C12.0372 1 14.5 3.46279 14.5 6.5V10.75C14.5 11.4408 15.0592 12 15.75 12C16.1642 12 16.5 12.3358 16.5 12.75C16.5 13.1642 16.1642 13.5 15.75 13.5H2.25C1.83579 13.5 1.5 13.1642 1.5 12.75C1.5 12.3358 1.83579 12 2.25 12C2.94079 12 3.5 11.4408 3.5 10.75V6.5Z"
-      />
+      <path d={BELL.body} />
       <motion.path
+        d={BELL.clapper}
         style={{
           rotate: clapper,
+          // the clapper's own pivot is where it meets the rim, and that is the
+          // top of its box — `fill-box` keeps it there at any icon size
           transformBox: "fill-box",
           transformOrigin: "50% 0%",
         }}
-        d="M10.2 15H7.80099C7.64999 15 7.50799 15.068 7.41299 15.185C7.31799 15.302 7.28099 15.456 7.31199 15.603C7.48499 16.425 8.17999 17 9.00099 17C9.82199 17 10.517 16.425 10.69 15.603C10.721 15.456 10.684 15.302 10.589 15.185C10.494 15.068 10.351 15 10.2 15Z"
       />
     </motion.svg>
   );
@@ -224,6 +269,9 @@ function CountBadge({
           aria-hidden
           className={cn(
             "pointer-events-none absolute z-10 grid place-items-center rounded-full",
+            // the ring is the button's own surface, so the badge reads as
+            // sitting on the control rather than butting into the glyph
+            "ring-2 ring-[var(--app-muted)] transition-[box-shadow] duration-150 group-hover:ring-[var(--app-active)]",
             COLORS[color],
           )}
           style={{
@@ -266,17 +314,14 @@ function CountBadge({
 }
 
 export type NotificationBellProps = Omit<
-  ComponentProps<"button">,
-  | "children"
-  | "color"
-  | "onAnimationStart"
-  | "onDrag"
-  | "onDragStart"
-  | "onDragEnd"
+  ButtonPrimitive.Props,
+  "children" | "color" | "variant" | "size"
 > & {
   count?: number;
   max?: number;
+  /** `count` shows the number, `dot` just marks that there is something. */
   variant?: "count" | "dot";
+  /** Rendered side in px. Defaults to the 40px `size="icon"` Button is. */
   size?: number;
   color?: keyof typeof COLORS;
 };
@@ -285,34 +330,40 @@ export function NotificationBell({
   count = 0,
   max = 99,
   variant = "count",
-  size = 48,
+  size = 40,
   color = "red",
   className,
   style,
+  onPointerEnter,
+  onPointerDown,
   ...props
 }: NotificationBellProps) {
   const reduced = useReducedMotion() ?? false;
   const total = Number.isFinite(count) ? Math.max(0, Math.floor(count)) : 0;
   // use the total so a weird count cannot ring the bell
-  const { swing, clapper } = useBellRing(total, reduced);
+  const { swing, clapper, ring } = useBellRing(total, reduced);
 
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
+      size="icon"
       data-slot="notification-bell"
-      className={cn(
-        // The pasted source focused with `ring-2 ring-ring`; this repo has no
-        // `--ring` token, so that class emits nothing and the control would
-        // have had no visible focus state. Same outline the app's Button uses.
-        "relative grid place-items-center rounded-full outline-none transition-transform active:scale-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917] motion-reduce:active:scale-100",
-        SURFACE,
-        GLYPH,
-        className,
-      )}
+      // `group` is for the badge's ring, which tracks the button's own hover
+      className={cn("group relative", className)}
       style={{ width: size, height: size, ...style }}
+      onPointerEnter={(event) => {
+        onPointerEnter?.(event);
+        // touch fires this too, and there it would double up with the press
+        if (event.pointerType === "mouse") ring(RING_HOVER);
+      }}
+      onPointerDown={(event) => {
+        onPointerDown?.(event);
+        ring(RING_PRESS);
+      }}
       {...props}
     >
-      {/* this is also the button label, so the count gets read out when it changes */}
+      {/* this is also the button's label, so the count gets read out when it
+          changes — no `aria-label`, which would win over it and go stale */}
       <span role="status" className="sr-only">
         {total > 0 ? `Notifications, ${total} unread` : "Notifications"}
       </span>
@@ -325,7 +376,7 @@ export function NotificationBell({
         dot={variant === "dot"}
         reduced={reduced}
       />
-    </button>
+    </Button>
   );
 }
 
