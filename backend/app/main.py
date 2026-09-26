@@ -9,6 +9,7 @@ from app.api.routes import (
     auth,
     delegation,
     demo,
+    drive_preview,
     files,
     health,
     offboard,
@@ -95,6 +96,7 @@ app.include_router(onboarding.router)
 app.include_router(demo.router)
 app.include_router(org_chart.router)
 app.include_router(files.router)
+app.include_router(drive_preview.router)
 app.include_router(search.router)
 app.include_router(suggested_share.router)
 app.include_router(reassignments.router)

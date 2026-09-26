@@ -104,6 +104,13 @@ const JoinPlacementForm = dynamic(
     ),
   { ssr: false },
 );
+const DelegationConnectStep = dynamic(
+  () =>
+    import("@/components/setup/delegation-connect-step").then(
+      (m) => m.DelegationConnectStep,
+    ),
+  { ssr: false },
+);
 const SignInResultPanel = dynamic(
   () =>
     import("@/components/setup/sign-in-result").then(
@@ -243,7 +250,7 @@ function LandingHero({
   const [sheetOpen, setSheetOpen] = useState(false);
   /** Which modal the sheet shows — kept after Close so it slides down intact. */
   const [sheetKind, setSheetKind] = useState<
-    "login" | "demo" | "setup" | "join" | "result"
+    "login" | "demo" | "setup" | "join" | "delegation" | "result"
   >("login");
   /** What came back from a Google round trip, shown in the sheet. */
   const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
@@ -948,6 +955,14 @@ function LandingHero({
               <SignInResultPanel
                 result={signInResult}
                 onDone={() => {
+                  if (signInResult === "admin_verified") {
+                    setSignInResult(null);
+                    void fetchMe().then((next) => {
+                      if (next) setMe(next);
+                    });
+                    setSheetKind("delegation");
+                    return;
+                  }
                   if (
                     signInResult === "admin_not_verified" ||
                     signInResult === "admin_error"
@@ -975,6 +990,15 @@ function LandingHero({
                   setSheetAtTop(false);
                   setSheetOpen(false);
                   if (me) router.push(APP_HOME);
+                }}
+              />
+            ) : sheetKind === "delegation" && me ? (
+              <DelegationConnectStep
+                me={me}
+                onDone={() => {
+                  setSheetAtTop(false);
+                  setSheetOpen(false);
+                  router.push(APP_HOME);
                 }}
               />
             ) : (

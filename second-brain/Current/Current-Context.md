@@ -28,6 +28,10 @@ User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes
 
 **Resume on the invite copy screen (2026-09-26):** new `GET /organizations/{org_id}/join-link` (`live_join_link` in `onboarding/service.py`, same role check as create; returns `{url: null}` when none is live). `InviteLinkStep` calls it on mount: a live link means the founder left before pressing Continue, so it opens on the copy screen with that link instead of "Ready to bring everyone in?" (making a new link would revoke the old one). Tests in `test_join_placement.py`. Local `knohow_test` DB was at 0016; upgraded to 0018.
 
+**Delegation guide UI (2026-09-26):** After `admin_proof=verified`, the landing shows [[FEAT-workspace-onboarding-flow]]’s Admin console step (`DelegationConnectStep`): client ID + scopes to paste, open Admin, check via `POST …/delegation/check`, or skip to app. Same step when Connect Workspace resumes for an already-proven Super Admin.
+
+**Phase C proven locally (2026-09-26):** `delegation_grants` for `knohow.app` is `approved` (admin@knohow.app; drive + reports scopes). A delegated Drive call as that member succeeds (`about` + `files.list`, empty Drive). New `GET /organizations/{org}/drive-preview` (`backend/app/api/routes/drive_preview.py`) reads the caller's OWN 24 latest files live, stores nothing, never touches `FileIndex`. `/workspace` now renders `WorkspaceScreen` (file cards from that endpoint; empty/not-connected/error states). This is a connection proof, not the librarian (Phase D still unbuilt). Delegation copy fields got in-field copy icons. Folder component still to build: blue theme only, per user.
+
 Active work is on **`main`** (synced with origin after Phase 0).
 
 ## Windows dev machine + privacy fixes (2026-09-25, branch `fix/signin-and-privacy`)
@@ -38,6 +42,8 @@ Backend: `backend\.venv\Scripts\uvicorn.exe app.main:app --port 8000 --reload` (
 **Privacy blockers (1), (2), (4) fixed** on that branch, uncommitted: detected files no longer enter `FileIndex`, DeepSearch no longer leaks unconfirmed files, and `personal` is now `private`. Details in [[Known-Issues]] → Recently resolved. **Consequence to know:** until the classification/confirmation flow ([[FEAT-drive-file-classification]]) is built, a file created outside Knohow never reaches `FileIndex`, `/files`, dashboards or other people's DeepSearch results. That is the agreed rule, not a bug.
 
 **Proposal gap (2026-09-25):** the BCW proposal (`docs/business/`, dated 2026-09-08) promises seven features. Only the org chart and onboarding have frontend. `/workspace`, `/search`, `/offboarding` are empty states over existing backend engines. Nothing is deployed and Google's OAuth verification isn't submitted, so a BCW pilot means adding each person as a GCP test user. The proposal claims AES-256 at rest; the backend's token encryption is Fernet (AES-128), unreconciled.
+
+**Proposal-ready plan (2026-09-26):** six blockers with evidence + phased work for Claude Code — [[Proposal-Ready-Plan]]. Order: host API (A) ∥ OAuth track (B) → prove delegation (C) → classification (D) → feature UIs (E); credibility/legal (F) continuous. Do not claim proposal-ready until C+D+E (and A+B for external users).
 
 ## Topbar bell is a real control now (2026-09-23)
 

@@ -20,6 +20,7 @@ import {
   startAdminProof,
   type Me,
 } from "@/lib/backend";
+import { DelegationConnectStep } from "./delegation-connect-step";
 
 /** After setup: always check this account with Google first (ADR-0021).
  *  Invite-someone-else only appears after Google says this account cannot
@@ -112,21 +113,7 @@ export function ConnectWorkspaceStep({
   }
 
   if (me.is_super_admin) {
-    return (
-      <div>
-        <SetupHeading>Connect Knohow to Google.</SetupHeading>
-        <SetupBody>
-          Google already confirmed you can connect {me.organization_name}
-          &rsquo;s Workspace. Continue into the app to finish that step when
-          ready.
-        </SetupBody>
-        <SetupChoices>
-          <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
-            Continue
-          </button>
-        </SetupChoices>
-      </div>
-    );
+    return <DelegationConnectStep me={me} onDone={onDone} />;
   }
 
   if (phase === "check" && me.admin_proof_attempted)
