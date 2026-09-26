@@ -135,8 +135,8 @@ export function JoinPlacementForm({
       <div>
         <SetupHeading>Are you the lead for {currentLeadTeam.name}?</SetupHeading>
         <SetupBody>
-          If nobody is lead yet, saying yes makes you the lead. If you&rsquo;re
-          just on the team, say no.
+          If you&rsquo;re just on the team, say no. More leads can be added
+          later.
         </SetupBody>
         <SetupChoices>
           <button

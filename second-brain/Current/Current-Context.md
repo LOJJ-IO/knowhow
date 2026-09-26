@@ -16,7 +16,7 @@ User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes
 
 **Standing fix (2026-09-26):** the 403 "membership not yet approved by the organization's owner" was hitting people ADR-0021 never approves. Now the **founder is `approved` when the org chart is created** (owner or not), and a joiner placed directly on a lead-less team is approved. Only a joiner with a **pending team request** stays `auto_affiliated`; Home shows a dark grey "not approved by the founder yet" note for them instead of the raw API error (founder never sees it). Old test assertion in `test_domain_check.py` updated. 3 `test_team_setup.py` link tests were already failing (stub actor lacks `organization_id`, `service.py:464`), not touched.
 
-**Connect + join-team list (2026-09-26):** Connect Workspace only offers **Check with Google** (removed pre-check “Someone else needs to do this”; invite-someone remains after a failed check). `GET /org-chart/{id}` uses any-standing so joiners see team pills instead of a standing 403 on the join wizard.
+**Connect + join-team list (2026-09-26):** Connect Workspace auto-starts Google’s admin check (no “Check with Google” click; invite-someone remains after a failed check). `GET /org-chart/{id}` uses any-standing so joiners see team pills instead of a standing 403 on the join wizard.
 
 Active work is on **`main`** (synced with origin after Phase 0).
 

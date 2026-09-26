@@ -87,6 +87,17 @@ export function SignInResultPanel({
     if (naming) nameRef.current?.focus();
   }, [naming]);
 
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  // Success after Google admin proof — brief confirmation, then into the app
+  // (or next setup step via onDone). No click required (user 2026-09-26).
+  useEffect(() => {
+    if (result !== "admin_verified") return;
+    const t = window.setTimeout(() => onDoneRef.current(), 2500);
+    return () => window.clearTimeout(t);
+  }, [result]);
+
   async function createPersonalOrg() {
     setSubmitting(true);
     setError("");
@@ -155,7 +166,9 @@ export function SignInResultPanel({
       return (
         <div>
           {heading("You’re verified as a Google Workspace Super Admin")}
-          {body("Google confirmed it. Your organization’s domain is now verified.")}
+          {body(
+            "Google confirmed it. Your organization’s domain is now verified. Taking you to the app…",
+          )}
         </div>
       );
     case "admin_not_verified":

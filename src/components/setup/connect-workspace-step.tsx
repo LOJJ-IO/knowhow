@@ -45,6 +45,12 @@ export function ConnectWorkspaceStep({
     if (phase === "email") emailRef.current?.focus();
   }, [phase]);
 
+  // Always run Google's check — no intermediate card or click (user 2026-09-26).
+  useEffect(() => {
+    if (phase !== "check" || me.is_super_admin) return;
+    startAdminProof();
+  }, [phase, me.is_super_admin]);
+
   useEffect(() => {
     if (phase !== "openLink") return;
     let cancelled = false;
@@ -229,19 +235,9 @@ export function ConnectWorkspaceStep({
     <div>
       <SetupHeading>Connect Knohow to Google.</SetupHeading>
       <SetupBody>
-        Google will check whether this account can connect your company&rsquo;s
-        Workspace, and may ask for one extra permission. This is how we know if
-        you can finish setup fully.
+        Checking with Google whether this account can connect your
+        company&rsquo;s Workspace…
       </SetupBody>
-      <SetupChoices>
-        <button
-          type="button"
-          className={SETUP_CHOICE_CLASS}
-          onClick={startAdminProof}
-        >
-          Check with Google
-        </button>
-      </SetupChoices>
     </div>
   );
 }

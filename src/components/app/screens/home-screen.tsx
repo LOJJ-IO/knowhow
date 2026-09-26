@@ -34,10 +34,9 @@ import { cn } from "@/lib/utils";
  *  chart and oversight in one screen.
  *
  *  The owner sits at the top and the teams spread beneath them, which is the
- *  chart. What has *happened* in each team is carried on the same cards — a
- *  badge, a lit border, and a pulse travelling up its connector — which is the
- *  oversight. Two screens' worth of information, one place to look, because
- *  the question "what changed?" is always asked about a particular team.
+ *  chart. Recent changes play as pulses on the connectors when you press
+ *  Recent updates — not as badges or coloured borders on the cards (user
+ *  2026-09-26). Quiet cards are the correct resting state.
  *
  *  `/org-chart` and `/oversight` are gone; this replaced both.
  *
@@ -115,8 +114,8 @@ export function HomeScreen() {
       .then((result) => {
         if (cancelled) return;
         setOverview(result);
-        // Stamp only after this visit has its data: clearing first would erase
-        // the badges in the very render meant to show them.
+        // Stamp after this visit has its data so the next visit's "since you
+        // looked" feed starts clean.
         void markDashboardSeen(chrome.organizationId);
       })
       .catch((e: unknown) => {
@@ -298,29 +297,20 @@ export function HomeScreen() {
                 const team = overview.teams.find((t) => t.id === node.id);
                 if (!team) return null;
                 const change = overview.changesByTeam[team.id];
-                // Flagged by the same feed that pulses: what moves on the
-                // chart and what is marked on the card agree.
-                const updated = recent.teamIds.has(team.id);
-                const lead = team.leaderId
-                  ? membersById.get(team.leaderId)
-                  : undefined;
                 const open = expanded.includes(team.id);
 
                 return (
-                  <Card selected={selected} changed={Boolean(change)}>
+                  <Card selected={selected}>
                     <div className="flex items-center gap-[13px] p-[13px]">
                       <TeamIcon name={team.name} size={52} />
                       <span className="min-w-0 flex-1 text-left">
                         <CardTitle>
                           <span className="truncate">{team.name}</span>
-                          {change ? <ChangeBadge count={change.count} /> : null}
-                          {updated ? <NewBadge /> : null}
                         </CardTitle>
                         <CardMeta>
                           {team.memberIds.length === 1
                             ? "1 member"
                             : `${team.memberIds.length} members`}
-                          {lead ? ` · ${lead.displayName ?? lead.email}` : ""}
                         </CardMeta>
                       </span>
                       {/* data-ui keeps the canvas from treating this as a drag. */}
@@ -421,7 +411,7 @@ function TeamDetail({
               </span>
               {member.id === leaderId ? (
                 <span
-                  className={`${satoshi.className} shrink-0 text-[0.875rem] text-[var(--app-dim)]`}
+                  className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
                 >
                   Lead
                 </span>
@@ -498,15 +488,14 @@ function relative(iso: string): string {
   return `${Math.round(hours / 24)}d`;
 }
 
-/** A card on the canvas. Three states, deliberately distinguishable at a
- *  glance: resting, selected (you clicked it), and changed (it has news). */
+/** A card on the canvas. Resting, or selected (you clicked it). Change
+ *  highlighting lives on connector pulses via Recent updates, not on the
+ *  card border (user 2026-09-26). */
 function Card({
   selected,
-  changed = false,
   children,
 }: {
   selected: boolean;
-  changed?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -515,9 +504,7 @@ function Card({
         "flex flex-col rounded-[14px] bg-white transition-shadow duration-200",
         selected
           ? "shadow-[0_0_0_1.5px_#1c1917,0_2px_10px_rgba(0,0,0,0.05)]"
-          : changed
-            ? "shadow-[0_0_0_1.5px_var(--app-change),0_2px_12px_rgba(37,99,235,0.10)]"
-            : "shadow-[0_0_0_1px_var(--app-border),0_1px_3px_rgba(0,0,0,0.04)]",
+          : "shadow-[0_0_0_1px_var(--app-border),0_1px_3px_rgba(0,0,0,0.04)]",
       )}
     >
       {children}
@@ -541,38 +528,6 @@ function CardMeta({ children }: { children: React.ReactNode }) {
       className={`${satoshi.className} block truncate text-[0.975rem] leading-[1.4] text-[var(--app-dim)]`}
     >
       {children}
-    </span>
-  );
-}
-
-/** "New", on the right of a team's name, when that team has moved inside the
- *  window Home is playing (user 2026-09-22, following a reference).
- *
- *  Quiet on purpose: a muted chip in the app's own grey rather than a colour.
- *  The count badge beside it is the loud one — it says *you* haven't seen
- *  this — while this says only that something happened recently, which is a
- *  weaker claim and should look like one.
- *
- *  Sits **next to the name**, not out at the card's edge, and its corners are
- *  5px rather than fully round: both measured off the user's reference
- *  (2026-09-22 — a 194×56 chip in a 2× capture traces to a ~4.5px arc). */
-function NewBadge() {
-  return (
-    <span
-      className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
-    >
-      New
-    </span>
-  );
-}
-
-function ChangeBadge({ count }: { count: number }) {
-  return (
-    <span
-      className={`${satoshi.className} inline-flex h-[1.125rem] shrink-0 items-center rounded-full bg-[var(--app-change)] px-1.5 text-[0.6875rem] font-medium text-white`}
-      aria-label={`${count} ${count === 1 ? "change" : "changes"} since you last looked`}
-    >
-      {count > 9 ? "9+" : count}
     </span>
   );
 }

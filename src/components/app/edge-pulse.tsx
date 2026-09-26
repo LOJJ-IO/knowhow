@@ -27,8 +27,8 @@ import { useEffect, useRef } from "react";
  *  follows a card being dragged mid-flight rather than animating along a stale
  *  copy of the curve.
  *
- *  Honours `prefers-reduced-motion`: the pulse simply never runs. The badge on
- *  the team card carries the same information without moving. */
+ *  Honours `prefers-reduced-motion`: the pulse simply never runs. Recent
+ *  updates are still available via the play control without motion. */
 export function EdgePulse({
   /** The connector this rides. Same `d` the line is drawn with. */
   d,
