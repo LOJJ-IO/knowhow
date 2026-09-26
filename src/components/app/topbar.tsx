@@ -127,24 +127,14 @@ export function Topbar({
             </kbd>
           </Link>
 
-          {/* The bell is its own control rather than an icon Button: it owns
-              the swing it does when the count goes up and the badge that rolls
-              with it. `size={40}` keeps the 2.5rem the icon Button held in this
-              row. Its default press is a `scale-90`, swapped here for the 1px
-              nudge the rest of the app's controls use — a control that shrinks
-              under the pointer can finish its press outside its own box and
-              swallow the click (see the note in `button.tsx`).
-
-              Count is mocked at 0 for now (`chromeFromMe`), so the badge is
+          {/* NotificationBell is the app's own icon Button underneath, so the
+              surface, hover, press and focus are the row's and need nothing
+              here. Count is mocked at 0 (`chromeFromMe`), so the badge stays
               hidden until a real notifications source exists. */}
           <Tooltip>
             <TooltipTrigger
               render={
-                <NotificationBell
-                  count={chrome.unreadNotifications}
-                  size={40}
-                  className="cursor-pointer transition-[background-color,translate] duration-150 active:translate-y-px active:scale-100"
-                />
+                <NotificationBell count={chrome.unreadNotifications} />
               }
             />
             <TooltipContent side="bottom" sideOffset={8}>

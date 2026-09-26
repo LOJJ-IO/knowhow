@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
   ChevronDown,
   ChevronLeft,
@@ -36,6 +36,51 @@ import { CODICONS, NAV_STROKE } from "@/components/app/icon";
  *  Pairs live here rather than in `nav-icons.ts` because they are components,
  *  and that module is imported by Server Components. */
 const POP = { type: "spring", stiffness: 600, damping: 25 } as const;
+
+/** The pop between two glyphs. Both stay mounted and only their scale and
+ *  opacity move, so it can't get stuck.
+ *
+ *  It used to key-swap them through `AnimatePresence` (user 2026-09-26:
+ *  "when I hover on the sidebar icons they either disappear or shrink", and
+ *  buttons needing two clicks). A fast in-out interrupted the exit mid-way
+ *  and left a glyph half-scaled or invisible, and a press that landed during
+ *  the swap started on an element that was removed before pointerup, so the
+ *  browser never dispatched the click. `pointer-events-none` also makes the
+ *  press always start on the control itself. */
+export function GlyphSwap({
+  open,
+  size,
+  rest,
+  hover,
+}: {
+  open: boolean;
+  size: number;
+  rest: ReactNode;
+  hover: ReactNode;
+}) {
+  return (
+    <span
+      aria-hidden
+      className="pointer-events-none relative inline-flex shrink-0 items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      {[
+        { key: "rest", glyph: rest, shown: !open },
+        { key: "hover", glyph: hover, shown: open },
+      ].map(({ key, glyph, shown }) => (
+        <motion.span
+          key={key}
+          initial={false}
+          animate={{ scale: shown ? 1 : 0.5, opacity: shown ? 1 : 0 }}
+          transition={POP}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          {glyph}
+        </motion.span>
+      ))}
+    </span>
+  );
+}
 
 /** Home's pair is the codicon house with its doorway empty, then filled —
  *  lucide has no open-house counterpart, and the codicon's own path leaves the
@@ -94,24 +139,7 @@ export function MorphIcon({
   if (!morph) return null;
 
   return (
-    <span
-      aria-hidden
-      className="relative inline-flex shrink-0 items-center justify-center"
-      style={{ width: size, height: size }}
-    >
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
-          key={open ? "hover" : "rest"}
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          transition={POP}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          {open ? morph.hover : morph.rest}
-        </motion.span>
-      </AnimatePresence>
-    </span>
+    <GlyphSwap open={open} size={size} rest={morph.rest} hover={morph.hover} />
   );
 }
 
@@ -178,42 +206,6 @@ export function LogOutIcon({
   );
 }
 
-/** A pop-swap between two glyphs, which is the family's hover gesture. Used
- *  by the profile menu's own rows the way `MorphIcon` is used by the nav's
- *  (user 2026-09-22). */
-function Swap({
-  open,
-  size,
-  rest,
-  hover,
-}: {
-  open: boolean;
-  size: number;
-  rest: ReactNode;
-  hover: ReactNode;
-}) {
-  return (
-    <span
-      aria-hidden
-      className="relative inline-flex shrink-0 items-center justify-center"
-      style={{ width: size, height: size }}
-    >
-      <AnimatePresence mode="popLayout" initial={false}>
-        <motion.span
-          key={open ? "hover" : "rest"}
-          initial={{ scale: 0.5, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.5, opacity: 0 }}
-          transition={POP}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          {open ? hover : rest}
-        </motion.span>
-      </AnimatePresence>
-    </span>
-  );
-}
-
 /** "Add another account": a plus that becomes a person being added. */
 export function AddAccountIcon({
   open,
@@ -223,7 +215,7 @@ export function AddAccountIcon({
   size?: number;
 }) {
   return (
-    <Swap
+    <GlyphSwap
       open={open}
       size={size}
       rest={<Plus size={size} strokeWidth={NAV_STROKE} />}
@@ -241,7 +233,7 @@ export function ManageAccountsIcon({
   size?: number;
 }) {
   return (
-    <Swap
+    <GlyphSwap
       open={open}
       size={size}
       rest={<Users size={size} strokeWidth={NAV_STROKE} />}

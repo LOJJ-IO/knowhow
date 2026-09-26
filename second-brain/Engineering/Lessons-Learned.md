@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-21
+updated: 2026-09-26
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -522,3 +522,37 @@ returns, because the server inherits the shell's stdout. Check it with `pg_ctl s
 with its title, before a share could even be suggested. That silently broke rule 3 of
 [[FEAT-drive-file-classification]]. When an invariant says "X must not be stored", check what *references*
 X, not only what writes it.
+
+## A component that restyles itself instead of rendering the app's button drifts (2026-09-25)
+A bell brought in from outside carried its own surface and glyph colours and no hover state. Dropped into
+the topbar it looked *nearly* right — same size, same rounding, same position — so the regression read as
+"something feels off in hover" rather than as an obviously wrong control. The fix was not to copy
+`--app-muted` / `--app-active` into it, which is the same mistake one layer down; it was to have it
+render `Button variant="secondary" size="icon"` and contribute only the parts that are actually new (the
+swing, the badge). Rule of thumb for anything pasted in: if the app already has a control of that shape,
+the newcomer renders it rather than matching it, and keeps only the behaviour that doesn't exist yet.
+Where a glyph has to articulate — a bell body and its clapper moving separately — inline the *same*
+icon's path data (lucide exposes it; render the icon once and read the `d` attributes) instead of
+substituting a different bell, so the silhouette is unchanged.
+
+## One spring at several strengths beats several animations (2026-09-25)
+The bell reacts to three things: a new notification, a press, and a mouse arriving. Giving each its own
+keyframes would have made three different objects. Instead one `ring(strength)` drives the same spring at
+0.26 (hover), 0.5 (press) and 0.7–1.3 (arrival, scaled by how many landed at once), and the clapper is
+never animated at all — it's a `useSpring` over the body's own `useVelocity`, so every impulse swings it
+for free. Cheaper, and it reads as one physical thing. Gate pointer-driven impulses on
+`event.pointerType === "mouse"`: touch fires `pointerenter` before `pointerdown`, so an ungated hover
+rings the bell twice on the way to a single tap.
+
+## 2026-09-26 — Don't key-swap an icon inside a clickable control; keep both glyphs mounted
+User: sidebar icons "disappear or shrink" on hover, and app buttons sometimes need two clicks. Both came
+from one pattern: hover icons swapped via `<AnimatePresence mode="popLayout">` with `key={open ? "hover" :
+"rest"}`. A quick in-and-out interrupts the exit and can strand a glyph half-scaled or at opacity 0; and a
+press that lands during the swap starts on an element that is removed before `pointerup`, so no `click` is
+dispatched. Fix: [`GlyphSwap`](../../src/components/app/nav-morph.tsx) renders **both** glyphs always and
+animates only scale/opacity, with `pointer-events-none` so the press starts on the control. Used by the
+sidebar morphs, the profile menu's swaps and Home's play/pause. Same family as the press-scale lesson in
+[`button.tsx`](../../src/components/app/button.tsx): anything that moves or replaces the element under the
+pointer during a press can eat the click. Still on `active:scale-*` (not changed, not asked): setup
+choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction`'s `whileTap`.
+
