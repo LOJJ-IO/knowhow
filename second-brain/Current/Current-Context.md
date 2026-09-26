@@ -18,6 +18,16 @@ User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes
 
 **Connect + join-team list (2026-09-26):** Connect Workspace auto-starts Google’s admin check (no “Check with Google” click; invite-someone remains after a failed check). `GET /org-chart/{id}` uses any-standing so joiners see team pills instead of a standing 403 on the join wizard.
 
+**Invite step copy (2026-09-26):** `invite-link-step.tsx` offer body now reads the ADR-0021 order in steps: "They pick a team, one claims lead, and the lead approves newcomers." (was "They pick their team; that team's lead approves when needed.")
+
+**Invite link ready screen (2026-09-26):** Copy now sits inside the link pill (`SetupCopyLink` in `setup-share-action.tsx`: read-only field + black Copy→Check button, resets after 1.6s), and the screen's main button is **Continue** (finishes setup). Copying no longer advances. Connect-Workspace's "Share this link" screen got the same pill + Continue; the old standalone `SetupShareAction` (Copy that also finished the step) is removed.
+
+**Connect step reuses the "didn't confirm" screen (2026-09-26):** when `/auth/me` has `admin_proof_attempted` and not `is_super_admin`, `ConnectWorkspaceStep` skips `4ee5629`'s auto-start and renders the existing `SignInResultPanel` `admin_not_verified` screen (Invite someone else → know-who, Continue to the app). Body copy restored to the pre-`58541a9` line "You can keep using Knohow. You can invite your Super Admin later." (user 2026-09-26); heading and buttons unchanged. User chose (2026-09-26) to **keep the Super Admin check separate from sign-in**: sign-in stays `LOGIN_SCOPES` only; the Directory-readonly consent is founder-only and its token is discarded, so each check is a Google round trip (silent after first consent).
+
+**Google result screens (2026-09-26):** `SignInResultPanel` shows a drawn-in mark above the heading (`ResultMark`, using the Transitions.dev `.t-success-check` CSS in `globals.css`): tick on `admin_verified`, X on `admin_not_verified`. `admin_verified` now waits for a **Continue** button (the 2.5s auto-advance from `4ee5629` is removed, which also cleared its render-time ref lint error) and its body drops "Taking you to the app…".
+
+**Resume on the invite copy screen (2026-09-26):** new `GET /organizations/{org_id}/join-link` (`live_join_link` in `onboarding/service.py`, same role check as create; returns `{url: null}` when none is live). `InviteLinkStep` calls it on mount: a live link means the founder left before pressing Continue, so it opens on the copy screen with that link instead of "Ready to bring everyone in?" (making a new link would revoke the old one). Tests in `test_join_placement.py`. Local `knohow_test` DB was at 0016; upgraded to 0018.
+
 Active work is on **`main`** (synced with origin after Phase 0).
 
 ## Windows dev machine + privacy fixes (2026-09-25, branch `fix/signin-and-privacy`)

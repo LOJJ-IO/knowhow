@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.activity.changes import team_changes
@@ -262,6 +262,24 @@ def create_join_link(org_id: uuid.UUID, lifetime: str, actor: OrgMember, db: Ses
         db=db,
     )
     return link
+
+
+def live_join_link(org_id: uuid.UUID, actor: OrgMember, db: Session) -> JoinLink | None:
+    """The org's current join link, if one is live — so setup can put the
+    founder back on the copy screen with the link they already made instead
+    of minting (and revoking) another."""
+    _require_join_link_role(org_id, actor, db)
+    now = datetime.now(timezone.utc)
+    return db.execute(
+        select(JoinLink)
+        .where(
+            JoinLink.organization_id == org_id,
+            JoinLink.revoked_at.is_(None),
+            or_(JoinLink.expires_at.is_(None), JoinLink.expires_at > now),
+        )
+        .order_by(JoinLink.created_at.desc())
+        .limit(1)
+    ).scalar_one_or_none()
 
 
 def revoke_join_link(org_id: uuid.UUID, actor: OrgMember, db: Session) -> int:

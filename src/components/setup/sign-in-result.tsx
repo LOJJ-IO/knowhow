@@ -87,17 +87,6 @@ export function SignInResultPanel({
     if (naming) nameRef.current?.focus();
   }, [naming]);
 
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-
-  // Success after Google admin proof — brief confirmation, then into the app
-  // (or next setup step via onDone). No click required (user 2026-09-26).
-  useEffect(() => {
-    if (result !== "admin_verified") return;
-    const t = window.setTimeout(() => onDoneRef.current(), 2500);
-    return () => window.clearTimeout(t);
-  }, [result]);
-
   async function createPersonalOrg() {
     setSubmitting(true);
     setError("");
@@ -165,10 +154,10 @@ export function SignInResultPanel({
     case "admin_verified":
       return (
         <div>
+          <ResultMark kind="check" />
           {heading("You’re verified as a Google Workspace Super Admin")}
-          {body(
-            "Google confirmed it. Your organization’s domain is now verified. Taking you to the app…",
-          )}
+          {body("Google confirmed it. Your organization’s domain is now verified.")}
+          {choices([{ label: "Continue", onClick: onDone }])}
         </div>
       );
     case "admin_not_verified":
@@ -176,10 +165,9 @@ export function SignInResultPanel({
       // continue into the app limited (ADR-0021 / Phase 4).
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("Google didn’t confirm you can connect Workspace")}
-          {body(
-            "That’s fine — invite someone who can, or keep using Knohow with limited access.",
-          )}
+          {body("You can keep using Knohow. You can invite your Super Admin later.")}
           {choices([
             { label: "Invite someone else", onClick: onDone },
             {
@@ -282,4 +270,45 @@ export function SignInResultPanel({
         </div>
       );
   }
+}
+
+/** Tick or X above a Google result, drawn in with the Transitions.dev success
+ *  check (`.t-success-check` in globals.css). Mounts "out", flips "in" on the
+ *  next frame so the appear animation runs. */
+function ResultMark({ kind }: { kind: "check" | "cross" }) {
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
+  return (
+    <span
+      className="t-success-check mb-5 text-[#1c1917]"
+      data-state={shown ? "in" : "out"}
+      aria-hidden="true"
+      // Longest path in the icon, rounded up (getTotalLength).
+      style={{ "--check-path-length": kind === "check" ? 30 : 23 } as React.CSSProperties}
+    >
+      <svg
+        viewBox="0 0 48 48"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="size-10"
+      >
+        {kind === "check" ? (
+          <path d="M14 25l7 7 13-15" />
+        ) : (
+          <>
+            <path d="M16 16l16 16" />
+            <path d="M32 16L16 32" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
 }

@@ -1,18 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   SetupAction,
   SetupBody,
   SetupError,
-  SetupField,
   SetupHeading,
 } from "./shell";
-import { SetupShareAction } from "./setup-share-action";
+import { SetupCopyLink } from "./setup-share-action";
 import { ChoicePill } from "@/components/ui/choice-pill";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
-type LinkPhase = "offer" | "lifetime" | "ready";
+type LinkPhase = "loading" | "offer" | "lifetime" | "ready";
 
 const LIFETIMES = [
   { value: "24h", label: "24 hours" },
@@ -30,7 +29,7 @@ export function InviteLinkStep({
   me: Me;
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<LinkPhase>("offer");
+  const [phase, setPhase] = useState<LinkPhase>("loading");
   // Pre-picked so the button is never dead and nothing is ever greyed out.
   // The owner still chooses.
   const [lifetime, setLifetime] = useState("7d");
@@ -39,14 +38,41 @@ export function InviteLinkStep({
   const [error, setError] = useState("");
   const domain = me.organization_domain;
 
+  // Left before pressing Continue? The link they made is still live, so put
+  // them back on the copy screen with it rather than asking them to make
+  // another (which would revoke the one they may already have shared).
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await backendFetch(
+          `/organizations/${me.organization_id}/join-link`,
+        );
+        const link = res.ok ? await res.json() : null;
+        if (cancelled) return;
+        if (link?.url) {
+          setUrl(link.url);
+          setPhase("ready");
+        } else setPhase("offer");
+      } catch {
+        if (!cancelled) setPhase("offer");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [me.organization_id]);
+
+  if (phase === "loading") return null;
+
   if (phase === "offer")
     return (
       <div>
         <SetupHeading>Ready to bring everyone in?</SetupHeading>
         <SetupBody>
           {domain
-            ? `One link works for everyone at ${domain}. They pick their team; that team's lead approves when needed.`
-            : "One link works for everyone. They pick their team; that team's lead approves when needed."}
+            ? `One link works for everyone at ${domain}. They pick a team, one claims lead, and the lead approves newcomers.`
+            : "One link works for everyone. They pick a team, one claims lead, and the lead approves newcomers."}
         </SetupBody>
         <SetupAction
           label="Create invite link"
@@ -113,29 +139,11 @@ export function InviteLinkStep({
           ? `Anyone with a ${domain} account can use it. Everyone else is turned away.`
           : "Anyone you send it to can use it."}
       </SetupBody>
-      {/* A field, not a second line of body copy. */}
       <div className="mt-6">
-        <SetupField
-          readOnly
-          value={url}
-          aria-label="Invite link"
-          onFocus={(e) => e.currentTarget.select()}
-          className="text-[0.85rem] text-[#1c1917]/70"
-        />
+        <SetupCopyLink url={url} label="Invite link" />
       </div>
       <SetupError>{error}</SetupError>
-      {/* Copy is this screen's one action, and it's also what finishes
-          setup — there is nothing left to decide after it. */}
-      <SetupShareAction
-        onClick={async () => {
-          try {
-            await navigator.clipboard.writeText(url);
-          } catch {
-            /* still show Copied — the URL is in the field to select */
-          }
-          window.setTimeout(onDone, 600);
-        }}
-      />
+      <SetupAction label="Continue" onClick={onDone} />
     </div>
   );
 }

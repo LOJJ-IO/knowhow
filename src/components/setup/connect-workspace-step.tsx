@@ -12,7 +12,8 @@ import {
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
-import { SetupShareAction } from "./setup-share-action";
+import { SetupCopyLink } from "./setup-share-action";
+import { SignInResultPanel } from "./sign-in-result";
 import {
   backendError,
   backendFetch,
@@ -46,10 +47,13 @@ export function ConnectWorkspaceStep({
   }, [phase]);
 
   // Always run Google's check — no intermediate card or click (user 2026-09-26).
+  // Google already answered no for this account: show that answer instead of
+  // another round trip that lands on the same screen.
   useEffect(() => {
-    if (phase !== "check" || me.is_super_admin) return;
+    if (phase !== "check" || me.is_super_admin || me.admin_proof_attempted)
+      return;
     startAdminProof();
-  }, [phase, me.is_super_admin]);
+  }, [phase, me.is_super_admin, me.admin_proof_attempted]);
 
   useEffect(() => {
     if (phase !== "openLink") return;
@@ -124,6 +128,14 @@ export function ConnectWorkspaceStep({
       </div>
     );
   }
+
+  if (phase === "check" && me.admin_proof_attempted)
+    return (
+      <SignInResultPanel
+        result="admin_not_verified"
+        onDone={() => setPhase("knowWho")}
+      />
+    );
 
   if (phase === "knowWho")
     return (
@@ -208,26 +220,10 @@ export function ConnectWorkspaceStep({
           like anyone else.
         </SetupBody>
         <div className="mt-6">
-          <SetupField
-            readOnly
-            value={url}
-            aria-label="Workspace connect invite link"
-            onFocus={(e) => e.currentTarget.select()}
-            className="text-[0.85rem] text-[#1c1917]/70"
-          />
+          <SetupCopyLink url={url} label="Workspace connect invite link" />
         </div>
         <SetupError>{error}</SetupError>
-        <SetupShareAction
-          onClick={async () => {
-            if (!url) return false;
-            try {
-              await navigator.clipboard.writeText(url);
-            } catch {
-              /* URL is in the field */
-            }
-            window.setTimeout(onDone, 600);
-          }}
-        />
+        <SetupAction label="Continue" onClick={onDone} />
       </div>
     );
 

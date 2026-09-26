@@ -37,6 +37,7 @@ from app.onboarding.service import (
     is_founding_member,
     create_join_link,
     join_link_url,
+    live_join_link,
     resolve_join_link_preview,
     revoke_join_link,
     record_setup_step,
@@ -120,6 +121,24 @@ def create_join_link_route(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {
+        "url": join_link_url(link),
+        "expires_at": link.expires_at.isoformat() if link.expires_at else None,
+    }
+
+
+@router.get("/organizations/{org_id}/join-link")
+def live_join_link_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    try:
+        link = live_join_link(org_id, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    if link is None:
+        return {"url": None, "expires_at": None}
     return {
         "url": join_link_url(link),
         "expires_at": link.expires_at.isoformat() if link.expires_at else None,

@@ -23,6 +23,8 @@ from app.onboarding.service import (
     create_join_link,
     create_org_chart,
     is_team_lead,
+    live_join_link,
+    revoke_join_link,
     start_signup,
 )
 
@@ -197,3 +199,21 @@ def test_expired_join_token_refused(db, monkeypatch):
     state = build_state_token("verifier", purpose=SIGNUP_STATE_PURPOSE, extra={"join_token": link.token})
     with pytest.raises(ValueError, match="expired"):
         complete_signup("code", state, db)
+
+
+def test_live_join_link_returns_current_until_revoked(db):
+    org, founder, _team, link = _seed_org_with_link(db)
+    assert live_join_link(org.id, founder, db).id == link.id
+
+    newer = create_join_link(org.id, "30d", founder, db)
+    assert live_join_link(org.id, founder, db).id == newer.id
+
+    revoke_join_link(org.id, founder, db)
+    assert live_join_link(org.id, founder, db) is None
+
+
+def test_live_join_link_ignores_expired(db):
+    org, founder, _team, link = _seed_org_with_link(db)
+    link.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    assert live_join_link(org.id, founder, db) is None
