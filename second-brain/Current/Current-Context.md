@@ -3,11 +3,23 @@ type: context
 status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
-updated: 2026-09-23
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
+updated: 2026-09-26
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0021-founder-not-owner-leads-self-claim]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]"]
 ---
 
 # Current Context
+
+## Org onboarding model locked (2026-09-26)
+User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes [[0014-org-setup-and-join-link]] on ownership / leads / join approval / who reissues the link. Summary: **founder ≠ owner**; SA > owner > team lead; first **lead claim** wins; join is a **request only if a lead exists**; later multi-leads; **one org-wide link** (team leads can reissue); owner-on-join is a **claim**; SA is undo/exceptions; multi-team + per-team lead Y/N → app. Workspace connect: Google-check → Connect, or know-who → email / don’t-know → copy open link. Tooltips for Owner + Super Admin. **Not built** — live UI still has the old Yes/No Super Admin / owner-as-founder shape. Spec: [[FEAT-workspace-onboarding-flow]].
+
+## Windows dev machine + privacy fixes (2026-09-25, branch `fix/signin-and-privacy`)
+**Second dev machine is Windows** (the setup notes below are the Mac). There, Postgres 16 is the EnterpriseDB **portable zip** at `%LOCALAPPDATA%\pgsql` (winget's installer needs a UAC prompt an agent can't approve). Trust auth, port 5432, role/DBs `knohow` + `knohow_test`, both at `0017`. It is **not a service**, so start it after a reboot:
+`"%LOCALAPPDATA%\pgsql\bin\pg_ctl.exe" -D "%LOCALAPPDATA%\pgsql\data" -l "%LOCALAPPDATA%\pgsql\postgres.log" start`.
+Backend: `backend\.venv\Scripts\uvicorn.exe app.main:app --port 8000 --reload` (venv is Python 3.13; suite passes on it). `backend/.env` has the real OAuth client (validated) and `GOOGLE_SERVICE_ACCOUNT_JSON=C:/Users/tolul/secrets/knohow-staging-95d725a75c83.json` (key `95d725a7…`, outside the repo; loads and parses through `load_service_account_info`). The Google redirect carries the real `client_id`. **Real sign-in not yet clicked through on Windows.** The OAuth client secret appeared in a chat photo 2026-09-25, so **rotate it**. The root `.env` gained `NEXT_PUBLIC_BACKEND_API_URL=http://localhost:8000`.
+
+**Privacy blockers (1), (2), (4) fixed** on that branch, uncommitted: detected files no longer enter `FileIndex`, DeepSearch no longer leaks unconfirmed files, and `personal` is now `private`. Details in [[Known-Issues]] → Recently resolved. **Consequence to know:** until the classification/confirmation flow ([[FEAT-drive-file-classification]]) is built, a file created outside Knohow never reaches `FileIndex`, `/files`, dashboards or other people's DeepSearch results. That is the agreed rule, not a bug.
+
+**Proposal gap (2026-09-25):** the BCW proposal (`docs/business/`, dated 2026-09-08) promises seven features. Only the org chart and onboarding have frontend. `/workspace`, `/search`, `/offboarding` are empty states over existing backend engines. Nothing is deployed and Google's OAuth verification isn't submitted, so a BCW pilot means adding each person as a GCP test user. The proposal claims AES-256 at rest; the backend's token encryption is Fernet (AES-128), unreconciled.
 
 ## Topbar bell is a real control now (2026-09-23)
 
@@ -426,41 +438,29 @@ revises [[0012-identity-linking-one-person-many-accounts]]'s one-org rule and ro
 The product is spelled **Knohow** in all user-facing text — the logo is *Kn* + hex mark (the "o") + *how*. The repo, folder and vault still say "Knowhow"; don't rename those unasked, but never write "Knowhow" in UI copy, page titles or metadata.
 
 ## Org setup copy (2026-09-20)
-Owner question is **"Are you the owner of the organization?"** (dropped "/ top"). If No → **"Do you know the owner's email?"** with Yes / No only; Yes → email field; No → skip nomination. Backend allows `is_owner=false` without `owner_email`. Super Admin still has Yes / No / I don't know. [[FEAT-landing-login-panel]] / [[FEAT-workspace-onboarding-flow]].
+**Superseded directionally by 2026-09-26** ([[0021-founder-not-owner-leads-self-claim]]): founder is not
+asked to self-declare as org owner as the grant of ownership; owner is invited/claimed separately; Super
+Admin is Google-checked, not Yes/No/I don't know. Live UI may still show the old questions until rebuilt.
+Historical: Owner question was **"Are you the owner of the organization?"** … Super Admin Yes / No / I don't know.
 
-## Org setup + join link decided (2026-09-20, not built)
+## Org setup + join link (superseded 2026-09-26)
+The 2026-09-20 write-up below is **historical**. Current locked rules: [[0021-founder-not-owner-leads-self-claim]]
+and [[FEAT-workspace-onboarding-flow]] → "Locked org model". In particular: **founder ≠ owner**; leads
+**self-claim**; join is a request **only if a lead exists**; **team leads** may reissue the org-wide link.
+
+<details><summary>2026-09-20 notes (superseded — do not implement)</summary>
+
 **Setup is the next onboarding step for both flows** (Workspace and personal) and is where the org chart
 is created. User's shape: create the groups, send **one deep link**, people sign in through it, join the
-org, pick a team, enter the app. Security edge cases worked through and locked in [[0014-org-setup-and-join-link]]:
-- **First person to sign in from the domain runs setup and owns the org outright** (no proof gate); if that
-  was the wrong person, **admin proof takes the org over**.
-- Chart at setup = **teams only, no named seats**; people fill in as they join. Teams are **typed in**, and
-  **pulled from Google Workspace groups when delegation makes that available** (typing always works).
-- Founder's own team is asked **after** the teams exist, "none" allowed. **Team leads are named by the owner
-  when approving someone into the team.** Owner, admins, and a team's lead can edit teams afterwards.
-- Link is **domain-locked** (org's Google domain only; contractors keep the sponsored path in
-  [[0009-contractor-work-created-as-the-org]]), **expires with the owner choosing the lifetime when sending**,
-  and is **revocable** (people already in stay in).
-- **Picking a team is a request, not a grant** — owner or an admin approves from one pending list.
-- While waiting: **in the app but empty**, with a line saying it's with the owner.
-- Wrong account at the link → name the expected account, one button to switch. Account already in another
-  org → **refuse and explain** ([[0013-sign-in-is-to-an-organization]]).
-- Owner sees **who joined, when, and who's pending**. Removal from the chart **revokes the sharing Knohow
-  granted** and reports it; Google access granted outside Knohow is stated as out of our reach.
-- **Resume, don't restart (user, 2026-09-21):** if an onboarding step hasn't been completed, signing in
-  takes the person **back to that step**, never to Get Started. **Not true today** — `signup_redirect`
-  (`backend/app/api/routes/auth.py`) redirects to `frontend_origin` with no marker of where they stopped.
-  Waiting-for-approval is **not** an unfinished step (those resume into the empty in-app state).
-  **Saved as they go** — each team persists as it's typed, so a half-built chart is a real state: setup
-  completion is its own flag (not "has teams"), the join link is unsendable until it's set, and a team typed
-  by mistake needs a way to be removed.
-- **Copy approved 2026-09-21** for every setup + join screen (founder's teams, Workspace-group import,
-  founder's own team, link creation/lifetime/ready, all four joiner rejection screens, team pick, waiting
-  state, approver list, lead question, resume, removal). Drafted by Claude at the user's request and
-  accepted as written; lives in [[FEAT-workspace-onboarding-flow]] → "Copy for setup + join".
-Still needed before building: the pending-request state + approver UI +
-empty in-app state + link records + team-lead role + admin-proof ownership takeover + a stored onboarding
-state with a resume route don't exist yet.
+org, pick a team, enter the app. Then locked in [[0014-org-setup-and-join-link]] (now superseded):
+- ~~First person owns the org outright~~ → **founder only** (0021).
+- Chart at setup = **teams only, no named seats** (still true).
+- ~~Team leads named by owner at approval~~ → **first lead claim wins**; request only if lead exists (0021).
+- Link **domain-locked**, expiry, revocable (still true); **team leads** may reissue (0021).
+- Resume / save-as-you-go (still true; resume path built 2026-09-21).
+- Copy approved 2026-09-21 — will need revision where it assumes founder=owner or always-request.
+
+</details>
 
 ## ⏭ Next + a standing reminder (2026-09-21)
 

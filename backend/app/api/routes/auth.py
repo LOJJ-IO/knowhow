@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_member, get_db
 from app.auth.login import complete_login, start_login
-from app.auth.personal_oauth import complete_personal_oauth_consent, start_personal_oauth_consent
+from app.auth.personal_oauth import (
+    PERSONAL_OAUTH_STATE_PURPOSE,
+    complete_personal_oauth_consent,
+    start_personal_oauth_consent,
+)
 from app.auth.pkce import InvalidOAuthState, decode_state_token, peek_state_purpose
 from app.auth.identity import (
     AccountAlreadyLinked,
@@ -254,6 +258,8 @@ def login_callback(
             return admin_proof_redirect(code, state, db)
         if purpose == LINK_ACCOUNT_STATE_PURPOSE:
             return link_account_redirect(code, state, knohow_device, db)
+        if purpose == PERSONAL_OAUTH_STATE_PURPOSE:
+            return personal_oauth_redirect(code, state, db)
         result = complete_login(code, state, db)
         needs_admin_proof = accept_invitations_on_sign_in(result.member, db)
     except InvalidOAuthState as exc:
@@ -527,14 +533,17 @@ def personal_oauth_start(member: OrgMember = Depends(get_current_member)) -> Red
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
 
+def personal_oauth_redirect(code: str, state: str, db: Session) -> RedirectResponse:
+    """Stores the member's Drive grant. Not a sign-in, so no session cookies."""
+    complete_personal_oauth_consent(code, state, db)
+    return RedirectResponse(f"{get_settings().frontend_origin}?drive_connected=1", status_code=status.HTTP_302_FOUND)
+
+
 @router.get("/personal-oauth/callback")
 def personal_oauth_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
-    settings = get_settings()
     try:
-        complete_personal_oauth_consent(code, state, db)
+        return personal_oauth_redirect(code, state, db)
     except InvalidOAuthState as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired consent state: {exc}") from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-
-    return RedirectResponse(f"{settings.frontend_origin}?drive_connected=1", status_code=status.HTTP_302_FOUND)

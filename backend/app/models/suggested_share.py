@@ -34,7 +34,9 @@ class SuggestedShare(Base):
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True
     )
-    file_id: Mapped[str] = mapped_column(String(255), ForeignKey("file_index.file_id"), nullable=False)
+    # A Drive file ID, not a FileIndex reference: the file is unconfirmed, so
+    # it has no FileIndex row and its title is not stored anywhere.
+    file_id: Mapped[str] = mapped_column(String(255), nullable=False)
     creator_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=False
     )

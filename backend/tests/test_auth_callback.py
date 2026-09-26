@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.api import deps
 from app.api.routes import auth as auth_routes
 from app.auth.login import LOGIN_STATE_PURPOSE
+from app.auth.personal_oauth import PERSONAL_OAUTH_STATE_PURPOSE
 from app.auth.pkce import build_state_token, peek_state_purpose
 from app.main import app
 from app.onboarding.service import SIGNUP_STATE_PURPOSE, SignupResult
@@ -58,6 +59,23 @@ def test_callback_routes_login_state_to_login(monkeypatch):
 
     assert calls == ["login"]
     assert response.status_code == 302
+
+
+def test_callback_routes_drive_consent_state_to_personal_oauth(monkeypatch):
+    calls: list[str] = []
+    monkeypatch.setattr(
+        auth_routes, "complete_personal_oauth_consent", lambda code, state, db: calls.append("personal_oauth")
+    )
+    state = build_state_token("verifier", purpose=PERSONAL_OAUTH_STATE_PURPOSE, extra={"member_id": str(uuid.uuid4())})
+    try:
+        response = _client(monkeypatch, calls).get("/auth/callback", params={"code": "c", "state": state})
+    finally:
+        app.dependency_overrides.clear()
+
+    assert calls == ["personal_oauth"]
+    assert response.status_code == 302
+    assert response.headers["location"].endswith("drive_connected=1")
+    assert "knohow_access_token" not in response.cookies  # consent is not a sign-in
 
 
 def test_callback_rejects_tampered_state(monkeypatch):

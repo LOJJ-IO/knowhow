@@ -509,3 +509,16 @@ Components copied off the web now import from `motion/react` (the renamed packag
 `useSpring`, `useTransform`, `AnimatePresence`, `useReducedMotion`, `AnimationPlaybackControls`,
 `MotionValue`. Retarget the import rather than installing `motion` beside it; two motion runtimes in one
 tree means two copies of the animation loop and `AnimatePresence` contexts that don't see each other.
+
+## Postgres on Windows without admin: use the portable zip (2026-09-25)
+`winget install PostgreSQL.PostgreSQL.16` runs the EnterpriseDB installer, which needs a UAC prompt. From an
+agent's shell it fails with `0x800704c7 … canceled by the user`. The same vendor's
+`postgresql-<ver>-windows-x64-binaries.zip` needs no admin: unzip, `initdb -A trust`, `pg_ctl start`. Two
+catches. It is not a service, so it doesn't come back after a reboot. And `pg_ctl start` from Git Bash never
+returns, because the server inherits the shell's stdout. Check it with `pg_ctl status` rather than waiting.
+
+## A foreign key can force a privacy violation (2026-09-25)
+`suggested_shares.file_id` referenced `file_index`. Every detected file therefore needed a `FileIndex` row,
+with its title, before a share could even be suggested. That silently broke rule 3 of
+[[FEAT-drive-file-classification]]. When an invariant says "X must not be stored", check what *references*
+X, not only what writes it.

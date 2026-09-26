@@ -36,7 +36,7 @@ class FileIndex(Base):
     modified_at: Mapped[datetime] = mapped_column(nullable=False)
 
     # Permission snapshot: who the file is currently shared with and how
-    # (roles, "Personal" designation, etc.) — not Drive's full permission
+    # (roles, "private" designation, etc.) — not Drive's full permission
     # object, just what the sharing engine and dashboards need to render.
     sharing_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 

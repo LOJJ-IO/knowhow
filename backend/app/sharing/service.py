@@ -81,26 +81,11 @@ def handle_file_created(
         raise ValueError(f"no OrgMember with id={creator_user_id}")
 
     team_id = member_team(org_id, creator_user_id, db)
-    now = datetime.now(timezone.utc)
-
-    file_row = db.get(FileIndex, file_id)
-    if file_row is None:
-        file_row = FileIndex(
-            file_id=file_id,
-            org_id=org_id,
-            owner_user_id=creator_user_id,
-            team_id=team_id,
-            file_type=file_type,
-            title=title,
-            created_at=now,
-            modified_at=now,
-            sharing_state={},
-            last_synced_at=now,
-        )
-        db.add(file_row)
-    db.commit()
 
     if not created_via_knohow:
+        # Nobody has confirmed this file as Company, so it must not enter
+        # FileIndex and its title must not be kept (FEAT-drive-file-classification
+        # rule 3, constraint 3). The suggestion holds the Drive file ID only.
         recipients = sorted(str(m) for m in resolve_auto_share_recipients(org_id, team_id, db)) if team_id else []
         suggestion = SuggestedShare(
             id=uuid.uuid4(),
@@ -122,6 +107,24 @@ def handle_file_created(
             db=db,
         )
         return {"action": "suggested_share_created", "suggested_share_id": str(suggestion.id)}
+
+    now = datetime.now(timezone.utc)
+    file_row = db.get(FileIndex, file_id)
+    if file_row is None:
+        file_row = FileIndex(
+            file_id=file_id,
+            org_id=org_id,
+            owner_user_id=creator_user_id,
+            team_id=team_id,
+            file_type=file_type,
+            title=title,
+            created_at=now,
+            modified_at=now,
+            sharing_state={},
+            last_synced_at=now,
+        )
+        db.add(file_row)
+    db.commit()
 
     result: dict = {"action": "indexed"}
 
@@ -190,27 +193,27 @@ def handle_file_created(
     return result
 
 
-def mark_file_personal(org_id: uuid.UUID, file_id: str, actor_member_id: uuid.UUID, db: Session, personal: bool = True) -> FileIndex:
-    """Lets an individual keep a draft hidden from their team while leaders
-    (the team's team_leader, plus org-wide top_leader/authorized_user roles,
-    which already always see everything) retain background access — see
-    app/sharing/visibility.py::can_view_file for the enforcement side."""
+def mark_file_private(org_id: uuid.UUID, file_id: str, actor_member_id: uuid.UUID, db: Session, private: bool = True) -> FileIndex:
+    """Private = a company file hidden from coworkers while leaders (the
+    team's team_leader, plus org-wide top_leader/authorized_user roles)
+    retain background access — see app/sharing/visibility.py::can_view_file.
+    Not "Personal", which is an employee's own file and never indexed."""
     file_row = db.get(FileIndex, file_id)
     if file_row is None:
         raise ValueError(f"no FileIndex row for file_id={file_id}")
     if file_row.org_id != org_id:
         raise CrossOrgAccessDenied(f"file {file_id} does not belong to organization {org_id}")
 
-    file_row.sharing_state = {**file_row.sharing_state, "personal": personal}
+    file_row.sharing_state = {**file_row.sharing_state, "private": private}
     db.commit()
     db.refresh(file_row)
 
     record_audit_entry(
         org_id=org_id,
         actor_user_id=actor_member_id,
-        action_type="sharing.file_personal_designation_set",
+        action_type="sharing.file_private_designation_set",
         target_resource_id=file_id,
-        details={"personal": personal},
+        details={"private": private},
         db=db,
     )
     return file_row

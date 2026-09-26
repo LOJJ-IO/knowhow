@@ -90,8 +90,8 @@ def can_view_file(member_id: uuid.UUID, file: FileIndex, org_id: uuid.UUID, db: 
     visible_team_ids = visible_team_ids_for_member(member_id, org_id, db)
     is_org_wide_visibility = visible_team_ids is None
 
-    is_personal = bool(file.sharing_state.get("personal")) if file.sharing_state else False
-    if is_personal:
+    is_private = bool(file.sharing_state.get("private")) if file.sharing_state else False
+    if is_private:
         # Hidden from the rest of the team, but leaders (org-wide roles,
         # already covered by is_org_wide_visibility, plus this file's own
         # team_leader specifically) retain background access.

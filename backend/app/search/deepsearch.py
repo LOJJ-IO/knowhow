@@ -8,10 +8,10 @@ from sqlalchemy.orm import Session
 from app.exceptions import PersonalAccountNotConsented
 from app.google.drive_client import get_drive_client_for_user
 from app.google.retry import google_api_call
-from app.members.lookup import member_team, resolve_member_by_email
+from app.members.lookup import resolve_member_by_email
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
-from app.sharing.visibility import can_view_file, visible_team_ids_for_member
+from app.sharing.visibility import can_view_file
 
 
 def _escape_drive_query(query: str) -> str:
@@ -29,28 +29,16 @@ class SearchResult:
 
 
 def _is_visible_live(requester_id: uuid.UUID, file_id: str, owner_email: str | None, org_id: uuid.UUID, db: Session) -> bool:
-    """Same role-based visibility rule DeepSearch results go through as
-    everything else — the whole point of this feature is surfacing files
-    the searcher was never individually Drive-shared on, filtered by the
-    org's role hierarchy rather than Drive's own ACLs. Prefers the indexed
-    FileIndex row (has the "Personal" designation and any explicit grants);
-    falls back to a live team-membership check for a file DeepSearch found
-    that hasn't been indexed yet."""
+    """Only confirmed Company files (those in FileIndex) reach other people,
+    through the same role visibility as everything else. An unindexed file
+    may be an employee's Personal file, so it shows to its own owner only
+    (FEAT-drive-file-classification, "Consumers")."""
     file_row = db.get(FileIndex, file_id)
     if file_row is not None:
         return can_view_file(requester_id, file_row, org_id, db)
 
-    visible_team_ids = visible_team_ids_for_member(requester_id, org_id, db)
-    if visible_team_ids is None:
-        return True
-
     owner = resolve_member_by_email(org_id, owner_email, db)
-    if owner is None:
-        return False
-    if owner.id == requester_id:
-        return True
-    owner_team_id = member_team(org_id, owner.id, db)
-    return owner_team_id in visible_team_ids if owner_team_id else False
+    return owner is not None and owner.id == requester_id
 
 
 def search(org_id: uuid.UUID, requester_member_id: uuid.UUID, query: str, db: Session, limit: int = 25) -> list[SearchResult]:
@@ -60,7 +48,7 @@ def search(org_id: uuid.UUID, requester_member_id: uuid.UUID, query: str, db: Se
     dedupes by file_id, then filters through the requester's role-based
     visibility. Google's own index performs the content matching — nothing
     from result bodies is ever persisted here; FileIndex (queried for the
-    "Personal" flag and explicit grants above) serves metadata filtering
+    "Private" flag and explicit grants above) serves metadata filtering
     and dashboards, this is a separate, live path layered on top of it —
     see the module docstring on FileIndex for why these stay two paths.
     """

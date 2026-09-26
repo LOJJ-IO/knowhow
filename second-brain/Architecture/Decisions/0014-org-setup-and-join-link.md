@@ -1,16 +1,16 @@
 ---
 type: decision
-status: active
+status: superseded
 tags: [area/onboarding, area/security, area/backend, area/frontend]
 created: 2026-09-20
-updated: 2026-09-20
-related: ["[[FEAT-workspace-onboarding-flow]]", "[[FEAT-landing-login-panel]]", "[[0006-observed-domain-tenant-identity]]", "[[0013-sign-in-is-to-an-organization]]", "[[0009-contractor-work-created-as-the-org]]", "[[Known-Issues]]"]
+updated: 2026-09-26
+related: ["[[0021-founder-not-owner-leads-self-claim]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-landing-login-panel]]", "[[0006-observed-domain-tenant-identity]]", "[[0013-sign-in-is-to-an-organization]]", "[[0009-contractor-work-created-as-the-org]]", "[[Known-Issues]]"]
 ---
 
 # ADR-0014: Org setup builds teams, and one revocable domain-locked link brings everyone else in
 
 ## Status
-`active` — decided 2026-09-20 with the user. Not built.
+`superseded` by [[0021-founder-not-owner-leads-self-claim]] (2026-09-26). Kept for history. Do not implement from this note — founder-owns-outright, leads-only-at-approval, and always-request-to-join are **no longer** the product rules.
 
 ## Context
 Setup is the next onboarding step for **both** flows (Workspace account and personal account), and it is

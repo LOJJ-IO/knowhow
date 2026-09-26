@@ -9,7 +9,7 @@ from app.api.deps import get_approved_member, get_db
 from app.exceptions import CrossOrgAccessDenied
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
-from app.sharing.service import mark_file_personal
+from app.sharing.service import mark_file_private
 from app.sharing.visibility import can_view_file, visible_team_ids_for_member
 
 router = APIRouter(tags=["files"])
@@ -87,7 +87,7 @@ def list_files(
 
     candidates = db.execute(stmt).scalars().all()
     # The SQL filter above narrows by team_id/ownership; can_view_file still
-    # runs per row for the "Personal" designation nuance (background access
+    # runs per row for the "Private" designation nuance (background access
     # for the file's own team_leader, hidden from everyone else on the team)
     # that isn't expressible as a single SQL predicate here.
     visible = [f for f in candidates if can_view_file(member.id, f, org_id, db)]
@@ -96,12 +96,12 @@ def list_files(
     return {"total": len(visible), "limit": limit, "offset": offset, "files": [_serialize(f) for f in page]}
 
 
-@router.post("/files/{file_id}/personal")
-def set_file_personal(
+@router.post("/files/{file_id}/private")
+def set_file_private(
     file_id: str,
-    personal: bool = True,
+    private: bool = True,
     db: Session = Depends(get_db),
     member: OrgMember = Depends(get_approved_member),
 ) -> dict:
-    file_row = mark_file_personal(member.organization_id, file_id, member.id, db, personal=personal)
+    file_row = mark_file_private(member.organization_id, file_id, member.id, db, private=private)
     return _serialize(file_row)
