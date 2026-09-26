@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-21
+updated: 2026-09-26
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -530,3 +530,16 @@ never animated at all — it's a `useSpring` over the body's own `useVelocity`, 
 for free. Cheaper, and it reads as one physical thing. Gate pointer-driven impulses on
 `event.pointerType === "mouse"`: touch fires `pointerenter` before `pointerdown`, so an ungated hover
 rings the bell twice on the way to a single tap.
+
+## 2026-09-26 — Don't key-swap an icon inside a clickable control; keep both glyphs mounted
+User: sidebar icons "disappear or shrink" on hover, and app buttons sometimes need two clicks. Both came
+from one pattern: hover icons swapped via `<AnimatePresence mode="popLayout">` with `key={open ? "hover" :
+"rest"}`. A quick in-and-out interrupts the exit and can strand a glyph half-scaled or at opacity 0; and a
+press that lands during the swap starts on an element that is removed before `pointerup`, so no `click` is
+dispatched. Fix: [`GlyphSwap`](../../src/components/app/nav-morph.tsx) renders **both** glyphs always and
+animates only scale/opacity, with `pointer-events-none` so the press starts on the control. Used by the
+sidebar morphs, the profile menu's swaps and Home's play/pause. Same family as the press-scale lesson in
+[`button.tsx`](../../src/components/app/button.tsx): anything that moves or replaces the element under the
+pointer during a press can eat the click. Still on `active:scale-*` (not changed, not asked): setup
+choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction`'s `whileTap`.
+

@@ -3,7 +3,7 @@ type: feature
 status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-25
+updated: 2026-09-26
 related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0014-org-setup-and-join-link]]"]
 ---
 
@@ -174,6 +174,89 @@ When the domain check finds **no `hd`** (personal Google account):
 - **Arrived through a sponsor's invite link** → joins that org as sponsored and lands in their blank workspace ([[0009-contractor-work-created-as-the-org]]).
 - **Arrived cold (no invite)** → **ask first**: "This is a personal Google account. Does your company use Google Workspace?" — **Yes** → sign in with the work account instead (back to Google); **No / just me** → create a **domainless** org (one owner, one per person). Chosen to avoid the domainless ↔ candidate collision below (a Gmail founder creating a second org for a company whose employees are already on Knohow). Copy above is wording direction, not final — user designs the screen.
 - **Backend today does none of this:** `bootstrap_organization` names the org after the email domain, so every Gmail user gets their own org called `gmail.com`.
+
+## Flow diagrams (2026-09-26, checked against code)
+Three separate journeys, split from one combined diagram the user brought (feedback on it: it mixed sign-in,
+joining and the Super Admin step into one chart). Each node is what the code does today; dashed = not built.
+
+### 1. Sign-in and founder setup
+```mermaid
+flowchart TD
+    A([Continue with Google]) --> B[Google sign-in]
+    B --> C{Email already a Knohow member?}
+    C -- Yes --> INV
+    C -- No --> D{What kind of Google account?}
+
+    D -- Personal --> P1{Does your company use<br/>Google Workspace?}
+    P1 -- Yes --> P2[Sign in with work account<br/>personal email linked to same person] --> D
+    P1 -- No --> P3[Name your workspace] --> P4[Domainless org, you are owner] --> APP
+
+    D -- Workspace --> E{Knohow org for this domain?}
+    E -- Yes --> J1{Auto-accept on?}
+    J1 -- Yes --> J2[Joins, approved] --> INV
+    J1 -- No --> J3[Joins, limited until approved] --> INV
+    E -- No --> F[New org, you are founder, limited] --> INV
+
+    INV{Invite for this account?<br/>checked for everyone, new or existing}
+    INV -- Owner invite --> OW[Becomes owner, approved] --> NEXT
+    INV -- Super Admin invite<br/>or open Super Admin link --> SA([Flow 3])
+    INV -- None --> NEXT
+
+    NEXT{Founder with setup unfinished?}
+    NEXT -- No --> APP
+    NEXT -- Yes --> Q1{Are you the owner?}
+    Q1 -- Yes --> Q3
+    Q1 -- No --> Q2{Know the owner's email?}
+    Q2 -- Yes --> Q2Y[Owner invite created] --> Q3
+    Q2 -- No --> Q3
+    Q3{Are you a Google Workspace Super Admin?}
+    Q3 -- Yes --> PROOF[Google checks, extra permission] --> S1
+    Q3 -- No / I don't know --> S1
+    S1[Org name] --> S2[How many teams] --> S3[Team names] --> S4[Your teams] --> S5[Invite link]
+    S5 --> S6{Google confirmed you as Super Admin?}
+    S6 -- Yes --> APP
+    S6 -- No --> S7[Invite your Super Admin<br/>copy open link] --> APP
+    APP([App])
+```
+
+### 2. Coworker joins through the invite link
+```mermaid
+flowchart TD
+    JL([Opens /join/token]) --> PV{Link still valid?}
+    PV -- No --> X[Link expired or turned off]
+    PV -- Yes --> G[Continue with Google] --> F1([Flow 1 from sign-in])
+    F1 -.-> T[Pick a team, request]
+    T -.-> AP[Owner or Super Admin approves]
+    classDef planned stroke-dasharray: 5 5;
+    class T,AP planned;
+```
+The join token is **not** sent to the backend at sign-in (as of 2026-09-26): the org is found from the
+Google account's domain, so there is no "wrong account / other org" check for join links. Only named
+invites have one (`?invite=wrong_account`).
+
+### 3. Super Admin gives Knohow access to the company's Drive
+```mermaid
+flowchart TD
+    A1([Opens open Super Admin link]) --> SI[Google sign-in, flow 1]
+    A2([Opens named Super Admin invite]) --> SI
+    A3([Founder answers Yes in setup]) --> PR
+    SI --> PR[Google checks: Super Admin?<br/>extra permission]
+    PR -- Yes --> V[Verified, domain bound]
+    PR -- No --> M[Ordinary member]
+    PR -- Error --> R[Try again]
+    V -.-> DG[Admin console step:<br/>client ID + permissions to copy]
+    DG -.-> DT[Knohow detects it, every 5 min]
+    DT -.-> OK[Company Drive connected]
+    classDef planned stroke-dasharray: 5 5;
+    class DG,OK planned;
+```
+Detection is built (backend); the screen that walks the Super Admin through the Admin console isn't.
+
+### What the combined diagram got wrong
+- **Invites were only on the existing-member branch.** The backend accepts them for every sign-in. An
+  invited owner is usually new, so that diagram sent them to "waits for approval" instead of owner.
+- **The open Super Admin link had no arrival.** It only appeared as something the founder copies.
+- **The Google check had no error path** (API off, outage): it shows "Try again", not "not proven".
 
 ## Out of scope
 - Multi-domain organizations (`acme.com` + `acme.ca`) — `Organization.verified_domain` is a single unique column.
@@ -429,8 +512,9 @@ It states their standing before asking anything, and the two choices are answers
 shape as the Yes / No screens, not two competing actions.
 
 Superseded 2026-09-21 (the check moved to the end of setup) and refined 2026-09-25: the end screen now
-depends on the answer. "No" gets an acknowledgement and **Done** (their admin connects Google later);
-"I don't know" gets "Not sure if you're the admin?" and **Check with Google**. Details in
+depends on the answer. "No" gets the **open admin link** to copy and send to their Super Admin (first UI
+for that link);
+"I don't know" gets the same link screen. Details in
 [[Current-Context]].
 
 ### Teams field placeholder

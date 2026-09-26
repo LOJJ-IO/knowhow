@@ -1,10 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
 import { Pause, Play } from "lucide-react";
 
 import { Button } from "@/components/app/button";
 import { NAV_STROKE } from "@/components/app/icon";
+import { GlyphSwap } from "@/components/app/nav-morph";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { cn } from "@/lib/utils";
 
@@ -30,8 +30,6 @@ const ON_CANVAS =
  *  green button sitting there. The label stays ink — colouring the whole
  *  control made it read as a state the screen was in. */
 const PLAY_TONE = "text-[var(--app-play)]";
-
-const POP = { type: "spring", stiffness: 600, damping: 25 } as const;
 
 /** Replays the day's updates: the pulses travelling up each changed team's
  *  connector, from the start, staggered as they were the first time.
@@ -78,22 +76,12 @@ export function ReplayUpdatesButton({
           running && PLAY_TONE,
         )}
       >
-        <AnimatePresence mode="popLayout" initial={false}>
-          <motion.span
-            key={running ? "pause" : "play"}
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.5, opacity: 0 }}
-            transition={POP}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            {running ? (
-              <Pause size={18} strokeWidth={NAV_STROKE} />
-            ) : (
-              <Play size={18} strokeWidth={NAV_STROKE} />
-            )}
-          </motion.span>
-        </AnimatePresence>
+        <GlyphSwap
+          open={running}
+          size={18}
+          rest={<Play size={18} strokeWidth={NAV_STROKE} />}
+          hover={<Pause size={18} strokeWidth={NAV_STROKE} />}
+        />
       </span>
       Recent updates
     </Button>

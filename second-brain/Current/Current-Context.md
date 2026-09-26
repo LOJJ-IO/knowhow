@@ -574,11 +574,28 @@ an **action plus a bail-out** ("Check with Google" / "Do this later") is **two a
   **2026-09-25 — the end screen now answers what they said** (user: a "No" / "I don't know" got the
   "one extra permission" screen and then Google's "Skip for now", which felt confusing). The answer is
   held in local state (`superAdminAnswer`) and picks the screen:
-  - **No** → "Your admin connects Knohow to Google." / "Only a Google Workspace Super Admin can do this.
-    You can invite yours from the app later." → **Done** (no Google check, it could only fail).
-  - **I don't know** → "Not sure if you're the admin?" / "Google can check for you. If you're not, nothing
-    changes and you can invite your admin later." → **Check with Google**.
-  - Resumed past the question (answer not persisted; backend only audit-logs it) → the old generic screen.
+  - **No** → [`admin-link-step.tsx`](../../src/components/setup/admin-link-step.tsx): creates the **open
+    admin link** (`POST /organizations/{id}/invitations` `{kind: "super_admin"}`, no email) and hands it over.
+    "Invite your Super Admin." / "Whoever opens this link signs in with Google, and Google checks whether
+    they're your Google Workspace Super Admin. If they are, they can give Knohow access to {Org}'s Google
+    Drive. If not, they join {Org} like anyone else. The link works for 7 days." (Rewritten 2026-09-25, user: "the wording doesnt
+    sound like what its doing". The first draft said "send to your Super Admin" and "share with your team" at
+    once and never said what opening the link does.) Known gap: a founder who answers No / I don't know but
+    *is* the Super Admin is never checked; the only way out is opening their own link, which nothing tells them.
+    → **Copy**, which finishes setup (same shape as the invite-link screen). No Google check, it could only fail.
+  - **I don't know** → the same Super Admin link screen as No (user, 2026-09-25: "why is there a setup
+    screen for someone that said idk"). The link already answers "who is it", since Google checks whoever
+    opens it, so a separate Check with Google screen only repeated the permission-then-skip confusion.
+  - **Wording rule (user, 2026-09-25):** always "Super Admin", never bare "admin" / "Workspace admin" in
+    copy. They're different Google roles; mixing them read as two different people.
+  - **No fallback screen (user, 2026-09-26: "why are we making screens that almost never appear").** The old
+    generic "Check if you're the Super Admin" screen only survived for a reload mid-setup; deleted. Anyone
+    reaching the end unconfirmed by Google gets the link screen, so the answer no longer needs remembering.
+    That includes a **Yes that Google turned down** (2026-09-26): it used to skip the link via
+    `admin_proof_attempted`, stranding exactly the person who needs to send it on. Only `is_super_admin`
+    skips it now.
+  - **Wording rule (user, 2026-09-26):** never say "connect Knohow to Google". They already signed in with
+    Google; what the Super Admin grants is Knohow's access to the *company's* Drive (domain-wide delegation).
   Copy drafted by me from the option the user picked; unverified in a browser.
 - **Teams is now two screens** (user's call, after I argued against one-name-per-screen):
   1. **"How many teams are in {Org}?"** / "Drag to set the number." — a **`DragStepper`**: one control, drag

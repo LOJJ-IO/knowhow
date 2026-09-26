@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   SETUP_CHOICE_CLASS,
   SetupAction,
-  SetupBody,
   SetupChoices,
   SetupError,
   SetupField,
@@ -16,6 +15,7 @@ import { OrgNameStep } from "./org-name-step";
 import { TeamsStep } from "./teams-step";
 import { OwnTeamStep } from "./own-team-step";
 import { InviteLinkStep } from "./invite-link-step";
+import { AdminLinkStep } from "./admin-link-step";
 import type { SetupTeam } from "./types";
 import {
   backendError,
@@ -48,11 +48,6 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
     (me.setup_step as SetupStep | null) ?? "owner",
   );
   const [isOwner, setIsOwner] = useState(true);
-  // What they said to the Super Admin question, so the Google check at the
-  // end can speak to it. Null when setup resumed past that question.
-  const [superAdminAnswer, setSuperAdminAnswer] = useState<
-    "no" | "unsure" | null
-  >(null);
   const [ownerEmail, setOwnerEmail] = useState("");
   // Starts as whatever the org is called now (its domain, until the naming
   // screen replaces it) so the teams heading always has something to say.
@@ -92,7 +87,6 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
       }
       // "No" and "I don't know" carry straight on. Proving admin is not a
       // gate on setting up an organization, so it waits until the end.
-      setSuperAdminAnswer(answer);
       void recordSetupStep("orgName");
       setStep("orgName");
     } catch (e) {
@@ -272,72 +266,20 @@ export function OrgSetupForm({ me, onDone }: { me: Me; onDone: () => void }) {
       <InviteLinkStep
         me={me}
         onDone={() => {
-          // Setup is finished at the link; the Google check that follows is
-          // an offer, not a step, so closing on it must not reopen setup.
+          // Setup is finished at the link; the Super Admin link that follows
+          // is an offer, not a step, so closing on it must not reopen setup.
+          // Only a Super Admin Google confirmed skips it: a Yes that Google
+          // turned down needs the link as much as a No does.
           void recordSetupStep("done");
-          if (me.is_super_admin || me.admin_proof_attempted) onDone();
+          if (me.is_super_admin) onDone();
           else setStep("adminCheck");
         }}
       />
     );
 
-  // "No": they've told us they aren't the admin, so don't send them to a
-  // Google check that can only fail. Their admin connects Knohow later.
-  if (step === "adminCheck" && superAdminAnswer === "no")
-    return (
-      <div>
-        <SetupHeading>Your admin connects Knohow to Google.</SetupHeading>
-        <SetupBody>
-          Only a Google Workspace Super Admin can do this. You can invite
-          yours from the app later.
-        </SetupBody>
-        <SetupChoices>
-          <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
-            Done
-          </button>
-        </SetupChoices>
-      </div>
-    );
-
-  if (step === "adminCheck" && superAdminAnswer === "unsure")
-    return (
-      <div>
-        <SetupHeading>Not sure if you&rsquo;re the admin?</SetupHeading>
-        <SetupBody>
-          Google can check for you. If you&rsquo;re not, nothing changes and
-          you can invite your admin later.
-        </SetupBody>
-        <SetupChoices>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={startAdminProof}
-          >
-            Check with Google
-          </button>
-        </SetupChoices>
-      </div>
-    );
-
-  if (step === "adminCheck")
-    return (
-      <div>
-        <SetupHeading>Connect Knohow to Google.</SetupHeading>
-        <SetupBody>
-          Only a Workspace admin can do this. Google will check whether
-          that&rsquo;s you, and ask for one extra permission.
-        </SetupBody>
-        <SetupChoices>
-          <button
-            type="button"
-            className={SETUP_CHOICE_CLASS}
-            onClick={startAdminProof}
-          >
-            Check with Google
-          </button>
-        </SetupChoices>
-      </div>
-    );
+  // Everyone Google hasn't confirmed as Super Admin: No, I don't know, or a
+  // Yes that Google turned down. They get the link for whoever is.
+  if (step === "adminCheck") return <AdminLinkStep me={me} onDone={onDone} />;
 
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   return null;
