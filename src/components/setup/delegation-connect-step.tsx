@@ -1,16 +1,18 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy } from "lucide-react";
 import {
   SETUP_CHOICE_CLASS,
+  SetupAction,
   SetupBody,
   SetupChoices,
   SetupError,
   SetupHeading,
 } from "./shell";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
-import { satoshi } from "@/components/brand/fonts";
+import { CopyField } from "@/components/ui/copy-field";
+import { GoogleWord } from "@/components/brand/google-word";
+import { GoogleG } from "@/components/ui/icons";
 
 type SetupGuide = {
   client_id: string;
@@ -21,83 +23,23 @@ type SetupGuide = {
   missing_scopes: string[];
 };
 
-/** A read-only field with its copy control inside it as an icon. Copies with
- *  the clipboard API and falls back to selecting the text and `execCommand`,
- *  and says so (icon turns into a check) so a failed copy is never silent. */
-function CopyField({
-  label,
-  value,
-  multiline,
-}: {
-  label: string;
-  value: string;
-  multiline?: boolean;
-}) {
-  const fieldRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  const [copied, setCopied] = useState(false);
-  const [failed, setFailed] = useState(false);
+type StepError = { title: string; items?: string[]; detail?: string };
 
-  async function copy() {
-    let ok = false;
-    try {
-      await navigator.clipboard.writeText(value);
-      ok = true;
-    } catch {
-      const el = fieldRef.current;
-      if (el) {
-        el.focus();
-        el.select();
-        try {
-          ok = document.execCommand("copy");
-        } catch {
-          ok = false;
-        }
-      }
-    }
-    setFailed(!ok);
-    setCopied(ok);
-    if (ok) window.setTimeout(() => setCopied(false), 1500);
-  }
+const SCOPE_LABELS: Record<string, string> = {
+  "https://www.googleapis.com/auth/drive": "Google Drive",
+  "https://www.googleapis.com/auth/admin.reports.audit.readonly":
+    "Drive activity reports (read-only)",
+};
 
-  const fieldClass = `${satoshi.className} w-full min-w-0 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white pl-3 pr-11 text-[0.8rem] text-[#1c1917]/80 outline-none`;
+function scopeLabel(scope: string) {
   return (
-    <div className={`${satoshi.className} flex flex-col gap-1.5`}>
-      <span className="text-[0.75rem] font-medium text-[#1c1917]/70">
-        {label}
-      </span>
-      <div className="relative">
-        {multiline ? (
-          <textarea
-            ref={fieldRef}
-            readOnly
-            value={value}
-            aria-label={label}
-            rows={3}
-            onFocus={(e) => e.currentTarget.select()}
-            className={`${fieldClass} resize-none py-2 leading-[1.4]`}
-          />
-        ) : (
-          <input
-            ref={fieldRef}
-            readOnly
-            value={value}
-            aria-label={label}
-            onFocus={(e) => e.currentTarget.select()}
-            className={`${fieldClass} h-10`}
-          />
-        )}
-        <button
-          type="button"
-          aria-label={copied ? `${label} copied` : `Copy ${label}`}
-          title={failed ? "Couldn’t copy. Select the text and copy it." : "Copy"}
-          onClick={() => void copy()}
-          className="absolute top-1.5 right-1.5 flex size-8 cursor-pointer items-center justify-center rounded-[10px] text-[#1c1917]/70 outline-none hover:bg-black/5 hover:text-[#1c1917] focus-visible:outline-2 focus-visible:outline-[#1c1917] active:translate-y-px"
-        >
-          {copied ? <Check size={16} /> : <Copy size={16} />}
-        </button>
-      </div>
-    </div>
+    SCOPE_LABELS[scope] ??
+    scope.replace("https://www.googleapis.com/auth/", "")
   );
+}
+
+function message(e: unknown) {
+  return e instanceof Error ? e.message : String(e);
 }
 
 /** After Super Admin proof: paste client ID + scopes into Google Admin,
@@ -110,8 +52,9 @@ export function DelegationConnectStep({
   onDone: () => void;
 }) {
   const [guide, setGuide] = useState<SetupGuide | null>(null);
-  const [error, setError] = useState("");
-  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<StepError | null>(null);
+  const [openedAdmin, setOpenedAdmin] = useState(false);
+  const checkingRef = useRef(false);
   const [phase, setPhase] = useState<"guide" | "connected">("guide");
   const onDoneRef = useRef(onDone);
   useEffect(() => {
@@ -136,7 +79,11 @@ export function DelegationConnectStep({
         }
         setGuide(body);
       } catch (e) {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled)
+          setError({
+            title: "Couldn’t load the Google Admin steps.",
+            detail: message(e),
+          });
       }
     })();
     return () => {
@@ -145,9 +92,8 @@ export function DelegationConnectStep({
   }, [me.organization_id]);
 
   async function checkNow() {
-    if (checking) return;
-    setChecking(true);
-    setError("");
+    if (checkingRef.current) return;
+    checkingRef.current = true;
     try {
       const res = await backendFetch(
         `/organizations/${me.organization_id}/delegation/check`,
@@ -164,30 +110,56 @@ export function DelegationConnectStep({
           : g,
       );
       if (body.status === "approved") {
+        setError(null);
         setPhase("connected");
-        window.setTimeout(onDone, 1500);
+        window.setTimeout(() => onDoneRef.current(), 1500);
         return;
       }
       if (body.missing_scopes?.length) {
-        setError(
-          `Still missing scopes: ${body.missing_scopes.join(", ")}. Add them in Admin and try again.`,
-        );
+        setError({
+          title: "Google authorized some of Knohow, but not all of it.",
+          items: body.missing_scopes.map(scopeLabel),
+          detail: "Open Google Admin again and click Authorize.",
+        });
       } else {
-        setError(
-          "Google hasn’t authorized Knohow yet. Finish the Admin console step, then check again.",
-        );
+        setError({
+          title: "Google hasn’t authorized Knohow yet.",
+          detail:
+            "Click Authorize in Google Admin and we’ll check again when you’re back.",
+        });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError({ title: "Couldn’t check with Google.", detail: message(e) });
     } finally {
-      setChecking(false);
+      checkingRef.current = false;
     }
   }
+  const checkNowRef = useRef(checkNow);
+  useEffect(() => {
+    checkNowRef.current = checkNow;
+  });
+
+  // After they open Google Admin, check each time they come back to this tab
+  // instead of asking them to press a button.
+  useEffect(() => {
+    if (!openedAdmin || phase !== "guide") return;
+    const onReturn = () => {
+      if (document.visibilityState === "visible") void checkNowRef.current();
+    };
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
+  }, [openedAdmin, phase]);
 
   if (phase === "connected")
     return (
       <div>
-        <SetupHeading>Knohow is connected to Google.</SetupHeading>
+        <SetupHeading>
+          Knohow is connected to <GoogleWord />.
+        </SetupHeading>
         <SetupBody>Taking you to the app…</SetupBody>
       </div>
     );
@@ -198,48 +170,43 @@ export function DelegationConnectStep({
 
   return (
     <div>
-      <SetupHeading>Connect Knohow to Google.</SetupHeading>
+      <SetupHeading>
+        Connect Knohow to <GoogleWord />.
+      </SetupHeading>
       <SetupBody>
-        In Google Admin, open{" "}
-        <span className="font-semibold">Domain-wide delegation</span> and
-        click <span className="font-semibold">Add new</span>. Paste the client
-        ID and scopes below, then click{" "}
-        <span className="font-semibold">Authorize</span>. When you&rsquo;re
-        done, we&rsquo;ll check.
+        Click <span className="font-semibold">Open Google Admin</span>.
+        Everything&rsquo;s filled in, so just click{" "}
+        <span className="font-semibold">Authorize</span>. When you come back,
+        we&rsquo;ll check automatically.
       </SetupBody>
 
       {guide ? (
-        <div className="mt-6 flex flex-col gap-3">
+        <div className="mx-[2.5%] mt-6 flex flex-col gap-3">
           <CopyField label="Client ID" value={guide.client_id} />
           <CopyField label="OAuth scopes" value={guide.scopes_csv} multiline />
         </div>
       ) : null}
 
-      <SetupError>{error}</SetupError>
+      {error ? (
+        <SetupError title={error.title} items={error.items}>
+          {error.detail}
+        </SetupError>
+      ) : null}
 
       <SetupChoices>
-        <button
-          type="button"
-          className={SETUP_CHOICE_CLASS}
-          onClick={() => {
-            if (guide?.admin_console_url)
-              window.open(guide.admin_console_url, "_blank", "noopener,noreferrer");
-          }}
-        >
-          Open Google Admin
-        </button>
-        <button
-          type="button"
-          className={SETUP_CHOICE_CLASS}
-          disabled={checking}
-          onClick={() => void checkNow()}
-        >
-          {checking ? "Checking…" : "I’ve added it, check now"}
-        </button>
         <button type="button" className={SETUP_CHOICE_CLASS} onClick={onDone}>
           Skip for now
         </button>
       </SetupChoices>
+      <SetupAction
+        label="Open Google Admin"
+        icon={<GoogleG className="size-5 shrink-0" />}
+        onClick={() => {
+          if (!guide?.admin_console_url) return;
+          setOpenedAdmin(true);
+          window.open(guide.admin_console_url, "_blank", "noopener,noreferrer");
+        }}
+      />
     </div>
   );
 }

@@ -149,7 +149,7 @@ export function TeamsStep({
           is read out of the name — it is only a seed. */}
       <div ref={slotsRef} className="mt-6 flex flex-col gap-3 pb-3">
         {names.map((name, i) => (
-          <div key={i} className="flex items-center gap-2.5">
+          <div key={i} className="flex items-center gap-2.5 pr-[5%]">
             {/* The icon's column is the icon plus 5% of the row; the field
                 gives that 5% up from its left edge (user, 2026-09-27). */}
             <div className="flex w-[calc(3rem+5%)] shrink-0 justify-center">
@@ -162,7 +162,6 @@ export function TeamsStep({
                 />
               )}
             </div>
-            {/* Fills the row so it ends where the org name field does. */}
             <div className="min-w-0 flex-1">
               <SetupField
                 aria-label={`Team ${i + 1}`}
@@ -178,6 +177,17 @@ export function TeamsStep({
                 }}
                 onBlur={() => void commit(i)}
                 onKeyDown={(e) => {
+                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                    // Moving off a slot blurs it, and blur commits.
+                    const inputs = slotsRef.current?.querySelectorAll("input");
+                    const target = inputs?.[
+                      i + (e.key === "ArrowUp" ? -1 : 1)
+                    ] as HTMLInputElement | undefined;
+                    if (!target) return;
+                    e.preventDefault();
+                    target.focus();
+                    return;
+                  }
                   if (e.key !== "Enter") return;
                   // Commits this slot and moves to the next. Never advances the
                   // screen — that is Continue's job, and only Continue's.

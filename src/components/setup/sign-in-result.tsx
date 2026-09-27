@@ -14,8 +14,11 @@ import {
   SUPER_ADMIN_DEFINITION,
   SetupAction,
   SetupBody,
+  SetupField,
   SetupHeading,
   SetupTerm,
+  clearSetupFieldError,
+  shakeSetupField,
 } from "./shell";
 
 /** What Google said on the way back: `?admin_proof=`, `?signup=personal`,
@@ -120,6 +123,17 @@ export function SignInResultPanel({
     }
   }
 
+  /** Never disabled (setup rule): an empty name shakes the field instead. */
+  function submitWorkspaceName() {
+    if (submitting) return;
+    if (!orgName.trim()) {
+      shakeSetupField(nameRef.current);
+      nameRef.current?.focus();
+      return;
+    }
+    void createPersonalOrg();
+  }
+
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   if (done) return null;
 
@@ -198,7 +212,7 @@ export function SignInResultPanel({
         <div>
           {heading("We couldn’t check with Google")}
           {body("Nothing changed. Try again in a moment.")}
-          {choices([{ label: "Try again", onClick: startAdminProof }])}
+          <SetupAction label="Try again" onClick={startAdminProof} />
         </div>
       );
     case "personal":
@@ -209,28 +223,26 @@ export function SignInResultPanel({
           <div>
             {heading("What should we call your workspace?")}
             {body("This is the name you'll see when you sign in.")}
-            <input
-              ref={nameRef}
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && orgName.trim()) void createPersonalOrg();
-              }}
-              placeholder="Workspace name"
-              aria-label="Workspace name"
-              className={`${satoshi.className} mt-8 h-12 w-full rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-4 text-[1rem] text-[#1c1917] outline-none placeholder:text-[#1c1917]/40`}
-            />
-            <div className={`${satoshi.className} mt-3 flex flex-col gap-3`}>
-              <button
-                type="button"
-                disabled={submitting || !orgName.trim()}
-                className={SETUP_CHOICE_CLASS}
-                onClick={() => void createPersonalOrg()}
-              >
-                Continue
-              </button>
+            <div className="mx-[2.5%] mt-6">
+              <SetupField
+                inputRef={nameRef}
+                value={orgName}
+                onChange={(e) => {
+                  setOrgName(e.target.value);
+                  clearSetupFieldError(nameRef.current);
+                  setError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  submitWorkspaceName();
+                }}
+                placeholder="Workspace name"
+                aria-label="Workspace name"
+              />
             </div>
             {errorLine}
+            <SetupAction label="Continue" onClick={submitWorkspaceName} />
           </div>
         );
       return (
@@ -287,14 +299,15 @@ export function SignInResultPanel({
 }
 
 /** Tick or X above a Google result, drawn in with the Transitions.dev success
- *  check (`.t-success-check` in globals.css). Mounts "out", flips "in" on the
- *  next frame so the appear animation runs. */
+ *  check (`.t-success-check` in globals.css). Mounts "out" and flips "in"
+ *  once the card has finished growing (`--resize-dur`), so the two motions
+ *  play one after the other instead of on top of each other. */
 function ResultMark({ kind }: { kind: "check" | "cross" }) {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(frame);
+    const timer = window.setTimeout(() => setShown(true), 320);
+    return () => window.clearTimeout(timer);
   }, []);
 
   // Centred above the heading; a white tick (or X) drawn inside a filled

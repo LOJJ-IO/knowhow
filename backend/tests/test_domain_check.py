@@ -536,6 +536,8 @@ def test_nominate_later_and_no_second_owner(db, monkeypatch):
 
 # --- Delegation guide + detection -------------------------------------------
 
+from urllib.parse import parse_qs, urlsplit  # noqa: E402
+
 from app.auth import delegation  # noqa: E402
 from app.models.delegation_grant import DelegationStatus  # noqa: E402
 
@@ -559,7 +561,13 @@ def test_delegation_setup_guide_lists_client_id_and_every_scope(db, monkeypatch)
     assert guide["client_id"] == "1088315"
     assert guide["scopes"] == delegation.ADMIN_CONSOLE_DELEGATION_SCOPES
     assert guide["scopes_csv"] == ",".join(delegation.ADMIN_CONSOLE_DELEGATION_SCOPES)
-    assert guide["admin_console_url"].startswith("https://admin.google.com/")
+    url = urlsplit(guide["admin_console_url"])
+    assert f"{url.scheme}://{url.netloc}{url.path}" == delegation.ADMIN_CONSOLE_DELEGATION_URL
+    assert parse_qs(url.query) == {
+        "overwriteClientId": ["true"],
+        "clientIdToAdd": ["1088315"],
+        "clientScopeToAdd": [guide["scopes_csv"]],
+    }
     assert guide["status"] == "pending"
 
 

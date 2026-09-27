@@ -343,7 +343,7 @@ function RemoveAccountsScreen({
         type="button"
         disabled={removing || selected.length === 0}
         onClick={submit}
-        className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
+        className={`${satoshi.className} relative mx-[2.5%] mt-8 flex h-12 w-[95%] cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
       >
         {many ? "Remove selected accounts" : "Remove selected account"}
       </button>
@@ -455,7 +455,7 @@ export function AccountPicker({
       <button
         type="button"
         onClick={() => continueWithGoogle(readInviteToken())}
-        className={`${satoshi.className} relative mt-6 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
+        className={`${satoshi.className} relative mx-[2.5%] mt-6 flex h-12 w-[95%] cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98] disabled:cursor-default disabled:opacity-60`}
       >
         <GoogleG className="absolute left-[13px] size-5" />
         Continue with another account

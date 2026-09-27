@@ -3,11 +3,20 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-26
+updated: 2026-09-27
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-27 — Google Admin's delegation page takes prefill parameters
+`https://admin.google.com/ac/owl/domainwidedelegation?overwriteClientId=true&clientIdToAdd=<id>&clientScopeToAdd=<csv>`
+opens the "Add a new client ID" dialog already filled in. Google doesn't document these parameters (its
+`google/create-service-account` script and HashiCorp's Workspace tutorial use them), so always show the values
+to copy as well. `overwriteClientId=true` replaces the client's scopes, so send the complete list every time.
+
+## 2026-09-27 — Tweening a card's height while its content swaps instantly reads as a glitch
+`LoginModal` animates height, but a new setup screen replaced the old one in the same frame, so the new content sat clipped at the old height while the centred card grew both ways (heading sliding up, rows revealed from the bottom). Sequence it instead: hide the new content, let the card resize, fade the content in near the end. Hide it by writing to the DOM from the `ResizeObserver` callback, not React state: an update scheduled from an observer callback can land a frame after paint, so one frame of the new content still flashes. Same rule for anything that animates *inside* the card (the Google result tick): start it after the card's own motion, not on top of it.
 
 ## 2026-09-26 — Alembic against `knohow` does not upgrade `knohow_test`
 `conftest` points pytest at `knohow_test` while local `alembic upgrade head` uses `DATABASE_URL` → `knohow`. A new migration can succeed on the app DB and still leave tests failing with `UndefinedColumn`. After adding a migration, run alembic once with `DATABASE_URL=…/knohow_test` (or document a dual-upgrade habit) before trusting the suite.

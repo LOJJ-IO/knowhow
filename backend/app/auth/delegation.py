@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
 from dataclasses import dataclass, field
 
@@ -128,11 +129,20 @@ class DelegationSetup:
 
     client_id: str
     scopes: list[str]
-    admin_console_url: str = ADMIN_CONSOLE_DELEGATION_URL
 
     @property
     def scopes_csv(self) -> str:
         return ",".join(self.scopes)
+
+    @property
+    def admin_console_url(self) -> str:
+        # Opens Admin's "Add a new client ID" dialog prefilled. Undocumented
+        # by Google (used by its own create-service-account tool), so the
+        # guide still shows both values to copy by hand.
+        query = urlencode(
+            {"overwriteClientId": "true", "clientIdToAdd": self.client_id, "clientScopeToAdd": self.scopes_csv}
+        )
+        return f"{ADMIN_CONSOLE_DELEGATION_URL}?{query}"
 
 
 def delegation_setup() -> DelegationSetup:

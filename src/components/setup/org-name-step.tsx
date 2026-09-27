@@ -85,7 +85,7 @@ export function OrgNameStep({
     <div>
       <SetupHeading>What&rsquo;s your organization called?</SetupHeading>
       <SetupBody>This is the name your team sees when they join.</SetupBody>
-      <div className="mt-6">
+      <div className="mx-[2.5%] mt-6">
         <SetupField
           inputRef={inputRef}
           aria-label="Organization name"

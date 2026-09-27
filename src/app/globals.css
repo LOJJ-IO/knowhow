@@ -941,7 +941,7 @@ body.t-deck-dragging * {
 .t-login-modal {
   --login-button-radius: 10px;
   --login-modal-pad-x: 1.1rem;
-  width: min(420px, 100% - 32px);
+  width: min(399px, 100% - 32px);
   overflow: hidden;
   background: #fbfaf8;
   border: 1px solid rgb(0 0 0 / 0.08);
@@ -953,6 +953,17 @@ body.t-deck-dragging * {
 
 .t-login-modal-body {
   padding: 2.5rem var(--login-modal-pad-x);
+  transition: opacity 220ms var(--resize-ease);
+}
+/* Set by LoginModal while the card resizes to a new screen. */
+.t-login-modal-body[data-swapping] {
+  opacity: 0;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-login-modal-body[data-swapping] {
+    opacity: 1;
+  }
 }
 
 /* Book a Demo's booking step — Cal's embed brings its own white surface, so

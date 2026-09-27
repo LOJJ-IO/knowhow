@@ -44,16 +44,38 @@ export function SetupBody({ children }: { children: ReactNode }) {
 }
 
 /** Field-level feedback. Not a second sub-line: it only exists when something
- *  went wrong, and it reads as an error, not as body copy. */
-export function SetupError({ children }: { children?: string }) {
-  if (!children) return null;
+ *  went wrong, and it reads as an error, not as body copy.
+ *
+ *  Plain `children` is a one-line error. For more, pass a bold `title` (what
+ *  went wrong), optional `items` (the specifics, as a list) and `children` as
+ *  the next step, instead of packing it all into one sentence. */
+export function SetupError({
+  title,
+  items,
+  children,
+}: {
+  title?: string;
+  items?: string[];
+  children?: string;
+}) {
+  if (!title && !children) return null;
   return (
-    <p
+    <div
       aria-live="polite"
-      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+      className={`${satoshi.className} mx-[2.5%] mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
     >
-      {children}
-    </p>
+      {title ? <p className="m-0 font-bold">{title}</p> : null}
+      {items?.length ? (
+        <ul className="m-0 mt-1 list-disc pl-4">
+          {items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {children ? (
+        <p className={cn("m-0", title && "mt-1")}>{children}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -85,9 +107,10 @@ export function SetupAction({
   );
 }
 
-/** A stack of answer buttons — the Yes / No shape. Press scale matches Continue. */
+/** A stack of answer buttons — the Yes / No shape. Press scale matches Continue.
+ *  Inset 2.5% each side, like the org name field (user, 2026-09-27). */
 export const SETUP_CHOICE_CLASS =
-  "relative flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-95";
+  "relative mx-[2.5%] flex h-12 w-[95%] cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-95";
 
 export function SetupChoices({ children }: { children: ReactNode }) {
   return (
