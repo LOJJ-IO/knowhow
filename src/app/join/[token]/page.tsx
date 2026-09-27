@@ -1,4 +1,4 @@
-import { LandingHero } from "@/components/brand/landing-hero";
+import { AppEntry } from "@/components/login/app-entry";
 import { fetchJoinPreview, joinLinkMetadata } from "@/lib/join-link";
 
 export async function generateMetadata({
@@ -18,5 +18,5 @@ export default async function JoinPage({
 }) {
   const { token } = await params;
   const preview = await fetchJoinPreview(token);
-  return <LandingHero joinToken={token} joinPreview={preview} />;
+  return <AppEntry joinToken={token} joinPreview={preview} />;
 }

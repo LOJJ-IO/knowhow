@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { LogoLockup } from "@/components/brand/logo-lockup";
@@ -30,30 +29,11 @@ const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
   { key: "demo", label: "Book a Demo" },
 ];
 
-import { GoogleG } from "@/components/ui/icons";
 import { FooterStubLink } from "@/components/landing/footer-stub-link";
-import {
-  clearSignInResultFromUrl,
-  readSignInResult,
-  type SignInResult,
-} from "@/components/setup/sign-in-result";
-import {
-  continueWithGoogle,
-  fetchMe,
-  fetchRememberedOrgs,
-  readInviteToken,
-  type RememberedOrg,
-} from "@/lib/remembered-accounts";
-import { APP_HOME } from "@/lib/app-nav";
-import {
-  readJoinToken,
-  type JoinLinkPreview,
-} from "@/lib/join-link";
-import { LoginSky } from "@/components/login/login-sky";
-import {
-  LoginModal,
-  ReservedCountdown,
-} from "@/components/login/login-modal";
+import { fetchMe } from "@/lib/remembered-accounts";
+import { appEntryUrl } from "@/lib/origins";
+import { ReservedCountdown } from "@/components/login/login-modal";
+import { SignInSheet } from "@/components/login/sign-in-sheet";
 import type { DemoFormInitial } from "@/components/demo/demo-form";
 import {
   DECK_CARDS,
@@ -72,10 +52,7 @@ import {
   type CtaExtra,
   type CtaPhase,
 } from "@/components/landing/get-started-cta";
-import { CTA_CLASS, SHEET_SLIDE_MS } from "@/components/ui/tokens";
-import {
-  type Me,
-} from "@/lib/backend";
+import { SHEET_SLIDE_MS } from "@/components/ui/tokens";
 import gsap from "gsap";
 import { SplitText } from "gsap/SplitText";
 import { useGSAP } from "@gsap/react";
@@ -83,41 +60,10 @@ import dynamic from "next/dynamic";
 
 gsap.registerPlugin(SplitText, useGSAP);
 
-/** Loaded on demand. None of these are on screen until someone opens the
- *  sheet, so none of them belong in the landing page's bundle (user,
- *  2026-09-21: "load only what is being used"). */
-const AccountPicker = dynamic(
-  () =>
-    import("@/components/account-picker/account-picker").then(
-      (m) => m.AccountPicker,
-    ),
-  { ssr: false },
-);
-const OrgSetupForm = dynamic(
-  () => import("@/components/setup/org-setup-form").then((m) => m.OrgSetupForm),
-  { ssr: false },
-);
-const JoinPlacementForm = dynamic(
-  () =>
-    import("@/components/setup/join-placement-form").then(
-      (m) => m.JoinPlacementForm,
-    ),
-  { ssr: false },
-);
-const DelegationConnectStep = dynamic(
-  () =>
-    import("@/components/setup/delegation-connect-step").then(
-      (m) => m.DelegationConnectStep,
-    ),
-  { ssr: false },
-);
-const SignInResultPanel = dynamic(
-  () =>
-    import("@/components/setup/sign-in-result").then(
-      (m) => m.SignInResultPanel,
-    ),
-  { ssr: false },
-);
+/** Loaded on demand: not on screen until someone opens Book a Demo, so it
+ *  doesn't belong in the landing page's bundle (user, 2026-09-21: "load only
+ *  what is being used"). Sign-in and onboarding live on the app's origin now
+ *  (ADR 0022). */
 const DemoForm = dynamic(
   () => import("@/components/demo/demo-form").then((m) => m.DemoForm),
   { ssr: false },
@@ -237,42 +183,14 @@ function useSubheadWave(ref: React.RefObject<HTMLElement | null>) {
   );
 }
 
-function LandingHero({
-  joinToken: joinTokenProp,
-  joinPreview: joinPreviewProp = null,
-}: {
-  joinToken?: string;
-  joinPreview?: JoinLinkPreview | null;
-} = {}) {
+function LandingHero() {
   const [ctaPhase, setCtaPhase] = useState<CtaPhase>("idle");
   const [nextOpen, setNextOpen] = useState(false);
   /** The slide-up sheet (Log In / Book a Demo) is open. */
   const [sheetOpen, setSheetOpen] = useState(false);
-  /** Which modal the sheet shows — kept after Close so it slides down intact. */
-  const [sheetKind, setSheetKind] = useState<
-    "login" | "demo" | "setup" | "join" | "delegation" | "result"
-  >("login");
-  /** What came back from a Google round trip, shown in the sheet. */
-  const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
-  const [setupStartAt, setSetupStartAt] = useState<
-    "connectWorkspace" | undefined
-  >(undefined);
-  const [connectInitialPhase, setConnectInitialPhase] = useState<
-    "check" | "knowWho"
-  >("check");
-  /** Who's signed in (backend `/auth/me`), once known. */
-  const [me, setMe] = useState<Me | null>(null);
-  const router = useRouter();
-  /** Accounts this browser has used before. Fetched on mount, not on open,
-   *  so the modal sizes once (the Cal embed taught us that — see
-   *  FEAT-landing-book-a-demo). */
-  const [rememberedOrgs, setRememberedOrgs] = useState<RememberedOrg[]>([]);
-  const [joinToken] = useState<string | null>(
-    () => joinTokenProp ?? readJoinToken(),
-  );
-  const [joinPreview, setJoinPreview] = useState<JoinLinkPreview | null>(
-    joinPreviewProp,
-  );
+  /** What the sheet is for — kept after Close so it slides down intact. Log
+   *  In only slides up here; the app's origin takes over at the top. */
+  const [sheetKind, setSheetKind] = useState<"login" | "demo">("login");
   /** The sheet has finished sliding up — square corners from then on. */
   const [sheetAtTop, setSheetAtTop] = useState(false);
   /** The landing's own scroll container (the page doesn't scroll on <body>). */
@@ -333,81 +251,32 @@ function LandingHero({
     return () => timers.forEach((id) => window.clearTimeout(id));
   }, []);
 
-  // Back from Google sign-in: if this person still has to set up their new
-  // organization, reopen the sheet on the setup questions.
+  // Log In's sheet reached the top: the rest (sign-in, onboarding, Google's
+  // answers) lives on the app's origin, which opens on this same sheet
+  // already at the top (ADR 0022).
   useEffect(() => {
-    let cancelled = false;
-    void fetchRememberedOrgs().then((orgs) => {
-      if (!cancelled) setRememberedOrgs(orgs);
-    });
-    return () => {
-      cancelled = true;
+    if (sheetOpen && sheetAtTop && sheetKind === "login")
+      window.location.assign(appEntryUrl());
+  }, [sheetOpen, sheetAtTop, sheetKind]);
+
+  // Back/forward can restore this page from the cache mid-handoff, with the
+  // Log In sheet still up. Put the landing back.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      setSheetAtTop(false);
+      setSheetOpen(false);
     };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
   }, []);
 
   useEffect(() => {
-    if (!joinToken || joinPreviewProp) return;
     let cancelled = false;
-    void fetch(
-      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/join-links/${encodeURIComponent(joinToken)}`,
-      { credentials: "omit" },
-    )
-      .then((res) => (res.ok ? res.json() : null))
-      .then((preview) => {
-        if (!cancelled && preview) setJoinPreview(preview as JoinLinkPreview);
-      })
-      .catch(() => {
-        // Generic join copy is fine when the preview can't load.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [joinToken, joinPreviewProp]);
-
-  // joinToken comes from the useState initializer — mount-stable, never updates.
-  // `router` is stable too; this effect is a mount-only sign-in check either way.
-  useEffect(() => {
-    let cancelled = false;
+    // Signed in already? Setup to resume, a join to finish, or the app
+    // itself: all of it is on the app's origin now.
     void fetchMe().then((result) => {
-      if (cancelled) return;
-      if (result) setMe(result);
-      const returned = readSignInResult();
-      if (returned) clearSignInResultFromUrl();
-      // Admin-proof / signup results must win over resume. After "Yes I'm a
-      // Super Admin", the chart already exists so `setup_step` falls back to
-      // orgName — that used to reopen setup and hide "Google didn't confirm".
-      if (returned) {
-        setSignInResult(returned);
-        setSheetKind("result");
-        setSheetOpen(true);
-      } else if (
-        result?.needs_org_setup ||
-        (result?.setup_step && result.setup_step !== "done")
-      ) {
-        // `needs_org_setup` only covers the first questions — it goes false as
-        // soon as an org chart row exists. `setup_step` covers the rest, but
-        // "done" is a finished marker, not a screen to resume: resuming it
-        // opened the sheet on `OrgSetupForm`'s empty "done" branch.
-        setSheetKind("setup");
-        setSheetOpen(true);
-      } else if (result?.needs_join_placement) {
-        setSheetKind("join");
-        setSheetOpen(true);
-      } else if (joinToken) {
-        // Arrived from the org's join link: open Log In on the join screen.
-        setSheetKind("login");
-        setSheetOpen(true);
-      } else if (readInviteToken()) {
-        // Arrived from an invite link: open Log In so they can sign in as
-        // the invited account.
-        setSheetKind("login");
-        setSheetOpen(true);
-      } else if (result) {
-        // Signed in with setup finished — the landing has nothing left to ask,
-        // so this is the app. Last branch on purpose: a join or invite link
-        // still gets its own screen first.
-        router.replace(APP_HOME);
-      }
+      if (!cancelled && result) window.location.replace(appEntryUrl());
     });
 
     // Abandoned-demo email CTA: `?demo_resume=<token>`.
@@ -802,211 +671,30 @@ function LandingHero({
         aria-hidden
       />
 
-      {/* The Slide-Up Sheet (Log In / Book a Demo) */}
-      <div
-        ref={demoSheetRef}
-        className={cn(
-          "fixed inset-x-0 bottom-0 z-[400] h-dvh w-full overflow-hidden overscroll-none bg-white t-signin-bg transition-[translate,border-radius] duration-992 ease-[var(--resize-ease)] flex flex-col",
-          sheetOpen ? "translate-y-0" : "translate-y-full",
-          sheetAtTop ? "rounded-none" : "rounded-[var(--deck-window-radius)]"
-        )}
-        // Slides at 992ms (the recess + veil stay 900ms). Only the panel's own
-        // slide counts — the Close button's press transition bubbles here too.
-        onTransitionEnd={(e) => {
-          if (
-            sheetOpen &&
-            e.target === e.currentTarget &&
-            e.propertyName === "translate"
-          )
-            setSheetAtTop(true);
+      {/* The Slide-Up Sheet (Book a Demo; Log In on its way to the app) */}
+      <SignInSheet
+        sheetRef={demoSheetRef}
+        open={sheetOpen}
+        atTop={sheetAtTop}
+        // Log In hands off at the top, so its card never opens here.
+        cardOpen={sheetAtTop && sheetKind === "demo"}
+        onReachedTop={() => setSheetAtTop(true)}
+        onClose={() => {
+          setSheetAtTop(false);
+          setSheetOpen(false);
         }}
-      >
-        <LoginSky active={sheetOpen} />
-        <div
-          className={`${satoshi.className} relative z-10 flex items-center justify-between gap-2 p-6`}
-        >
-          {sheetKind === "demo" && demoReservedAt != null ? (
+        topLeft={
+          sheetKind === "demo" && demoReservedAt != null ? (
             <ReservedCountdown startedAt={demoReservedAt} />
-          ) : null}
-          <button
-            type="button"
-            onClick={() => {
-              setSheetAtTop(false);
-              setSheetOpen(false);
-            }}
-            className={cn(CTA_CLASS, "ml-auto")}
-          >
-            Close
-          </button>
-        </div>
-        <div className="pointer-events-none absolute bottom-6 left-6 z-10">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/hero/edmonton.png"
-            alt="Proudly from Edmonton"
-            className="h-8 w-auto md:h-10"
-          />
-        </div>
-        {/* Centred modal — Log In or Book a Demo content. */}
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <LoginModal open={sheetAtTop}>
-            {/* Nothing inside the sheet exists until the sheet is opening.
-                The modal is always mounted, so rendering its contents eagerly
-                pulled every screen's chunk into the first load — the demo form
-                especially, as the final fallback branch (user, 2026-09-21:
-                "load only what is being used"). */}
-            {!sheetOpen ? null : sheetKind === "login" &&
-              rememberedOrgs.length > 0 ? (
-              <AccountPicker
-                organizations={rememberedOrgs}
-                onRemoved={({ memberIds, emails }) =>
-                  setRememberedOrgs((rows) =>
-                    rows
-                      .filter((row) => !memberIds.includes(row.member_id))
-                      // A hidden address stays linked; it just stops being
-                      // shown on this browser, so drop it from the chips too.
-                      .map((row) =>
-                        emails.length === 0
-                          ? row
-                          : {
-                              ...row,
-                              linked_personal_emails:
-                                row.linked_personal_emails.filter(
-                                  (email) => !emails.includes(email),
-                                ),
-                            },
-                      ),
-                  )
-                }
-              />
-            ) : sheetKind === "login" ? (
-              <>
-                <h2
-                  className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
-                >
-                  {joinToken && joinPreview
-                    ? joinPreview.valid
-                      ? joinPreview.title
-                      : "This link has expired"
-                    : joinToken
-                      ? "Join on Knohow"
-                      : "Log in or sign up in seconds"}
-                </h2>
-                <p
-                  className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
-                >
-                  {joinToken && joinPreview
-                    ? joinPreview.description
-                    : joinToken
-                      ? "Sign in with Google to join your team."
-                      : "Use your Google account to continue with Knohow."}
-                </p>
-                {joinToken && joinPreview && !joinPreview.valid ? null : (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      continueWithGoogle(readInviteToken(), null, joinToken)
-                    }
-                    className={`${satoshi.className} relative mt-8 flex h-12 w-full cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
-                  >
-                    <GoogleG className="absolute left-[13px] size-5" />
-                    Continue with Google
-                  </button>
-                )}
-                {!(joinToken && joinPreview && !joinPreview.valid) ? (
-                  <p
-                    className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
-                  >
-                    By continuing, you agree to Knohow&rsquo;s{" "}
-                    <span className="font-bold">
-                      <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
-                    </span>
-                    . Read our{" "}
-                    <span className="font-bold">
-                      <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
-                    </span>
-                    .
-                  </p>
-                ) : null}
-              </>
-            ) : sheetKind === "setup" && me ? (
-              <OrgSetupForm
-                me={me}
-                startAt={setupStartAt}
-                connectInitialPhase={connectInitialPhase}
-                onDone={() => {
-                  setSetupStartAt(undefined);
-                  setConnectInitialPhase("check");
-                  setSheetAtTop(false);
-                  setSheetOpen(false);
-                  router.push(APP_HOME);
-                }}
-              />
-            ) : sheetKind === "join" && me ? (
-              <JoinPlacementForm
-                me={me}
-                onDone={() => {
-                  setSheetAtTop(false);
-                  setSheetOpen(false);
-                  router.push(APP_HOME);
-                }}
-              />
-            ) : sheetKind === "result" && signInResult ? (
-              <SignInResultPanel
-                result={signInResult}
-                onDone={() => {
-                  if (signInResult === "admin_verified") {
-                    setSignInResult(null);
-                    void fetchMe().then((next) => {
-                      if (next) setMe(next);
-                    });
-                    setSheetKind("delegation");
-                    return;
-                  }
-                  if (
-                    signInResult === "admin_not_verified" ||
-                    signInResult === "admin_error"
-                  ) {
-                    setSignInResult(null);
-                    setConnectInitialPhase("knowWho");
-                    setSetupStartAt("connectWorkspace");
-                    setSheetKind("setup");
-                    return;
-                  }
-                  // Mid-setup admin check: after the result, keep going.
-                  if (
-                    me?.needs_org_setup ||
-                    (me?.setup_step && me.setup_step !== "done")
-                  ) {
-                    setSignInResult(null);
-                    setSheetKind("setup");
-                    return;
-                  }
-                  if (me?.needs_join_placement) {
-                    setSignInResult(null);
-                    setSheetKind("join");
-                    return;
-                  }
-                  setSheetAtTop(false);
-                  setSheetOpen(false);
-                  if (me) router.push(APP_HOME);
-                }}
-              />
-            ) : sheetKind === "delegation" && me ? (
-              <DelegationConnectStep
-                me={me}
-                onDone={() => {
-                  setSheetAtTop(false);
-                  setSheetOpen(false);
-                  router.push(APP_HOME);
-                }}
-              />
-            ) : (
-              <DemoForm key={demoFormKey} initial={demoInitial} />
-            )}
-          </LoginModal>
-        </div>
-      </div>
+          ) : null
+        }
+      >
+        {/* Nothing inside the sheet exists until Book a Demo opens it
+            (user, 2026-09-21: "load only what is being used"). */}
+        {sheetOpen && sheetKind === "demo" ? (
+          <DemoForm key={demoFormKey} initial={demoInitial} />
+        ) : null}
+      </SignInSheet>
     </div>
   );
 }

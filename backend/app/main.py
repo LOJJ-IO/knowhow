@@ -55,7 +55,7 @@ app = FastAPI(title="Knohow Backend", lifespan=lifespan)
 settings = get_settings()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=list(dict.fromkeys([settings.frontend_origin, settings.landing_origin])),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

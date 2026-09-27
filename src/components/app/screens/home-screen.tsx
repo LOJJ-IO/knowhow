@@ -277,7 +277,7 @@ export function HomeScreen() {
                     owner?.displayName ?? owner?.email ?? chrome.viewer.name;
                   return (
                     <Card selected={selected}>
-                      <div className="flex items-center gap-[13px] p-[13px]">
+                      <div className="flex items-center gap-[13px] p-[9px]">
                         <PersonAvatar
                           identity={owner?.email ?? chrome.viewer.email}
                           label={name}
@@ -301,7 +301,16 @@ export function HomeScreen() {
 
                 return (
                   <Card selected={selected}>
-                    <div className="flex items-center gap-[13px] p-[13px]">
+                    {/* An inset panel, so the line under it curves up at the
+                        corners with the card (like the reference) instead of
+                        cutting straight across. Drawn as a shadow so opening
+                        doesn't shift anything by a pixel. */}
+                    <div
+                      className={cn(
+                        "flex items-center gap-[13px] rounded-[var(--card-inner-radius)] p-[9px] transition-shadow duration-200",
+                        open && "shadow-[0_0_0_1px_var(--app-border)]",
+                      )}
+                    >
                       <TeamIcon name={team.name} size={52} />
                       <span className="min-w-0 flex-1 text-left">
                         <CardTitle>
@@ -388,7 +397,7 @@ function TeamDetail({
   membersById: Map<string, OverviewMember>;
 }) {
   return (
-    <div className="border-t border-[var(--app-border)] px-[13px] py-[13px]">
+    <div className="px-[9px] pt-[13px] pb-[9px]">
       {members.length === 0 ? (
         <p
           className={`${satoshi.className} m-0 px-1 text-[0.975rem] leading-[1.5] text-[var(--app-dim)]`}
@@ -501,7 +510,9 @@ function Card({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-[14px] bg-white transition-shadow duration-200",
+        // Outer radius = inner panel radius + the 4px inset, so the two
+        // curves stay parallel.
+        "flex flex-col rounded-[calc(var(--card-inner-radius)+4px)] bg-white p-1 transition-shadow duration-200 [--card-inner-radius:12px]",
         selected
           ? "shadow-[0_0_0_1.5px_#1c1917,0_2px_10px_rgba(0,0,0,0.05)]"
           : "shadow-[0_0_0_1px_var(--app-border),0_1px_3px_rgba(0,0,0,0.04)]",
