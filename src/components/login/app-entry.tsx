@@ -60,6 +60,9 @@ const SignInResultPanel = dynamic(
   { ssr: false },
 );
 
+/** `--resize-dur` (300ms) in globals.css, plus a frame: the card closing. */
+const CARD_CLOSE_MS = 320;
+
 type EntryKind = "login" | "setup" | "join" | "delegation" | "result";
 
 /** The app's front door (ADR 0022): Log In, founder setup, the join wizard
@@ -79,7 +82,7 @@ export function AppEntry({
   /** What came back from a Google round trip. */
   const [signInResult, setSignInResult] = useState<SignInResult | null>(null);
   const [setupStartAt, setSetupStartAt] = useState<
-    "connectWorkspace" | undefined
+    "connectWorkspace" | "inviteOwner" | undefined
   >(undefined);
   const [connectInitialPhase, setConnectInitialPhase] = useState<
     "check" | "knowWho"
@@ -166,8 +169,31 @@ export function AppEntry({
     };
   }, []);
 
+  /** After Google's check: mid-setup, the owner question is next
+   *  (ADR-0023); otherwise, the app. */
+  function afterGoogleCheck() {
+    if (me?.setup_step && me.setup_step !== "done") {
+      setSignInResult(null);
+      setConnectInitialPhase("check");
+      setSetupStartAt("inviteOwner");
+      setKind("setup");
+      return;
+    }
+    intoTheApp();
+  }
+
+  // Load the app's first screen ahead of time, so leaving setup doesn't sit
+  // on the finished screen while Home compiles and loads (user 2026-09-27:
+  // Skip looked like it did nothing, then the app snapped in).
+  useEffect(() => {
+    router.prefetch(APP_HOME);
+  }, [router]);
+
+  /** Close the card first (its own resize), so the finish is visible at
+   *  once, then hand over to the app. */
   function intoTheApp() {
-    router.push(APP_HOME);
+    setKind(null);
+    window.setTimeout(() => router.push(APP_HOME), CARD_CLOSE_MS);
   }
 
   return (
@@ -270,6 +296,14 @@ export function AppEntry({
       ) : kind === "result" && signInResult ? (
         <SignInResultPanel
           result={signInResult}
+          organizationName={me?.organization_name}
+          onContinue={
+            signInResult === "admin_not_verified" &&
+            me?.setup_step &&
+            me.setup_step !== "done"
+              ? afterGoogleCheck
+              : undefined
+          }
           onDone={() => {
             if (signInResult === "admin_verified") {
               setSignInResult(null);
@@ -309,7 +343,7 @@ export function AppEntry({
           }}
         />
       ) : kind === "delegation" && me ? (
-        <DelegationConnectStep me={me} onDone={intoTheApp} />
+        <DelegationConnectStep me={me} onDone={afterGoogleCheck} />
       ) : null}
     </SignInSheet>
   );

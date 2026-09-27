@@ -21,7 +21,10 @@ class PersonalOAuthStart:
 
 
 def start_personal_oauth_consent(member: OrgMember) -> PersonalOAuthStart:
-    """Individual consent flow for personal-account members, triggered
+    """Individual consent flow. Personal-account members need it for any
+    Drive access; since ADR-0024 a domain member may also use it to connect
+    their own Drive before the Super Admin connects the company. Originally
+    triggered
     (by the org-engine module) when a member's email domain does not match
     the organization's verified Workspace domain — domain-wide delegation
     cannot reach a personal Gmail account, so each such member must grant

@@ -20,7 +20,14 @@ import { useSession } from "@/components/app/session";
 import { AppPage } from "@/components/app/shell";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
-import { fetchDrivePreview, type DrivePreview } from "@/lib/drive-preview";
+import { startDriveConsent, startLinkedDriveConsent } from "@/lib/backend";
+import {
+  fetchDrivePreview,
+  fetchLinkedDrivePreviews,
+  type DrivePreview,
+  type DrivePreviewFile,
+  type LinkedDrivePreview,
+} from "@/lib/drive-preview";
 
 /** What a Drive file's MIME type reads as, in the person's words. */
 function describe(mime: string): { label: string; Icon: LucideIcon } {
@@ -67,6 +74,22 @@ export function WorkspaceScreen() {
   const { chrome } = useSession();
   const [preview, setPreview] = useState<DrivePreview | null>(null);
   const [error, setError] = useState("");
+  /** Personal accounts linked to you, each connected or not (ADR-0025). */
+  const [linked, setLinked] = useState<LinkedDrivePreview[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLinkedDrivePreviews(chrome.organizationId)
+      .then((rows) => {
+        if (!cancelled) setLinked(rows);
+      })
+      // The work Drive is the screen; a linked account failing to load
+      // shouldn't take it down.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [chrome.organizationId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,7 +128,11 @@ export function WorkspaceScreen() {
             icon="folder_open"
             title="No documents yet"
             description="Once your Google Workspace is connected, every document your teams own appears here instead of being scattered across personal drives."
-            action={<Button size="lg">Connect your Google Drive</Button>}
+            action={
+              <Button size="lg" onClick={startDriveConsent}>
+                Connect your Google Drive
+              </Button>
+            }
           />
         ) : preview.files.length === 0 ? (
           <EmptyState
@@ -128,37 +155,88 @@ export function WorkspaceScreen() {
               Knohow.
             </p>
 
-            <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-              {preview.files.map((file) => {
-                const { label, Icon } = describe(file.mimeType);
-                const edited = editedAgo(file.modifiedAt);
-                return (
-                  <li
-                    key={file.id}
-                    className="flex items-start gap-3 rounded-[20px] bg-[var(--app-muted)] p-4"
-                  >
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
-                      <Icon size={20} strokeWidth={NAV_STROKE} />
-                    </span>
-                    <span className={`${satoshi.className} min-w-0`}>
-                      <span
-                        title={file.name}
-                        className="line-clamp-2 text-[0.9375rem] leading-[1.35] text-[#1c1917]"
-                      >
-                        {file.name}
-                      </span>
-                      <span className="mt-1 block text-[0.8125rem] text-[var(--app-dim)]">
-                        {label}
-                        {edited ? ` · ${edited}` : ""}
-                      </span>
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            <FileGrid files={preview.files} />
           </div>
         )}
+        {linked.map((account) => (
+          <LinkedAccount key={account.email} account={account} />
+        ))}
       </section>
     </AppPage>
+  );
+}
+
+/** A personal account linked to you (ADR-0025): its files, or a way to
+ *  connect it. Shown only to you; nothing is saved or shared. */
+function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
+  return (
+    <div className="border-t border-[var(--app-border)] p-8">
+      <h2
+        className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
+      >
+        Personal account
+      </h2>
+      <p
+        className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
+      >
+        {account.connected
+          ? `Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`
+          : `${account.email} is linked to you. Connect its Drive to see its files here. Only you will see them.`}
+      </p>
+      {account.error ? (
+        <p
+          className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}
+        >
+          {account.error}
+        </p>
+      ) : null}
+      {account.connected ? (
+        account.files.length ? (
+          <FileGrid files={account.files} />
+        ) : null
+      ) : (
+        <Button
+          size="lg"
+          className="mt-5"
+          onClick={() => startLinkedDriveConsent(account.email)}
+        >
+          Connect this Drive
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Recently edited files, as cards. */
+function FileGrid({ files }: { files: DrivePreviewFile[] }) {
+  return (
+    <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+      {files.map((file) => {
+        const { label, Icon } = describe(file.mimeType);
+        const edited = editedAgo(file.modifiedAt);
+        return (
+          <li
+            key={file.id}
+            className="flex items-start gap-3 rounded-[20px] bg-[var(--app-muted)] p-4"
+          >
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
+              <Icon size={20} strokeWidth={NAV_STROKE} />
+            </span>
+            <span className={`${satoshi.className} min-w-0`}>
+              <span
+                title={file.name}
+                className="line-clamp-2 text-[0.9375rem] leading-[1.35] text-[#1c1917]"
+              >
+                {file.name}
+              </span>
+              <span className="mt-1 block text-[0.8125rem] text-[var(--app-dim)]">
+                {label}
+                {edited ? ` · ${edited}` : ""}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -3,14 +3,14 @@ type: feature
 status: in-progress
 tags: [area/product, area/backend, area/frontend, auth]
 created: 2026-09-16
-updated: 2026-09-26
-related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0021-founder-not-owner-leads-self-claim]]", "[[0014-org-setup-and-join-link]]"]
+updated: 2026-09-27
+related: ["[[FEAT-drive-file-classification]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[FEAT-landing-login-panel]]", "[[Product-Vision]]", "[[0021-founder-not-owner-leads-self-claim]]", "[[0014-org-setup-and-join-link]]", "[[0023-founder-setup-google-check-before-owner]]"]
 ---
 
 # FEAT: Workspace onboarding flow (sign-in → org → authority)
 
 ## Status
-`in-progress` — org model + Workspace-connect path locked 2026-09-26 ([[0021-founder-not-owner-leads-self-claim]]). **Core ADR-0021 flows built on `main` 2026-09-26:** founder setup (name→teams→link→invite owner→connect, no Super Admin Yes/No), join-token OAuth + placement wizard (lead claim / request / optional owner claim), team-lead join-link reissue + pending requests in Settings, wrong-SA recovery into invite-someone-else. Still open: multi-lead per team, owner-claim confirm UX polish, contractor path, classification.
+`in-progress` — org model + Workspace-connect path locked 2026-09-26 ([[0021-founder-not-owner-leads-self-claim]]). **Core ADR-0021 flows built on `main` 2026-09-26:** founder setup (name→teams→link→connect→"Do you sit at the top?"→invite owner, reordered 2026-09-27 per [[0023-founder-setup-google-check-before-owner]]; no Super Admin Yes/No), join-token OAuth + placement wizard (lead claim / request / optional owner claim), team-lead join-link reissue + pending requests in Settings, wrong-SA recovery into invite-someone-else. Still open: multi-lead per team, owner-claim confirm UX polish, contractor path, classification.
 
 ## Locked org model (2026-09-26 — A–I all yes)
 Authoritative detail: [[0021-founder-not-owner-leads-self-claim]]. Short form:

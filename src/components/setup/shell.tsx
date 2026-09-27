@@ -5,6 +5,12 @@ import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
 import { CTA_CLASS } from "@/components/ui/tokens";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/brand/tooltip";
 
 /** The shell every setup screen composes, so a new screen never invents its
  *  own type scale, spacing or button.
@@ -12,12 +18,15 @@ import { CTA_CLASS } from "@/components/ui/tokens";
  *  The rule it encodes (user, 2026-09-21): **one heading, one sub-line and one
  *  action per screen.** A question whose answers are choices is still one
  *  decision — an action plus a bail-out is two, and doesn't belong here.
+ *
+ *  Heading and sub-line start 5% of the card's width in from the left, with
+ *  fields and actions left where they are (user, 2026-09-27).
  */
 
 export function SetupHeading({ children }: { children: ReactNode }) {
   return (
     <h2
-      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      className={`${sohne.className} m-0 pl-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
     >
       {children}
     </h2>
@@ -27,7 +36,7 @@ export function SetupHeading({ children }: { children: ReactNode }) {
 export function SetupBody({ children }: { children: ReactNode }) {
   return (
     <p
-      className={`${sohne.className} mt-3 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+      className={`${sohne.className} mt-3 pl-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
     >
       {children}
     </p>
@@ -53,17 +62,23 @@ export function SetupError({ children }: { children?: string }) {
 export function SetupAction({
   label,
   onClick,
+  icon,
 }: {
   label: string;
   onClick: () => void;
+  /** Sits in front of the label (the Google G on "Check with Google"). */
+  icon?: ReactNode;
 }) {
   return (
-    <div className="mt-6 flex justify-end">
+    // 32px above: a little more room between the content and the action
+    // (user, 2026-09-27).
+    <div className="mt-8 flex justify-end">
       <button
         type="button"
         onClick={onClick}
-        className={cn(CTA_CLASS, satoshi.className, "bg-black")}
+        className={cn(CTA_CLASS, satoshi.className, "bg-black", icon && "gap-2.5")}
       >
+        {icon}
         {label}
       </button>
     </div>
@@ -123,4 +138,55 @@ export function clearSetupFieldError(input: HTMLInputElement | null) {
   wrap.classList.remove("is-error", "is-shaking");
   input.classList.remove("is-error", "is-shaking");
   input.removeAttribute("aria-invalid");
+}
+
+/** What "Super Admin" means, wherever setup names it (user-picked 2026-09-27). */
+export const SUPER_ADMIN_DEFINITION =
+  "The person with full control of your company's Google accounts, usually IT or whoever set up your company email. They can add people, reset passwords and connect apps like Knohow.";
+
+/** A term in a sub-line with its definition on hover or focus ("owner",
+ *  "Super Admin"): the app's black tooltip, wider and roomier for a full
+ *  sentence. Pass `href` when the term also links out (it then keeps the
+ *  pointer cursor); otherwise the help cursor says there's more to read. */
+export function SetupTerm({
+  children,
+  definition,
+  href,
+}: {
+  children: ReactNode;
+  definition: ReactNode;
+  href?: string;
+}) {
+  const className =
+    "underline decoration-[#1c1917]/40 underline-offset-2 " +
+    (href ? "cursor-pointer" : "cursor-help");
+  return (
+    <TooltipProvider delay={0}>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                className={className}
+              />
+            ) : (
+              <span tabIndex={0} className={className} />
+            )
+          }
+        >
+          {children}
+        </TooltipTrigger>
+        <TooltipContent
+          side="bottom"
+          sideOffset={8}
+          className="max-w-[18rem] px-3 py-2 text-[13px]"
+        >
+          {definition}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 }

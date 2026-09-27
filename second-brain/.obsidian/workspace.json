@@ -11,10 +11,14 @@
             "id": "131902d57546c591",
             "type": "leaf",
             "state": {
-              "type": "graph",
-              "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "type": "markdown",
+              "state": {
+                "file": "Current/Current-Context.md",
+                "mode": "source",
+                "source": false
+              },
+              "icon": "lucide-file",
+              "title": "Current-Context"
             }
           }
         ]
@@ -49,7 +53,7 @@
             "state": {
               "type": "search",
               "state": {
-                "query": "invariant 5",
+                "query": "",
                 "matchingCase": false,
                 "explainSearch": false,
                 "collapseAll": false,
@@ -70,8 +74,7 @@
               "title": "Bookmarks"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
@@ -165,6 +168,10 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0025-linked-personal-drive-visible-to-owner.md",
+    "Architecture/Decisions/0024-own-drive-consent-for-work-accounts.md",
+    "Architecture/Decisions/0023-founder-setup-google-check-before-owner.md",
+    "README.md",
     "Architecture/Decisions/0020-button-taxonomy.md",
     "Architecture/Decisions/0019-dashboard-absorbs-chart-and-oversight.md",
     "Architecture/Decisions/0018-dashboard-reflects-onboarding.md",
@@ -187,10 +194,6 @@
     "Product/Features/FEAT-landing-book-a-demo.md",
     "Daily.md",
     "Templates/ADR.md",
-    "Architecture/Decisions/0007-shared-drive-support.md",
-    "Architecture/Decisions/0006-observed-domain-tenant-identity.md",
-    "Engineering/Patterns-landing-mc-recess-deck.md",
-    "Product/Features/FEAT-drive-file-classification.md",
     "Features"
   ]
 }

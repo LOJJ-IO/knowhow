@@ -113,6 +113,10 @@ export function DelegationConnectStep({
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(false);
   const [phase, setPhase] = useState<"guide" | "connected">("guide");
+  const onDoneRef = useRef(onDone);
+  useEffect(() => {
+    onDoneRef.current = onDone;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -124,8 +128,13 @@ export function DelegationConnectStep({
         if (!res.ok) throw new Error(await backendError(res));
         const body = (await res.json()) as SetupGuide;
         if (cancelled) return;
+        // Already connected: nothing to do here, so don't stop on a screen
+        // that only repeats "You're verified" (user, 2026-09-27). Move on.
+        if (body.status === "approved") {
+          onDoneRef.current();
+          return;
+        }
         setGuide(body);
-        if (body.status === "approved") setPhase("connected");
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       }
@@ -183,13 +192,9 @@ export function DelegationConnectStep({
       </div>
     );
 
-  if (!guide && !error)
-    return (
-      <div>
-        <SetupHeading>Connect Knohow to Google.</SetupHeading>
-        <SetupBody>Loading what to paste into Admin…</SetupBody>
-      </div>
-    );
+  // Nothing until we know whether there's anything to do: an org that's
+  // already connected skips this step, and shouldn't flash it first.
+  if (!guide && !error) return null;
 
   return (
     <div>

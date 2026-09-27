@@ -5,6 +5,7 @@ from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_same_org
+from app.auth.linked_drive import linked_drive_client, linked_personal_emails
 from app.exceptions import DelegationNotApproved, PersonalAccountNotConsented
 from app.google.drive_client import get_drive_client_for_user
 from app.models.org_member import OrgMember
@@ -57,3 +58,52 @@ def drive_preview(
             for f in result.get("files", [])
         ],
     }
+
+
+def _recent_files(drive) -> list[dict]:
+    result = (
+        drive.files()
+        .list(
+            q="'me' in owners and trashed = false",
+            orderBy="modifiedTime desc",
+            pageSize=PREVIEW_SIZE,
+            fields="files(id,name,mimeType,modifiedTime)",
+        )
+        .execute()
+    )
+    return [
+        {
+            "id": f["id"],
+            "name": f.get("name", "Untitled"),
+            "mime_type": f.get("mimeType", ""),
+            "modified_at": f.get("modifiedTime"),
+        }
+        for f in result.get("files", [])
+    ]
+
+
+@router.get("/organizations/{org_id}/linked-drive-previews")
+def linked_drive_previews(
+    org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
+) -> list[dict]:
+    """The caller's linked personal accounts (ADR-0025), each with its most
+    recently edited files if connected. Only ever the caller's own links;
+    read live, never stored or indexed, never shown to anyone else."""
+    out = []
+    for email in linked_personal_emails(member, db):
+        drive = linked_drive_client(member, email, db)
+        if drive is None:
+            out.append({"email": email, "connected": False, "files": [], "error": None})
+            continue
+        try:
+            out.append({"email": email, "connected": True, "files": _recent_files(drive), "error": None})
+        except HttpError as exc:
+            out.append(
+                {
+                    "email": email,
+                    "connected": True,
+                    "files": [],
+                    "error": f"Google didn't answer the Drive request ({exc.status_code}).",
+                }
+            )
+    return out

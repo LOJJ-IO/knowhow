@@ -9,6 +9,7 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
+  SetupTerm,
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
@@ -23,7 +24,7 @@ export function InviteOwnerStep({
   me: Me;
   onDone: () => void;
 }) {
-  const [phase, setPhase] = useState<"ask" | "email">("ask");
+  const [phase, setPhase] = useState<"top" | "ask" | "email">("top");
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -60,6 +61,55 @@ export function InviteOwnerStep({
       setSubmitting(false);
     }
   }
+
+  async function claimOwner() {
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await backendFetch(
+        `/organizations/${me.organization_id}/owner-claim`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(await backendError(res));
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Asked of the founder first (ADR-0023). Yes is a pending claim, never an
+  // instant grant (ADR-0021); No moves on to inviting whoever is.
+  if (phase === "top")
+    return (
+      <div>
+        <SetupHeading>Do you sit at the top?</SetupHeading>
+        <SetupBody>
+          Every organization on Knohow has one <OwnerTerm />: the person in
+          charge. Is that you?
+        </SetupBody>
+        <SetupChoices>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            disabled={submitting}
+            onClick={() => void claimOwner()}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            className={SETUP_CHOICE_CLASS}
+            disabled={submitting}
+            onClick={() => setPhase("ask")}
+          >
+            No
+          </button>
+        </SetupChoices>
+        <SetupError>{error}</SetupError>
+      </div>
+    );
 
   if (phase === "email")
     return (
@@ -98,12 +148,7 @@ export function InviteOwnerStep({
       <SetupHeading>Do you know who sits at the top?</SetupHeading>
       <SetupBody>
         That person is the{" "}
-        <span
-          className="underline decoration-[#1c1917]/40 underline-offset-2"
-          title="The person at the top of your org chart in Knohow. They approve org-wide decisions. Not the same as a Google Workspace Super Admin."
-        >
-          owner
-        </span>{" "}
+        <OwnerTerm />{" "}
         of {me.organization_name} on Knohow. You can invite them now or skip.
       </SetupBody>
       <SetupChoices>
@@ -125,5 +170,14 @@ export function InviteOwnerStep({
         </button>
       </SetupChoices>
     </div>
+  );
+}
+
+/** "owner", with its definition (ADR-0023 wording, user 2026-09-27). */
+function OwnerTerm() {
+  return (
+    <SetupTerm definition="The person at the top of your organization in Knohow. They approve org-wide decisions. They may not be the same as your Google Workspace Super Admin.">
+      owner
+    </SetupTerm>
   );
 }

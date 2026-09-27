@@ -7,6 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_member, get_db
+from app.auth.linked_drive import (
+    LINKED_DRIVE_STATE_PURPOSE,
+    NotLinked,
+    complete_linked_drive_consent,
+    start_linked_drive_consent,
+)
 from app.auth.login import complete_login, start_login
 from app.auth.personal_oauth import (
     PERSONAL_OAUTH_STATE_PURPOSE,
@@ -264,6 +270,11 @@ def login_callback(
             return link_account_redirect(code, state, knohow_device, db)
         if purpose == PERSONAL_OAUTH_STATE_PURPOSE:
             return personal_oauth_redirect(code, state, db)
+        if purpose == LINKED_DRIVE_STATE_PURPOSE:
+            complete_linked_drive_consent(code, state, db)
+            return RedirectResponse(
+                f"{settings.frontend_origin}/workspace?drive_connected=1", status_code=status.HTTP_302_FOUND
+            )
         result = complete_login(code, state, db)
         needs_admin_proof = accept_invitations_on_sign_in(result.member, db)
     except InvalidOAuthState as exc:
@@ -535,6 +546,18 @@ def admin_proof_start(member: OrgMember = Depends(get_current_member)) -> Redire
     return RedirectResponse(start_admin_proof(member).authorization_url, status_code=status.HTTP_302_FOUND)
 
 
+@router.get("/linked-drive/start")
+def linked_drive_start(
+    email: str, member: OrgMember = Depends(get_current_member), db: Session = Depends(get_db)
+) -> RedirectResponse:
+    """Connect the Drive of a personal account linked to the caller (ADR-0025)."""
+    try:
+        start = start_linked_drive_consent(member, email, db)
+    except NotLinked as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    return RedirectResponse(start.authorization_url, status_code=status.HTTP_302_FOUND)
+
+
 @router.get("/personal-oauth/start")
 def personal_oauth_start(member: OrgMember = Depends(get_current_member)) -> RedirectResponse:
     result = start_personal_oauth_consent(member)
@@ -544,7 +567,10 @@ def personal_oauth_start(member: OrgMember = Depends(get_current_member)) -> Red
 def personal_oauth_redirect(code: str, state: str, db: Session) -> RedirectResponse:
     """Stores the member's Drive grant. Not a sign-in, so no session cookies."""
     complete_personal_oauth_consent(code, state, db)
-    return RedirectResponse(f"{get_settings().frontend_origin}?drive_connected=1", status_code=status.HTTP_302_FOUND)
+    # Back to the Workspace screen, where the button that started this lives.
+    return RedirectResponse(
+        f"{get_settings().frontend_origin}/workspace?drive_connected=1", status_code=status.HTTP_302_FOUND
+    )
 
 
 @router.get("/personal-oauth/callback")

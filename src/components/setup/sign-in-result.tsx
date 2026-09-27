@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import {
   BACKEND_API_URL,
@@ -10,7 +9,14 @@ import {
   backendFetch,
   startAdminProof,
 } from "@/lib/backend";
-import { SETUP_CHOICE_CLASS } from "./shell";
+import {
+  SETUP_CHOICE_CLASS,
+  SUPER_ADMIN_DEFINITION,
+  SetupAction,
+  SetupBody,
+  SetupHeading,
+  SetupTerm,
+} from "./shell";
 
 /** What Google said on the way back: `?admin_proof=`, `?signup=personal`,
  *  `?invite=wrong_account`, `?link=`. Reading the result, clearing it from
@@ -70,10 +76,17 @@ export function signInWithAnotherAccount() {
 export function SignInResultPanel({
   result,
   onDone,
+  onContinue,
+  organizationName,
 }: {
   result: SignInResult;
+  /** The organization's name, for the verified screen's sub-line. */
+  organizationName?: string;
   /** Closes the sheet. */
   onDone: () => void;
+  /** "Google didn't confirm" mid-setup: carry on with setup (the owner
+   *  question, ADR-0023) instead of jumping into the app. */
+  onContinue?: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -110,20 +123,10 @@ export function SignInResultPanel({
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   if (done) return null;
 
-  const heading = (text: string) => (
-    <h2
-      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
-    >
-      {text}
-    </h2>
-  );
-  const body = (text: string) => (
-    <p
-      className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
-    >
-      {text}
-    </p>
-  );
+  // The setup shell's own heading and sub-line, so these screens share its
+  // indent and spacing (user, 2026-09-27).
+  const heading = (text: React.ReactNode) => <SetupHeading>{text}</SetupHeading>;
+  const body = (text: string) => <SetupBody>{text}</SetupBody>;
   const choices = (
     buttons: { label: string; onClick: () => void }[],
   ) => (
@@ -155,9 +158,18 @@ export function SignInResultPanel({
       return (
         <div>
           <ResultMark kind="check" />
-          {heading("You’re verified as a Google Workspace Super Admin")}
-          {body("Google confirmed it. Your organization’s domain is now verified.")}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          {heading(
+            <>
+              You’re verified as a{" "}
+              <SetupTerm definition={SUPER_ADMIN_DEFINITION}>
+                Google Workspace Super Admin
+              </SetupTerm>
+            </>,
+          )}
+          {body(
+            `Google confirmed you manage ${organizationName ? `${organizationName}’s` : "your company’s"} Google accounts. That lets you connect your company’s Drive to Knohow.`,
+          )}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
     case "admin_not_verified":
@@ -170,12 +182,14 @@ export function SignInResultPanel({
           {body("You can keep using Knohow. You can invite your Super Admin later.")}
           {choices([
             { label: "Invite someone else", onClick: onDone },
-            {
-              label: "Continue to the app",
-              onClick: () => {
-                window.location.assign("/home");
-              },
-            },
+            onContinue
+              ? { label: "Continue", onClick: onContinue }
+              : {
+                  label: "Continue to the app",
+                  onClick: () => {
+                    window.location.assign("/home");
+                  },
+                },
           ])}
         </div>
       );
@@ -243,7 +257,7 @@ export function SignInResultPanel({
           {body(
             "You can sign in with either one and land in the same place.",
           )}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
     case "link_already_linked":
@@ -253,7 +267,7 @@ export function SignInResultPanel({
           {body(
             "It is already connected to a different person, so we left it alone.",
           )}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
     case "invite_wrong_account":
@@ -283,32 +297,37 @@ function ResultMark({ kind }: { kind: "check" | "cross" }) {
     return () => cancelAnimationFrame(frame);
   }, []);
 
+  // Centred above the heading; a white tick (or X) drawn inside a filled
+  // circle (user, 2026-09-27). The circle rides the wrapper's fade, rotate
+  // and bob; only the <path> strokes get the draw.
   return (
-    <span
-      className="t-success-check mb-5 text-[#1c1917]"
-      data-state={shown ? "in" : "out"}
-      aria-hidden="true"
-      // Longest path in the icon, rounded up (getTotalLength).
-      style={{ "--check-path-length": kind === "check" ? 30 : 23 } as React.CSSProperties}
-    >
-      <svg
-        viewBox="0 0 48 48"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-10"
+    <div className="mb-8 flex justify-center">
+      <span
+        className="t-success-check text-[#1c1917]"
+        data-state={shown ? "in" : "out"}
+        aria-hidden="true"
+        // Longest path in the icon, rounded up (getTotalLength).
+        style={{ "--check-path-length": kind === "check" ? 27 : 20 } as React.CSSProperties}
       >
-        {kind === "check" ? (
-          <path d="M14 25l7 7 13-15" />
-        ) : (
-          <>
-            <path d="M16 16l16 16" />
-            <path d="M32 16L16 32" />
-          </>
-        )}
-      </svg>
-    </span>
+        <svg viewBox="0 0 48 48" fill="none" className="size-14">
+          <circle cx="24" cy="24" r="24" fill="currentColor" />
+          <g
+            stroke="#fff"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {kind === "check" ? (
+              <path d="M15 25l6 6 12-13" />
+            ) : (
+              <>
+                <path d="M17 17l14 14" />
+                <path d="M31 17L17 31" />
+              </>
+            )}
+          </g>
+        </svg>
+      </span>
+    </div>
   );
 }

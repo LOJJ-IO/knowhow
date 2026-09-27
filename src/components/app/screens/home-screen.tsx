@@ -27,7 +27,12 @@ import {
   type OrgOverview,
   type OverviewMember,
 } from "@/lib/organization";
-import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
+import {
+  LIMITED_ACCESS_MESSAGE,
+  backendError,
+  backendFetch,
+} from "@/lib/backend";
+import { FormDialog } from "@/components/app/dialog";
 import { cn } from "@/lib/utils";
 
 /** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
@@ -127,6 +132,7 @@ export function HomeScreen() {
   }, [chrome.organizationId, awaitingApproval]);
 
   const owner = overview?.members.find((m) => m.id === overview.ownerMemberId);
+  const [invitingOwner, setInvitingOwner] = useState(false);
   const membersById = useMemo(
     () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
     [overview],
@@ -273,20 +279,46 @@ export function HomeScreen() {
               spread
               renderNode={(node, { selected }) => {
                 if (node.id === OWNER_NODE) {
-                  const name =
-                    owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+                  // Nobody owns the org yet: an empty seat, never the
+                  // viewer's name (user 2026-09-27: a founder who said "No"
+                  // was shown at the top).
+                  if (!owner)
+                    return (
+                      <Card selected={selected}>
+                        <div className="flex items-center gap-[13px] p-[9px]">
+                          <span
+                            aria-hidden
+                            className="size-[52px] shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+                          />
+                          <span className="min-w-0 flex-1 text-left">
+                            <CardTitle>No owner yet</CardTitle>
+                            <CardMeta>Owner</CardMeta>
+                          </span>
+                          {/* data-ui keeps the canvas from treating this as a drag. */}
+                          <Button
+                            data-ui
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setInvitingOwner(true)}
+                          >
+                            Invite
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  const name = owner.displayName ?? owner.email;
                   return (
                     <Card selected={selected}>
                       <div className="flex items-center gap-[13px] p-[9px]">
                         <PersonAvatar
-                          identity={owner?.email ?? chrome.viewer.email}
+                          identity={owner.email}
                           label={name}
                           size={52}
                         />
                         <span className="min-w-0 text-left">
                           <CardTitle>{name}</CardTitle>
                           <CardMeta>
-                            {owner?.id === me.id ? "Owner · you" : "Owner"}
+                            {owner.id === me.id ? "Owner · you" : "Owner"}
                           </CardMeta>
                         </span>
                       </div>
@@ -378,7 +410,95 @@ export function HomeScreen() {
           </div>
         )}
       </div>
+      <InviteOwnerDialog
+        open={invitingOwner}
+        onOpenChange={setInvitingOwner}
+        organizationId={me.organization_id}
+        organizationName={chrome.name}
+      />
     </AppPage>
+  );
+}
+
+/** Invite whoever sits at the top, from the empty owner card. Same request
+ *  as setup's "Do you know who sits at the top?" (a nomination they confirm
+ *  by signing in), in the app's form dialog. */
+function InviteOwnerDialog({
+  open,
+  onOpenChange,
+  organizationId,
+  organizationName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  organizationId: string;
+  organizationName: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) setError("");
+      }}
+      title="Invite the owner"
+      description={`We’ll invite them to confirm they sit at the top of ${organizationName}.`}
+      size="sm"
+      submitLabel="Send invite"
+      busy={busy}
+      disabled={!email.trim()}
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+          const res = await backendFetch(
+            `/organizations/${organizationId}/invitations`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ kind: "owner", email: email.trim() }),
+            },
+          );
+          if (!res.ok) throw new Error(await backendError(res));
+          setEmail("");
+          onOpenChange(false);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <label className={`${satoshi.className} flex flex-col gap-1.5`}>
+        <span className="text-[0.875rem] text-[#1c1917]">
+          Owner&rsquo;s work email
+        </span>
+        <input
+          type="email"
+          required
+          autoFocus
+          value={email}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            setError("");
+          }}
+          className="h-10 w-full rounded-[10px] border border-[var(--app-border)] bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none focus:border-[#1c1917]"
+        />
+      </label>
+      {error ? (
+        <p
+          aria-live="polite"
+          className={`${satoshi.className} m-0 mt-2 text-[0.8125rem] text-[#EA4335]`}
+        >
+          {error}
+        </p>
+      ) : null}
+    </FormDialog>
   );
 }
 

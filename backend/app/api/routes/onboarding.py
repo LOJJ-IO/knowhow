@@ -17,6 +17,7 @@ from app.models.invitation import InvitationKind
 from app.models.org_member import OrgMember
 from app.onboarding.service import (
     add_member,
+    claim_pending_owner,
     decode_pending_personal_signup_token,
     approve_member,
     list_invitations,
@@ -416,6 +417,20 @@ class JoinPlacementTeam(BaseModel):
 class JoinPlacementRequest(BaseModel):
     teams: list[JoinPlacementTeam] = []
     claim_owner: bool = False
+
+
+@router.post("/organizations/{org_id}/owner-claim")
+def owner_claim_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """The founder answered "Yes" to "Do you sit at the top?": a pending
+    claim, same as a joiner's, not an instant grant (ADR-0021 / 0023)."""
+    try:
+        return {"owner_claim": claim_pending_owner(org_id, member, db)}
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
 @router.post("/organizations/{org_id}/join-placement")

@@ -147,40 +147,47 @@ export function TeamsStep({
           it is typed: the identity appears with the team rather than being
           assigned later, and it is the same icon the app will show. Nothing
           is read out of the name — it is only a seed. */}
-      <div ref={slotsRef} className="mt-6 flex flex-col gap-2">
+      <div ref={slotsRef} className="mt-6 flex flex-col gap-3 pb-3">
         {names.map((name, i) => (
           <div key={i} className="flex items-center gap-2.5">
-            {name.trim() ? (
-              <TeamIcon name={name} size={36} />
-            ) : (
-              <span
-                aria-hidden
-                className="size-9 shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+            {/* The icon's column is the icon plus 5% of the row; the field
+                gives that 5% up from its left edge (user, 2026-09-27). */}
+            <div className="flex w-[calc(3rem+5%)] shrink-0 justify-center">
+              {name.trim() ? (
+                <TeamIcon name={name} size={48} />
+              ) : (
+                <span
+                  aria-hidden
+                  className="size-12 shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+                />
+              )}
+            </div>
+            {/* Fills the row so it ends where the org name field does. */}
+            <div className="min-w-0 flex-1">
+              <SetupField
+                aria-label={`Team ${i + 1}`}
+                value={name}
+                onChange={(e) => {
+                  setError("");
+                  clearSetupFieldError(e.currentTarget);
+                  setNames((current) => {
+                    const next = [...current];
+                    next[i] = e.target.value;
+                    return next;
+                  });
+                }}
+                onBlur={() => void commit(i)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  // Commits this slot and moves to the next. Never advances the
+                  // screen — that is Continue's job, and only Continue's.
+                  e.preventDefault();
+                  void commit(i);
+                  const inputs = slotsRef.current?.querySelectorAll("input");
+                  (inputs?.[i + 1] as HTMLInputElement | undefined)?.focus();
+                }}
               />
-            )}
-            <SetupField
-              aria-label={`Team ${i + 1}`}
-              value={name}
-              onChange={(e) => {
-                setError("");
-                clearSetupFieldError(e.currentTarget);
-                setNames((current) => {
-                  const next = [...current];
-                  next[i] = e.target.value;
-                  return next;
-                });
-              }}
-              onBlur={() => void commit(i)}
-              onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
-                // Commits this slot and moves to the next. Never advances the
-                // screen — that is Continue's job, and only Continue's.
-                e.preventDefault();
-                void commit(i);
-                const inputs = slotsRef.current?.querySelectorAll("input");
-                (inputs?.[i + 1] as HTMLInputElement | undefined)?.focus();
-              }}
-            />
+            </div>
           </div>
         ))}
       </div>
@@ -193,7 +200,9 @@ export function TeamsStep({
             let incomplete = false;
             for (let i = 0; i < names.length; i += 1) {
               if ((names[i] ?? "").trim()) continue;
-              shakeSetupField(inputs?.[i] as HTMLInputElement | undefined ?? null);
+              shakeSetupField(
+                (inputs?.[i] as HTMLInputElement | undefined) ?? null,
+              );
               incomplete = true;
             }
             if (incomplete) {

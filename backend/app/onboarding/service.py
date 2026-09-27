@@ -832,7 +832,9 @@ SETUP_DONE = "done"
 # than stored, so a typo can't strand a founder on a step that doesn't exist.
 # inviteOwner is after the join link; connectWorkspace is offer-only (not stored —
 # closing there must not reopen setup).
-SETUP_STEPS = ("orgName", "teams", "ownTeam", "inviteLink", "inviteOwner", SETUP_DONE)
+# Founder setup order (ADR-0023): the Google check comes before the owner
+# question, and setup is only done after the owner question.
+SETUP_STEPS = ("orgName", "teams", "ownTeam", "inviteLink", "connectWorkspace", "inviteOwner", SETUP_DONE)
 
 
 def record_setup_step(org_id: uuid.UUID, step: str, db: Session) -> Organization:

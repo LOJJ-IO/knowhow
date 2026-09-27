@@ -9,6 +9,8 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
+  SUPER_ADMIN_DEFINITION,
+  SetupTerm,
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
@@ -21,6 +23,8 @@ import {
   type Me,
 } from "@/lib/backend";
 import { DelegationConnectStep } from "./delegation-connect-step";
+import { GoogleWord } from "@/components/brand/google-word";
+import { GoogleG } from "@/components/ui/icons";
 
 /** After setup: always check this account with Google first (ADR-0021).
  *  Invite-someone-else only appears after Google says this account cannot
@@ -46,15 +50,6 @@ export function ConnectWorkspaceStep({
   useEffect(() => {
     if (phase === "email") emailRef.current?.focus();
   }, [phase]);
-
-  // Always run Google's check — no intermediate card or click (user 2026-09-26).
-  // Google already answered no for this account: show that answer instead of
-  // another round trip that lands on the same screen.
-  useEffect(() => {
-    if (phase !== "check" || me.is_super_admin || me.admin_proof_attempted)
-      return;
-    startAdminProof();
-  }, [phase, me.is_super_admin, me.admin_proof_attempted]);
 
   useEffect(() => {
     if (phase !== "openLink") return;
@@ -121,6 +116,7 @@ export function ConnectWorkspaceStep({
       <SignInResultPanel
         result="admin_not_verified"
         onDone={() => setPhase("knowWho")}
+        onContinue={onDone}
       />
     );
 
@@ -132,15 +128,12 @@ export function ConnectWorkspaceStep({
         </SetupHeading>
         <SetupBody>
           That person is usually a{" "}
-          <a
-            className="underline decoration-[#1c1917]/40 underline-offset-2"
+          <SetupTerm
             href="https://support.google.com/a/answer/33307"
-            target="_blank"
-            rel="noreferrer"
-            title="Google Workspace Super Admin — someone who can manage your organization's Google account."
+            definition={SUPER_ADMIN_DEFINITION}
           >
             Super Admin
-          </a>{" "}
+          </SetupTerm>{" "}
           of your Google Workspace.
         </SetupBody>
         <SetupChoices>
@@ -214,13 +207,29 @@ export function ConnectWorkspaceStep({
       </div>
     );
 
+  // Waits for the click (user 2026-09-27: the auto-start from 4ee5629 only
+  // flashed this screen), so the Super Admin definition can be read first.
   return (
     <div>
-      <SetupHeading>Connect Knohow to Google.</SetupHeading>
+      <SetupHeading>
+        Connect Knohow to <GoogleWord />.
+      </SetupHeading>
       <SetupBody>
-        Checking with Google whether this account can connect your
-        company&rsquo;s Workspace…
+        Google will check whether you&rsquo;re a{" "}
+        <SetupTerm
+          href="https://support.google.com/a/answer/33307"
+          definition={SUPER_ADMIN_DEFINITION}
+        >
+          Google Workspace Super Admin
+        </SetupTerm>{" "}
+        for your company, and may ask for one extra permission. This is how we
+        know if you can finish setup fully.
       </SetupBody>
+      <SetupAction
+        label="Check with Google"
+        icon={<GoogleG className="size-5 shrink-0" />}
+        onClick={startAdminProof}
+      />
     </div>
   );
 }

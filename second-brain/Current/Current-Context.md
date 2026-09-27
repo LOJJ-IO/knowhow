@@ -4,7 +4,7 @@ status: active
 tags: [priority/high, area/frontend, area/backend]
 created: 2026-08-31
 updated: 2026-09-26
-related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0021-founder-not-owner-leads-self-claim]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]", "[[0022-landing-and-app-on-separate-origins]]"]
+related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landing-deck-carousel]]", "[[FEAT-landing-header-nav]]", "[[FEAT-landing-deck-notes-folder]]", "[[0004-landing-only-purge-old-app]]", "[[0004-fastapi-backend-for-auth-and-identity]]", "[[Patterns-landing-mc-recess-deck]]", "[[Known-Issues]]", "[[Architecture-Overview]]", "[[FEAT-workspace-onboarding-flow]]", "[[FEAT-drive-file-classification]]", "[[0006-observed-domain-tenant-identity]]", "[[0007-shared-drive-support]]", "[[0008-continue-with-google-via-backend]]", "[[0009-contractor-work-created-as-the-org]]", "[[0010-deletes-go-to-trash-30-days]]", "[[0011-device-remembered-accounts]]", "[[0012-identity-linking-one-person-many-accounts]]", "[[0013-sign-in-is-to-an-organization]]", "[[0021-founder-not-owner-leads-self-claim]]", "[[0014-org-setup-and-join-link]]", "[[FEAT-core-app-screens]]", "[[0022-landing-and-app-on-separate-origins]]", "[[0023-founder-setup-google-check-before-owner]]", "[[0024-own-drive-consent-for-work-accounts]]", "[[0025-linked-personal-drive-visible-to-owner]]"]
 ---
 
 # Current Context
@@ -35,6 +35,34 @@ User confirmed A–I. **[[0021-founder-not-owner-leads-self-claim]]** supersedes
 **Landing and app split (2026-09-26):** [[0022-landing-and-app-on-separate-origins]]. Prod: landing on knohow.app, sign-in + onboarding + app on app.knohow.app, routed by `src/proxy.ts` (renamed from `middleware.ts` per Next 16). Sign-in/onboarding moved out of `landing-hero.tsx` into `AppEntry` (`/entry`, the app origin's `/`) on a shared `SignInSheet`; the landing keeps Book a Demo and slides Log In up, then hands off. Locally the env vars stay unset, so one origin serves both (`/entry`). **To ship:** point both domains at Vercel, set `NEXT_PUBLIC_SITE_ORIGIN` / `NEXT_PUBLIC_APP_ORIGIN`, and on the backend `FRONTEND_ORIGIN=https://app.knohow.app` + `SITE_ORIGIN=https://knohow.app`.
 
 **Home team card divider (2026-09-26):** per the user's reference, the card header is an inset panel (card `p-1`, panel radius 12px, card radius 16px = 12 + 4 so the curves are concentric). When the card is open, the panel's 1px `--app-border` ring is the divider, curving up at the corners, replacing the straight `border-t`. Header padding went 13px → 9px so nothing moves.
+
+**Team names step layout (2026-09-27):** each team field now fills its row (`min-w-0 flex-1` wrapper), so it ends where the org name field does; gap between rows 8px → 12px, plus 12px more above Continue (`teams-step.tsx`). The circle is 48px (36 → 40 → 48 at the user's asks) and its column is `calc(48px + 5%)` with the icon centred in it; the field shrinks by that 5% from its left.
+
+**Setup heading indent (2026-09-27):** `SetupHeading` + `SetupBody` (`setup/shell.tsx`) carry `pl-[5%]` (tried 10%, user pulled it back to 5%), so every setup screen's heading and sub-line start 5% of the card width in. Fields and buttons unchanged. The Google result panel (`sign-in-result.tsx`) now renders `SetupHeading`/`SetupBody` too (2026-09-27), so it has the indent and the 12px heading-to-sub-line gap. The Log In card still has its own heading styles.
+
+**Owner tooltip (2026-09-27):** the invite-owner screen's "owner" term uses the app's black `brand/tooltip` (portalled, arrow) instead of the browser `title`, widened for a sentence (`max-w-[18rem]`, 13px, roomier padding), with `cursor-help` and keyboard focus. The Connect step's "Super Admin" link still uses a plain `title`.
+
+**Founder setup reorder (2026-09-27):** [[0023-founder-setup-google-check-before-owner]]. After the join link: Google check → "Do you sit at the top?" (sub-line: "Every organization on Knohow has one owner: the person in charge. Is that you?", user-picked 2026-09-27; Yes = pending owner claim via new `POST /organizations/{org_id}/owner-claim`; No → invite owner) → done. New setup step `connectWorkspace`; `done` recorded last. Owner + Super Admin definitions share `SetupTerm` (`setup/shell.tsx`). Backend 141 passed. An org saved at `inviteOwner` under the old order resumes past the check (the user's "Knohow" org did); it was rewound to `connectWorkspace` by hand 2026-09-27.
+
+**Google check screen polish (2026-09-27):** heading's "Google" in the landing's letter colours (`GoogleWord`, new `brand/google-word.tsx`, which `deck.tsx` now imports `GOOGLE_LETTERS` from); **Check with Google** is the black right-aligned `SetupAction` pill with the Google G in front (new optional `icon` prop).
+
+**Google check waits for a click again (2026-09-27):** user found the auto-start (`4ee5629`) only flashed the Connect screen. `ConnectWorkspaceStep` shows "Connect Knohow to Google." with a "Google Workspace Super Admin" `SetupTerm` in the body ("…whether you're a Google Workspace Super Admin for your company…") and a **Check with Google** button; an account Google already turned down still skips straight to the not-confirmed screen.
+
+**Super Admin tooltip copy (2026-09-27, user-picked):** "The person with full control of your company's Google accounts, usually IT or whoever set up your company email. They can add people, reset passwords and connect apps like Knohow." (`SUPER_ADMIN_DEFINITION`, used on the Connect screen and the know-who screen).
+
+**Setup action spacing (2026-09-27):** `SetupAction` (Continue, Check with Google, Send invite…) sits 32px below the content (was 24px); applies to every setup screen. The teams step keeps its extra 12px.
+
+**Result mark restyle (2026-09-27):** `ResultMark` is centred above the heading (32px gap below it), 56px: a filled `#1c1917` circle with a white tick (verified) or X (not verified) drawn in by the same `.t-success-check` animation. Single-Continue result screens (verified, accounts linked, already linked) now use the black right-aligned `SetupAction` pill, like setup's Continue.
+
+**Verified screen copy (2026-09-27, user-picked):** heading's "Google Workspace Super Admin" carries the Super Admin `SetupTerm` tooltip (`SUPER_ADMIN_DEFINITION` now exported from `setup/shell.tsx`); sub-line "Google confirmed you manage [org]'s Google accounts. That lets you connect your company's Drive to Knohow." (`organizationName` prop on `SignInResultPanel`).
+
+**Drive connection step skips when already connected (2026-09-27):** `DelegationConnectStep` (from `0bf6017`) used to show "Knohow is connected to Google. Taking you to the app…" on load when `/delegation/setup` said `approved`, and never advanced (only `checkNow` set the timer). Now an approved status calls `onDone` straight away (next: the owner question), and nothing renders while that status loads. The post-`checkNow` "connected" screen still says "Taking you to the app…" though setup now goes to the owner question next.
+
+**Own-Drive connection for everyone (2026-09-27):** [[0024-own-drive-consent-for-work-accounts]]. Workspace's "Connect your Google Drive" → own consent (`startDriveConsent`, `/auth/personal-oauth/start`), back to `/workspace?drive_connected=1`. Work accounts fall back to that consent until the Super Admin's company connection (delegation) is approved; delegation wins after. Distinct from setup's company-wide delegation step. Backend 145 passed.
+
+**Linked personal Drive on Workspace (2026-09-27):** [[0025-linked-personal-drive-visible-to-owner]]. Each personal account linked to you gets a "Personal account" section on Workspace (files, or **Connect this Drive**), visible only to you, never indexed. New table `linked_drive_credentials` (migration `0019`, dev + test DBs upgraded), `/auth/linked-drive/start`, `/organizations/{org_id}/linked-drive-previews`. Backend 151 passed. Open: unlinking doesn't delete the stored consent yet.
+
+**Home owner seat + setup finish (2026-09-27):** no owner → empty top card "No owner yet" with **Invite** (FormDialog, `kind: "owner"` invitation); never the viewer's name. Setup's finish closes the card, then goes to Home (prefetched). See [[Known-Issues]].
 
 Active work is on **`main`** (synced with origin after Phase 0).
 
@@ -443,6 +471,13 @@ revises [[0012-identity-linking-one-person-many-accounts]]'s one-org rule and ro
   `alembic_version`, which stays at `0016_dashboard_seen`). Removed 1 org, 1 member, 6 teams, 1 join
   link, 14 audit entries and the remembered-account rows; no `oauth_credentials` existed. `knohow_test`
   not touched. Next sign-in starts setup from scratch.
+- **`knohow` cleared again 2026-09-27** (Mac, user: "clear my db"): same truncate over 24 tables,
+  `alembic_version` kept at `0018_team_join_requests`. Removed 1 org, 1 member, 1 team, 1 org chart,
+  1 membership, 1 join link, 1 person, 1 remembered account, 7 audit entries. `knohow_test` not touched.
+  Cleared once more the same day: 1 org, 1 member, 1 org chart, 1 person, 1 remembered account,
+  3 audit entries.
+  Cleared a third time that day (25 tables, at `0019_linked_drive_credentials`): 1 org, 1 member, 5 teams,
+  3 memberships, 1 join link, 1 delegation grant, 1 linked personal email, 18 audit entries.
 - To see the picker without signing in, re-run `seed-picker.py` from the session scratchpad
   (device `11111111-1111-1111-1111-111111111111`). Nothing is seeded right now.
 
