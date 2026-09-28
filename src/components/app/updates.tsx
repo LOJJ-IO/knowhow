@@ -36,6 +36,8 @@ export type TeamUpdate = { team: OrgOverview["teams"][number]; changes: TeamChan
 type Updates = {
   overview: OrgOverview | null;
   error: string;
+  /** The overview came back 401: the session ended while the app was open. */
+  signedOut: boolean;
   /** Team id → changes this person hasn't seen yet. */
   unseen: Record<string, TeamChanges>;
   tasks: Task[];
@@ -67,6 +69,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
   const { me, chrome } = useSession();
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [error, setError] = useState("");
+  const [signedOut, setSignedOut] = useState(false);
   const [unseen, setUnseen] = useState<Record<string, TeamChanges>>({});
   const [tasks, setTasks] = useState<Task[]>([]);
   const [version, setVersion] = useState(0);
@@ -84,6 +87,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
     fetchOrgOverview(chrome.organizationId)
       .then((result) => {
         if (cancelled) return;
+        setError("");
         setOverview(result);
         const known = knownIds.current;
         if (version === 0) {
@@ -127,7 +131,9 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
         });
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        if ((e as { status?: number }).status === 401) setSignedOut(true);
       });
     fetchTasks(chrome.organizationId)
       .then((result) => {
@@ -286,6 +292,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
       value={{
         overview,
         error,
+        signedOut,
         unseen,
         tasks,
         teamUpdates,

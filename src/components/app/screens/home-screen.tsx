@@ -19,12 +19,14 @@ import {
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { InviteDialog } from "@/components/app/invite-dialog";
+import { ResultMark } from "@/components/setup/sign-in-result";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { personColor } from "@/lib/identity/composition";
 import { PALETTE } from "@/lib/identity/palette";
 import { type OverviewMember } from "@/lib/organization";
 import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
+import { appEntryUrl } from "@/lib/origins";
 import { cn } from "@/lib/utils";
 
 /** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
@@ -51,7 +53,8 @@ const TEAM_W = 302;
 
 export function HomeScreen() {
   const { me } = useSession();
-  const { overview, error, unseen, clearAll, clearTeam } = useUpdates();
+  const { overview, error, signedOut, unseen, clearAll, clearTeam, refresh } =
+    useUpdates();
   const [expanded, setExpanded] = useState<string[]>([]);
 
   // Leaving Home counts as having seen its updates (user 2026-09-27).
@@ -104,15 +107,39 @@ export function HomeScreen() {
       </AppPage>
     );
 
-  if (error)
+  // Shaped like the sign-in card's failure screens (the drawn X, a plain
+  // heading, one next step), not a raw error (user 2026-09-27). Only when
+  // there's nothing to show: a failed background re-read keeps the chart.
+  if (signedOut || (error && !overview))
     return (
       <AppPage>
-        <Panel>
-          <EmptyState
-            icon="monitoring"
-            title="Couldn't load your organization"
-            description={error}
-          />
+        <Panel className="flex flex-1 items-center justify-center p-6">
+          <div className="flex max-w-[26rem] flex-col items-center text-center">
+            <ResultMark kind="cross" />
+            <h2
+              className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+            >
+              {signedOut
+                ? "You’ve been signed out"
+                : "We couldn’t load your organization"}
+            </h2>
+            <p
+              className={`${sohne.className} mt-3 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+            >
+              {signedOut
+                ? "Log in again to pick up where you left off."
+                : "Nothing changed. Try again in a moment."}
+            </p>
+            <Button
+              size="lg"
+              className="mt-8"
+              onClick={() =>
+                signedOut ? window.location.assign(appEntryUrl()) : refresh()
+              }
+            >
+              {signedOut ? "Log in again" : "Try again"}
+            </Button>
+          </div>
         </Panel>
       </AppPage>
     );

@@ -19,7 +19,9 @@ export type Task =
   | { kind: "no_owner"; id: string }
   | { kind: "no_super_admin"; id: string }
   | { kind: "company_drive"; id: string }
-  | { kind: "own_drive"; id: string };
+  | { kind: "own_drive"; id: string }
+  /** A linked personal account whose Drive isn't connected (ADR-0025). */
+  | { kind: "linked_drive"; id: string; email: string };
 
 type RawPerson = { id: string; email: string; display_name: string | null } | null;
 
@@ -46,6 +48,8 @@ export async function fetchTasks(organizationId: string): Promise<Task[]> {
       };
     if (t.kind === "owner_claim")
       return { kind: t.kind, id: t.id, person: person(t.person as RawPerson) };
+    if (t.kind === "linked_drive")
+      return { kind: t.kind, id: t.id, email: t.email as string };
     return { kind: t.kind, id: t.id } as Task;
   });
 }

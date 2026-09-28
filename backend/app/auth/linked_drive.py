@@ -131,6 +131,23 @@ def complete_linked_drive_consent(code: str, state: str, db: Session) -> LinkedD
     return credential
 
 
+def unconnected_linked_emails(member: OrgMember, db: Session) -> list[str]:
+    """The caller's linked personal addresses whose Drive hasn't been
+    connected yet: the Notifications "connect its Drive" tasks."""
+    emails = linked_personal_emails(member, db)
+    if not emails:
+        return []
+    connected = set(
+        db.execute(
+            select(LinkedDriveCredential.email).where(
+                LinkedDriveCredential.person_id == member.person_id,
+                LinkedDriveCredential.email.in_(emails),
+            )
+        ).scalars()
+    )
+    return [e for e in emails if e not in connected]
+
+
 def linked_drive_client(member: OrgMember, email: str, db: Session) -> Resource | None:
     """A Drive client for one of the caller's linked personal accounts, or
     None if that account hasn't been connected yet."""

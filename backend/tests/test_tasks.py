@@ -112,3 +112,31 @@ def test_overview_carries_the_pending_owner_until_confirmed(db):
     overview = org_overview(org.id, db)
     assert overview["pending_owner"] is None
     assert overview["owner_member_id"] == str(other.id)
+
+
+
+def test_unconnected_linked_drive_is_a_task_until_connected(db):
+    from app.models.linked_drive_credential import LinkedDriveCredential
+    from app.models.person import Person
+    from app.models.person_email import PersonEmail
+
+    org, _founder, other, _chart = _org(db)
+    person = Person(id=uuid.uuid4())
+    db.add(person)
+    db.flush()
+    other.person_id = person.id
+    db.add(PersonEmail(id=uuid.uuid4(), person_id=person.id, email="me@gmail.com"))
+    db.commit()
+
+    tasks = pending_tasks(org.id, other, db)
+    assert _kinds(tasks) == ["own_drive", "linked_drive"]
+    assert tasks[-1]["email"] == "me@gmail.com"
+
+    db.add(
+        LinkedDriveCredential(
+            id=uuid.uuid4(), person_id=person.id, email="me@gmail.com",
+            google_subject_id="sub", encrypted_refresh_token=b"x", scopes=[],
+        )
+    )
+    db.commit()
+    assert _kinds(pending_tasks(org.id, other, db)) == ["own_drive"]

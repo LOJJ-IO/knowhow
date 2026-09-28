@@ -225,7 +225,12 @@ export async function fetchOrgOverview(
   organizationId: string,
 ): Promise<OrgOverview> {
   const res = await backendFetch(`/organizations/${organizationId}/overview`);
-  if (!res.ok) throw new Error(await backendError(res));
+  if (!res.ok)
+    // The status rides along so Home can tell "signed out" (401) from a
+    // failed load.
+    throw Object.assign(new Error(await backendError(res)), {
+      status: res.status,
+    });
   const body = (await res.json()) as OverviewResponse;
   return {
     organizationId: body.organization.id,

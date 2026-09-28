@@ -21,7 +21,7 @@ import { useSession } from "@/components/app/session";
 import { AppPage } from "@/components/app/shell";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
-import { startDriveConsent, startLinkedDriveConsent } from "@/lib/backend";
+import { startDriveConsent } from "@/lib/backend";
 import {
   fetchDrivePreview,
   fetchLinkedDrivePreviews,
@@ -155,7 +155,9 @@ export function WorkspaceScreen() {
             <FileGrid files={preview.files} className="mt-0" />
           </div>
         )}
-        {linked.map((account) => (
+        {/* An unconnected linked account is a Pending task in Notifications
+            now, not a prompt here (user 2026-09-27). */}
+        {linked.filter((account) => account.connected).map((account) => (
           <LinkedAccount key={account.email} account={account} />
         ))}
       </section>
@@ -163,8 +165,9 @@ export function WorkspaceScreen() {
   );
 }
 
-/** A personal account linked to you (ADR-0025): its files, or a way to
- *  connect it. Shown only to you; nothing is saved or shared. */
+/** A connected personal account linked to you (ADR-0025): its files. Shown
+ *  only to you; nothing is saved or shared. Connecting one is a Pending task
+ *  in Notifications. */
 function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
   return (
     <div className="border-t border-[var(--app-border)] p-8">
@@ -176,9 +179,7 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
       <p
         className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
       >
-        {account.connected
-          ? `Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`
-          : `${account.email} is linked to you. Connect its Drive to see its files here. Only you will see them.`}
+        {`Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`}
       </p>
       {account.error ? (
         <p
@@ -187,19 +188,7 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
           {account.error}
         </p>
       ) : null}
-      {account.connected ? (
-        account.files.length ? (
-          <FileGrid files={account.files} />
-        ) : null
-      ) : (
-        <Button
-          size="lg"
-          className="mt-5"
-          onClick={() => startLinkedDriveConsent(account.email)}
-        >
-          Connect this Drive
-        </Button>
-      )}
+      {account.files.length ? <FileGrid files={account.files} /> : null}
     </div>
   );
 }
@@ -220,7 +209,9 @@ function FileGrid({
         return (
           <li
             key={file.id}
-            className="flex items-start gap-3 rounded-[20px] bg-[var(--app-muted)] p-4"
+            // Stacked (icon, name, type · edited) with no card behind it
+            // (user 2026-09-27).
+            className="flex min-w-0 flex-col items-start gap-2"
           >
             {GOOGLE_MARKS[file.mimeType] ? (
               <Image
@@ -231,11 +222,11 @@ function FileGrid({
                 className="size-10 shrink-0"
               />
             ) : (
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--app-muted)] text-[#57534e]">
                 <Icon size={20} strokeWidth={NAV_STROKE} />
               </span>
             )}
-            <span className={`${satoshi.className} min-w-0`}>
+            <span className={`${satoshi.className} min-w-0 max-w-full`}>
               <span
                 title={file.name}
                 className="line-clamp-2 text-[0.9375rem] leading-[1.35] text-[#1c1917]"

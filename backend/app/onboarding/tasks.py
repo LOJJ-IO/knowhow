@@ -9,6 +9,8 @@ Kinds, in the order they're returned:
   no_super_admin  nobody has been confirmed by Google as a Super Admin
   company_drive   the company-wide Drive connection isn't approved
   own_drive       the caller's own Drive isn't reachable
+  linked_drive    a personal account linked to the caller (ADR-0025) whose
+                  Drive isn't connected; one per address, only to the caller
 """
 
 import uuid
@@ -18,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit_entry
+from app.auth.linked_drive import unconnected_linked_emails
 from app.models.delegation_grant import DelegationStatus
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
@@ -95,6 +98,9 @@ def pending_tasks(org_id: uuid.UUID, member: OrgMember, db: Session) -> list[dic
 
     if org is not None and not _drive_connected(member, org):
         tasks.append({"kind": "own_drive", "id": str(member.id)})
+
+    for email in unconnected_linked_emails(member, db):
+        tasks.append({"kind": "linked_drive", "id": email, "email": email})
 
     return tasks
 

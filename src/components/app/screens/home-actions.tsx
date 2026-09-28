@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/app/button";
 import { AppDialog } from "@/components/app/dialog";
 import { JoiningSection } from "@/components/app/joining-section";
+import { NewTeamDialog } from "@/components/app/new-team-dialog";
 import { TeamMembersSection } from "@/components/app/team-members-section";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ const ON_CANVAS =
 export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"joining" | "teams">("joining");
+  const [creating, setCreating] = useState(false);
   return (
     <>
       <Button
@@ -72,37 +74,59 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
         onOpenChange={setOpen}
         title="Manage teams"
         size="sm"
-        footer={
-          <Button onClick={() => setOpen(false)}>
-            Close
-          </Button>
-        }
+        footer={<Button onClick={() => setOpen(false)}>Close</Button>}
       >
         {/* Tabs like Notifications' (user 2026-09-27): the open one black,
             40px to what they show. Teams lists each team's members
             (`TeamMembersSection`). */}
-        <div role="tablist" className="mb-10 flex items-center gap-2">
-          {(
-            [
-              ["joining", "Joining"],
-              ["teams", "Teams"],
-            ] as const
-          ).map(([value, label]) => (
+        {/* New team sits on the far right, apart from the tabs, where
+            Notifications keeps Clear all (user 2026-09-27). */}
+        <div className="mb-10 flex items-center gap-2">
+          <div role="tablist" className="flex items-center gap-2">
+            {(
+              [
+                ["joining", "Joining"],
+                ["teams", "Teams"],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                role="tab"
+                aria-selected={tab === value}
+                variant={tab === value ? "default" : "outline"}
+                onClick={() => setTab(value)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          {tab === "teams" ? (
             <Button
-              key={value}
-              role="tab"
-              aria-selected={tab === value}
-              variant={tab === value ? "default" : "outline"}
-              onClick={() => setTab(value)}
+              variant="outline"
+              className="group ml-auto"
+              onClick={() => setCreating(true)}
             >
-              {label}
+              {/* New link's plus (joining-section.tsx). */}
+              <svg
+                aria-hidden
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                className="size-4 shrink-0 transform-gpu transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110 motion-reduce:transition-none"
+              >
+                <path d="M8 3v10M3 8h10" />
+              </svg>
+              New team
             </Button>
-          ))}
+          ) : null}
         </div>
         <div role="tabpanel">
           {tab === "joining" ? <JoiningSection /> : <TeamMembersSection />}
         </div>
       </AppDialog>
+      <NewTeamDialog open={creating} onOpenChange={setCreating} />
     </>
   );
 }

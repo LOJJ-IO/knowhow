@@ -13,11 +13,12 @@ import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/app/button";
 import { AppDialog, DialogSectionTitle } from "@/components/app/dialog";
+import { SetupTerm } from "@/components/setup/shell";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
 import { TeamIcon } from "@/components/identity/team-icon";
-import { startDriveConsent } from "@/lib/backend";
+import { startDriveConsent, startLinkedDriveConsent } from "@/lib/backend";
 import { describeChange, relativeTime } from "@/lib/change-text";
 import { appEntryUrl } from "@/lib/origins";
 import {
@@ -314,6 +315,22 @@ function TaskRow({
             onClick={() =>
               window.location.assign(appEntryUrl("?connect=workspace"))
             }
+          >
+            Connect
+          </Button>,
+        ];
+      case "linked_drive":
+        // Moved here from the Workspace screen (user 2026-09-27).
+        return [
+          <>
+            Connect{" "}
+            <SetupTerm definition={task.email}>personal</SetupTerm> Drive.
+          </>,
+          <Button
+            key="c"
+            size="sm"
+            variant="outline"
+            onClick={() => startLinkedDriveConsent(task.email)}
           >
             Connect
           </Button>,
