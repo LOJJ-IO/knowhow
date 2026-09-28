@@ -120,8 +120,44 @@ export function TeamsStep({
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setErrorAt(index);
+      shakeSetupField(
+        (slotsRef.current?.querySelectorAll("input")[index] as
+          | HTMLInputElement
+          | undefined) ?? null,
+      );
       return null;
     }
+  }
+
+  /** Removes one slot, deleting its team if it was already saved. */
+  async function remove(index: number) {
+    const existing = saved[index];
+    if (existing) {
+      setError("");
+      try {
+        const res = await backendFetch(
+          `/organizations/${me.organization_id}/teams/${existing.id}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) throw new Error(await backendError(res));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+        setErrorAt(index);
+        shakeSetupField(
+          (slotsRef.current?.querySelectorAll("input")[index] as
+            | HTMLInputElement
+            | undefined) ?? null,
+        );
+        return;
+      }
+    }
+    if (errorAt === index) {
+      setError("");
+      setErrorAt(null);
+    }
+    setNames((current) => current.filter((_, i) => i !== index));
+    setSaved((current) => current.filter((_, i) => i !== index));
+    setCount((c) => Math.max(1, c - 1));
   }
 
   if (phase === "count")
@@ -129,7 +165,7 @@ export function TeamsStep({
       <div>
         <SetupHeading>How many teams are in {orgName}?</SetupHeading>
         <SetupBody>Set the number. You can change this later.</SetupBody>
-        <div className="mt-6">
+        <div className="mx-[2.5%] mt-6">
           <DragStepper
             value={count}
             min={1}
@@ -153,7 +189,7 @@ export function TeamsStep({
           is read out of the name — it is only a seed. */}
       <div ref={slotsRef} className="mt-6 flex flex-col gap-3 pb-3">
         {names.map((name, i) => (
-          <div key={i} className="flex items-center gap-2.5 pr-[5%]">
+          <div key={i} className="group relative flex items-center gap-2.5 pr-[5%]">
             {/* The icon's column is the icon plus 5% of the row; the field
                 gives that 5% up from its left edge (user, 2026-09-27). */}
             <div className="flex w-[calc(3rem+5%)] shrink-0 justify-center">
@@ -171,6 +207,9 @@ export function TeamsStep({
               onDismiss={() => {
                 setError("");
                 setErrorAt(null);
+                slotsRef.current
+                  ?.querySelectorAll("input")
+                  .forEach((input) => clearSetupFieldError(input));
               }}
               className="min-w-0 flex-1"
             >
@@ -210,6 +249,20 @@ export function TeamsStep({
                 }}
               />
             </ErrorTip>
+            {/* Hovering (or focusing) a slot springs in a red minus in the
+                row's right inset that removes it, like a Notifications update
+                (user 2026-09-27). Never on the last slot. */}
+            {names.length > 1 ? (
+              <button
+                type="button"
+                aria-label={`Remove team ${i + 1}`}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void remove(i)}
+                className="absolute right-[calc(2.5%-9px)] grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[#EA4335] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#d93025] focus-visible:ring-2 focus-visible:ring-[#EA4335]/40 active:scale-90 motion-reduce:scale-100"
+              >
+                <span className="h-[2px] w-2 rounded-full bg-white" />
+              </button>
+            ) : null}
           </div>
         ))}
       </div>

@@ -54,7 +54,7 @@ export function CopyField({
     if (ok) window.setTimeout(() => setCopied(false), 1500);
   }
 
-  const fieldClass = `${satoshi.className} w-full min-w-0 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white pl-3 pr-11 text-[0.8rem] text-[#1c1917]/80 outline-none`;
+  const fieldClass = `${satoshi.className} w-full min-w-0 rounded-[var(--login-button-radius,10px)] border border-[#d9d9de] bg-white pl-3 pr-11 text-[0.8rem] text-[#1c1917]/80 outline-none`;
   return (
     <div className={`${satoshi.className} flex flex-col gap-1.5`}>
       {showLabel ? (

@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { FormDialog } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
 import { ErrorTip } from "@/components/brand/tooltip";
+import {
+  SetupField,
+  clearSetupFieldError,
+  shakeSetupField,
+} from "@/components/setup/shell";
 import { backendError, backendFetch } from "@/lib/backend";
 import { emailError } from "@/lib/email";
 
@@ -25,6 +30,9 @@ const COPY = {
   },
 } as const;
 
+/** Book a Demo's `--revert-hold`. */
+const ERROR_HOLD_MS = 3000;
+
 export function InviteDialog({
   kind,
   open,
@@ -39,14 +47,33 @@ export function InviteDialog({
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const holdTimer = useRef<number | undefined>(undefined);
   const copy = COPY[kind];
+
+  useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+
+  function clearError() {
+    window.clearTimeout(holdTimer.current);
+    setError("");
+    clearSetupFieldError(inputRef.current);
+  }
+
+  /** Book a Demo's error: red + shake, then border and tooltip fade back
+   *  after the same 3s hold. */
+  function flagError(message: string) {
+    setError(message);
+    shakeSetupField(inputRef.current);
+    window.clearTimeout(holdTimer.current);
+    holdTimer.current = window.setTimeout(clearError, ERROR_HOLD_MS);
+  }
 
   return (
     <FormDialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
-        if (!next) setError("");
+        if (!next) clearError();
       }}
       title={copy.title}
       size="sm"
@@ -57,11 +84,11 @@ export function InviteDialog({
         event.preventDefault();
         const problem = emailError(email);
         if (problem) {
-          setError(problem);
+          flagError(problem);
           return;
         }
         setBusy(true);
-        setError("");
+        clearError();
         try {
           const res = await backendFetch(
             `/organizations/${chrome.organizationId}/invitations`,
@@ -76,26 +103,31 @@ export function InviteDialog({
           onOpenChange(false);
           refresh();
         } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
+          flagError(e instanceof Error ? e.message : String(e));
         } finally {
           setBusy(false);
         }
       }}
     >
-      {/* A little air above the label and below the field (user 2026-09-27). */}
+      {/* A little air above the label and below the field (user 2026-09-27).
+          The field is Book a Demo's (via SetupField): red border that fades
+          back, and a shake on every failed submit. */}
       <label className={`${satoshi.className} flex flex-col gap-1.5 py-2`}>
         <span className="text-[0.875rem] text-[#1c1917]">{copy.label}</span>
-        <ErrorTip message={error} onDismiss={() => setError("")}>
-          <input
+        <ErrorTip
+          message={error}
+          onDismiss={clearError}
+        >
+          <SetupField
+            inputRef={inputRef}
             type="email"
             autoFocus
-            aria-invalid={error ? true : undefined}
+            className="rounded-[10px]"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
-              setError("");
+              clearError();
             }}
-            className="h-10 w-full rounded-[10px] border border-[var(--app-border)] bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none focus:border-[#1c1917] aria-invalid:border-[#EA4335]"
           />
         </ErrorTip>
       </label>

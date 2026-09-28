@@ -51,7 +51,7 @@ export function Topbar({
 }) {
   const pathname = usePathname();
   const { chrome } = useSession();
-  const { tasks, unseen, clearAll } = useUpdates();
+  const { tasks, teamUpdates, unseen, clearAll } = useUpdates();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   /** Teams whose updates were unseen when Notifications opened, so the
    *  dialog can still mark them after opening clears the cards. */
@@ -59,7 +59,7 @@ export function Topbar({
   const [inviting, setInviting] = useState<"owner" | "super_admin" | null>(null);
   const bellCount =
     tasks.length +
-    Object.values(unseen).reduce((sum, change) => sum + change.count, 0);
+    teamUpdates.reduce((sum, row) => sum + row.changes.events.length, 0);
   const current = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
     (item) => item.href === pathname,
   );
@@ -142,7 +142,8 @@ export function Topbar({
           {/* NotificationBell is the app's own icon Button underneath, so the
               surface, hover, press and focus are the row's and need nothing
               here. The count is pending tasks plus team updates you haven't
-              seen (user 2026-09-27); opening it counts as seeing them. */}
+              cleared in Notifications (user 2026-09-27), the two tab
+              badges added up. Opening it only clears Home's New chips. */}
           <Tooltip>
             <TooltipTrigger
               render={

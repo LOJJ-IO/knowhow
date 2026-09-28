@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ChoiceLabel,
   SETUP_CHOICE_CLASS,
   SetupAction,
   SetupBody,
@@ -105,6 +106,7 @@ export function ConnectWorkspaceStep({
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      shakeSetupField(emailRef.current);
     } finally {
       setSubmitting(false);
     }
@@ -145,14 +147,14 @@ export function ConnectWorkspaceStep({
             className={SETUP_CHOICE_CLASS}
             onClick={() => setPhase("email")}
           >
-            Yes, invite by email
+            <ChoiceLabel>Yes, invite by email</ChoiceLabel>
           </button>
           <button
             type="button"
             className={SETUP_CHOICE_CLASS}
             onClick={() => setPhase("openLink")}
           >
-            No, give me a link to share
+            <ChoiceLabel>No, give me a link to share</ChoiceLabel>
           </button>
         </SetupChoices>
       </div>
@@ -172,7 +174,7 @@ export function ConnectWorkspaceStep({
             setError("");
             clearSetupFieldError(emailRef.current);
           }}
-          className="mt-6"
+          className="mx-[2.5%] mt-6"
         >
           <SetupField
             inputRef={emailRef}

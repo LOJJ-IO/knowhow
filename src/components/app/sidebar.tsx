@@ -124,23 +124,24 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             is what the bottom of the sidebar is for now: naming the tenant you
             are in.
 
-            It stays in the rail rather than disappearing with the labels
-            (user 2026-09-22) — which org you are in is the one thing the rail
-            can't say by shape — and shrinks to fit the 64px column, where a
-            long name truncates. */}
-        <p
-          className={cn(
-            satoshi.className,
-            // Lifted off the bottom edge (user 2026-09-22): the block sits
-            // ~30% of its own height higher, which is the extra 20px of
-            // bottom padding rather than a margin, so the sidebar's last
-            // element still owns the space under it.
-            "m-0 truncate pt-4 pb-9 text-center font-medium text-[#1c1917]",
-            collapsed ? "px-2 text-[0.75rem]" : "px-4 text-[1.40625rem]",
-          )}
-        >
-          {chrome.name}
-        </p>
+            One word per line rather than truncating, and hidden in the
+            collapsed rail (user 2026-09-27). */}
+        {collapsed ? null : (
+          <p
+            className={cn(
+              satoshi.className,
+              // Lifted off the bottom edge (user 2026-09-22): the block sits
+              // ~30% of its own height higher, which is the extra 20px of
+              // bottom padding rather than a margin, so the sidebar's last
+              // element still owns the space under it.
+              "mx-auto my-0 flex w-fit max-w-full flex-col px-4 pt-4 pb-9 text-left text-[1.40625rem] leading-tight font-medium break-words text-[#1c1917]",
+            )}
+          >
+            {chrome.name.split(/\s+/).filter(Boolean).map((word, i) => (
+              <span key={i}>{word}</span>
+            ))}
+          </p>
+        )}
       </nav>
     </TooltipProvider>
   );

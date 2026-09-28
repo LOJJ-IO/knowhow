@@ -177,10 +177,7 @@ function DialogBody({
 
   return (
     <div
-      className={cn(
-        "min-h-0 shrink overflow-y-auto",
-        animate && "t-resize",
-      )}
+      className={cn("min-h-0 shrink overflow-y-auto", animate && "t-resize")}
       style={{ height }}
     >
       <div
@@ -192,6 +189,23 @@ function DialogBody({
         <div className="px-[5%]">{children}</div>
       </div>
     </div>
+  );
+}
+
+/** A section's small label, for a group that isn't a whole `DialogSection`. */
+export function DialogSectionTitle({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <h3
+      className={`${satoshi.className} m-0 text-[0.8125rem] font-medium tracking-[0.02em] text-[var(--app-dim)] uppercase ${className}`}
+    >
+      {children}
+    </h3>
   );
 }
 
@@ -208,11 +222,7 @@ export function DialogSection({
 }) {
   return (
     <section className="border-b border-[var(--app-border)] pb-5 last:border-0 last:pb-0 [&+&]:pt-5">
-      <h3
-        className={`${satoshi.className} m-0 text-[0.8125rem] font-medium tracking-[0.02em] text-[var(--app-dim)] uppercase`}
-      >
-        {title}
-      </h3>
+      <DialogSectionTitle>{title}</DialogSectionTitle>
       {hint ? (
         <p
           className={`${satoshi.className} m-0 mt-1 text-[0.8125rem] leading-[1.5] text-[var(--app-dim)]`}

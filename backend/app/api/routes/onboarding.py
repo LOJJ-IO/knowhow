@@ -43,6 +43,7 @@ from app.onboarding.service import (
     live_join_link,
     resolve_join_link_preview,
     revoke_join_link,
+    set_join_link_locked,
     record_setup_step,
     start_signup,
 )
@@ -158,6 +159,27 @@ def revoke_join_link_route(
         return {"revoked": revoke_join_link(org_id, member, db)}
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+class JoinLinkLockRequest(BaseModel):
+    locked: bool
+
+
+@router.patch("/organizations/{org_id}/join-link")
+def lock_join_link_route(
+    org_id: uuid.UUID,
+    body: JoinLinkLockRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """Lock or unlock the live link without replacing it."""
+    try:
+        link = set_join_link_locked(org_id, body.locked, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {"locked": link.locked_at is not None, "url": join_link_url(link)}
 
 
 class SetupStepRequest(BaseModel):

@@ -11,6 +11,7 @@ import {
   startAdminProof,
 } from "@/lib/backend";
 import {
+  ChoiceLabel,
   SETUP_CHOICE_CLASS,
   SUPER_ADMIN_DEFINITION,
   SetupAction,
@@ -119,6 +120,7 @@ export function SignInResultPanel({
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      shakeSetupField(nameRef.current);
     } finally {
       setSubmitting(false);
     }
@@ -128,8 +130,9 @@ export function SignInResultPanel({
   function submitWorkspaceName() {
     if (submitting) return;
     if (!orgName.trim()) {
-      shakeSetupField(nameRef.current);
       nameRef.current?.focus();
+      shakeSetupField(nameRef.current);
+      setError("Enter a workspace name.");
       return;
     }
     void createPersonalOrg();
@@ -154,7 +157,7 @@ export function SignInResultPanel({
           className={SETUP_CHOICE_CLASS}
           onClick={b.onClick}
         >
-          {b.label}
+          <ChoiceLabel>{b.label}</ChoiceLabel>
         </button>
       ))}
     </div>
@@ -162,7 +165,7 @@ export function SignInResultPanel({
   const errorLine = error ? (
     <p
       aria-live="polite"
-      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+      className={`${satoshi.className} m-0 mx-[2.5%] mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
     >
       {error}
     </p>
@@ -211,6 +214,7 @@ export function SignInResultPanel({
     case "admin_error":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("We couldn’t check with Google")}
           {body("Nothing changed. Try again in a moment.")}
           <SetupAction label="Try again" onClick={startAdminProof} />
@@ -282,6 +286,7 @@ export function SignInResultPanel({
     case "link_already_linked":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("That account belongs to someone else")}
           {body(
             "It is already connected to a different person, so we left it alone.",
@@ -292,6 +297,7 @@ export function SignInResultPanel({
     case "invite_wrong_account":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("That wasn’t the invited account")}
           {body("Sign in with the email address the invite was for.")}
           {choices([
@@ -309,7 +315,7 @@ export function SignInResultPanel({
  *  check (`.t-success-check` in globals.css). Mounts "out" and flips "in"
  *  once the card has finished growing (`--resize-dur`), so the two motions
  *  play one after the other instead of on top of each other. */
-function ResultMark({ kind }: { kind: "check" | "cross" }) {
+export function ResultMark({ kind }: { kind: "check" | "cross" }) {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {

@@ -242,6 +242,16 @@ def test_owner_sees_pending_join_requests(db, monkeypatch):
     assert _client_as(john).get(f"/organizations/{john.organization_id}/members/pending").status_code == 403
 
 
+def test_join_link_managers_who_arent_owner_can_flip_auto_accept(db, monkeypatch):
+    sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=False, owner_email="boss@acme.com")
+
+    enabled = _client_as(sarah).patch(
+        f"/organizations/{sarah.organization_id}/settings", json={"auto_accept_workspace_members": True}
+    )
+    assert enabled.status_code == 200
+    assert enabled.json() == {"auto_accept_workspace_members": True}
+
+
 def test_owner_can_opt_into_auto_accepting_workspace_accounts(db, monkeypatch):
     sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
     _google(monkeypatch, "john@acme.com", hd="acme.com")

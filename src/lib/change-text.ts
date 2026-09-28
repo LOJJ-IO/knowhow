@@ -12,6 +12,7 @@ const ACTIONS: Record<string, string> = {
   "org_chart.team.edited": "Team renamed",
   "org_chart.team.deleted": "Team deleted",
   "org_chart.team.leader_assigned": "Lead assigned",
+  "onboarding.team_lead_claimed": "Team lead claimed",
   "org_chart.membership.upserted": "Someone joined",
   "org_chart.membership.removed": "Someone left",
   "org_chart.member_offboarded": "Member offboarded",
@@ -26,18 +27,34 @@ const ACTIONS: Record<string, string> = {
   "sharing.reassignment_confirmed": "Ownership reassigned",
 };
 
+/** Joins and leaves name the person they were about instead of "Someone"
+ *  (user 2026-09-27): "Ada Lovelace left". */
+const SUBJECT_VERBS: Record<string, string> = {
+  "org_chart.membership.upserted": "joined",
+  "org_chart.membership.removed": "left",
+};
+
 export function describeChange(
   event: ChangeEvent,
   membersById: Map<string, OverviewMember>,
 ): string {
-  const what =
-    ACTIONS[event.action] ??
-    event.action.split(".").slice(-1)[0].replace(/_/g, " ");
-  const actor = event.actorMemberId
-    ? membersById.get(event.actorMemberId)
+  const nameOf = (id: string | null) => {
+    const member = id ? membersById.get(id) : undefined;
+    return member?.displayName ?? member?.email;
+  };
+  const raw = event.action.split(".").slice(-1)[0].replace(/_/g, " ");
+  const subject = SUBJECT_VERBS[event.action]
+    ? nameOf(event.subjectMemberId)
     : undefined;
-  const who = actor?.displayName ?? actor?.email;
-  return who ? `${what} · ${who}` : what;
+  const what = subject
+    ? `${subject} ${SUBJECT_VERBS[event.action]}`
+    : (ACTIONS[event.action] ?? raw.charAt(0).toUpperCase() + raw.slice(1));
+  const who = nameOf(event.actorMemberId);
+  // "Ada left · Ada" says it twice; only name the actor when it was
+  // someone else.
+  if (!who || (subject && event.actorMemberId === event.subjectMemberId))
+    return what;
+  return `${what} · ${who}`;
 }
 
 export function relativeTime(iso: string): string {

@@ -26,7 +26,7 @@ import {
 export function SetupHeading({ children }: { children: ReactNode }) {
   return (
     <h2
-      className={`${sohne.className} m-0 pl-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
     >
       {children}
     </h2>
@@ -36,7 +36,7 @@ export function SetupHeading({ children }: { children: ReactNode }) {
 export function SetupBody({ children }: { children: ReactNode }) {
   return (
     <p
-      className={`${sohne.className} mt-3 pl-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+      className={`${sohne.className} mt-3 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
     >
       {children}
     </p>
@@ -94,7 +94,7 @@ export function SetupAction({
   return (
     // 32px above: a little more room between the content and the action
     // (user, 2026-09-27).
-    <div className="mt-8 flex justify-end">
+    <div className="mx-[2.5%] mt-8 flex justify-end">
       <button
         type="button"
         onClick={onClick}
@@ -111,6 +111,19 @@ export function SetupAction({
  *  Inset 2.5% each side, like the org name field (user, 2026-09-27). */
 export const SETUP_CHOICE_CLASS =
   "relative mx-[2.5%] flex h-12 w-[95%] cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-95";
+
+/** A choice worded "Answer, the rest" (Yes, … / No, …): the answer bold, the
+ *  rest medium, not thin (user 2026-09-27). Anything else renders as given. */
+export function ChoiceLabel({ children }: { children: string }) {
+  const comma = children.indexOf(", ");
+  if (comma < 0) return children;
+  return (
+    <>
+      <span className="font-bold">{children.slice(0, comma + 1)}</span>
+      <span className="font-medium">&nbsp;{children.slice(comma + 2)}</span>
+    </>
+  );
+}
 
 export function SetupChoices({ children }: { children: ReactNode }) {
   return (
@@ -167,10 +180,19 @@ export function clearSetupFieldError(input: HTMLInputElement | null) {
 export const SUPER_ADMIN_DEFINITION =
   "The person with full control of your company's Google accounts, usually IT or whoever set up your company email. They can add people, reset passwords and connect apps like Knohow.";
 
+/** "owner", with its definition (ADR-0023 wording, user 2026-09-27). */
+export function OwnerTerm() {
+  return (
+    <SetupTerm definition="The person at the top of your organization in Knohow. They approve org-wide decisions. They may not be the same as your Google Workspace Super Admin.">
+      owner
+    </SetupTerm>
+  );
+}
+
 /** A term in a sub-line with its definition on hover or focus ("owner",
- *  "Super Admin"): the app's black tooltip, wider and roomier for a full
- *  sentence. Pass `href` when the term also links out (it then keeps the
- *  pointer cursor); otherwise the help cursor says there's more to read. */
+ *  "Super Admin"): the same tooltip as the Log In sheet's (account picker,
+ *  copy field) — Satoshi, default padding, 6px off. The `?` help cursor says
+ *  there's more to read; with `href` (it links out) it's the pointer. */
 export function SetupTerm({
   children,
   definition,
@@ -204,8 +226,8 @@ export function SetupTerm({
         </TooltipTrigger>
         <TooltipContent
           side="bottom"
-          sideOffset={8}
-          className="max-w-[18rem] px-3 py-2 text-[13px]"
+          sideOffset={6}
+          className={satoshi.className}
         >
           {definition}
         </TooltipContent>

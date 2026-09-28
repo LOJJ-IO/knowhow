@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/app/button";
-import { AppDialog } from "@/components/app/dialog";
+import { AppDialog, DialogSectionTitle } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
@@ -20,7 +20,6 @@ import { TeamIcon } from "@/components/identity/team-icon";
 import { startDriveConsent } from "@/lib/backend";
 import { describeChange, relativeTime } from "@/lib/change-text";
 import { appEntryUrl } from "@/lib/origins";
-import type { TeamChanges } from "@/lib/organization";
 import {
   decideJoinRequest,
   decideOwnerClaim,
@@ -47,91 +46,27 @@ export function NotificationsDialog({
   onInvite: (kind: "owner" | "super_admin") => void;
 }) {
   const { chrome } = useSession();
-  const { overview, tasks, refresh, reloadTasks } = useUpdates();
+  const {
+    overview,
+    tasks,
+    teamUpdates,
+    clearTeamUpdates,
+    clearTeamUpdate: clearTeam,
+    dismissUpdate,
+    refresh,
+    reloadTasks,
+  } = useUpdates();
   useEffect(() => {
     if (open) reloadTasks();
   }, [open, reloadTasks]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<"pending" | "teams">("pending");
-  /** When this person last pressed Clear: team updates up to then are gone
-   *  from the Teams tab. Per viewer, on this browser (a convenience, not a
-   *  record), so it lives in localStorage. */
-  const clearedKey = `knohow:notifications-cleared:${chrome.organizationId}`;
-  const [clearedAt, setClearedAt] = useState<string | null>(() => {
-    try {
-      return window.localStorage.getItem(clearedKey);
-    } catch {
-      return null;
-    }
-  });
-
-  /** Per-team Clear: when each team was last cleared on its own. */
-  const teamClearedKey = `knohow:notifications-cleared-teams:${chrome.organizationId}`;
-  const [teamClearedAt, setTeamClearedAt] = useState<Record<string, string>>(
-    () => {
-      try {
-        return JSON.parse(window.localStorage.getItem(teamClearedKey) ?? "{}");
-      } catch {
-        return {};
-      }
-    },
-  );
 
   const membersById = useMemo(
     () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
     [overview],
   );
-  /** The last week, newest team first. */
-  const teamUpdates = useMemo(() => {
-    if (!overview) return [];
-    return Object.entries(overview.recentChangesByTeam)
-      .map(([teamId, changes]) => {
-        const cutoff = [clearedAt, teamClearedAt[teamId]]
-          .filter((at): at is string => Boolean(at))
-          .sort()
-          .at(-1);
-        return {
-          team: overview.teams.find((t) => t.id === teamId),
-          changes: {
-            ...changes,
-            events: cutoff
-              ? changes.events.filter((e) => e.at > cutoff)
-              : changes.events,
-          },
-        };
-      })
-      .filter((row) => row.changes.events.length > 0)
-      .filter(
-        (
-          row,
-        ): row is {
-          team: NonNullable<typeof row.team>;
-          changes: TeamChanges;
-        } => Boolean(row.team),
-      )
-      .sort((a, b) => b.changes.latestAt.localeCompare(a.changes.latestAt));
-  }, [overview, clearedAt, teamClearedAt]);
-
-  function clearTeam(teamId: string) {
-    const next = { ...teamClearedAt, [teamId]: new Date().toISOString() };
-    setTeamClearedAt(next);
-    try {
-      window.localStorage.setItem(teamClearedKey, JSON.stringify(next));
-    } catch {
-      // Private window or blocked storage: cleared for this visit only.
-    }
-  }
-
-  function clearTeamUpdates() {
-    const now = new Date().toISOString();
-    setClearedAt(now);
-    try {
-      window.localStorage.setItem(clearedKey, now);
-    } catch {
-      // Private window or blocked storage: cleared for this visit only.
-    }
-  }
 
   async function act(id: string, run: () => Promise<void>) {
     setBusy(id);
@@ -162,18 +97,36 @@ export function NotificationsDialog({
         <div role="tablist" className="flex items-center gap-2">
           {(
             [
-              ["pending", "Pending"],
-              ["teams", "Teams"],
+              ["pending", "Pending", tasks.length],
+              [
+                "teams",
+                "Teams",
+                teamUpdates.reduce(
+                  (sum, row) => sum + row.changes.events.length,
+                  0,
+                ),
+              ],
             ] as const
-          ).map(([value, label]) => (
+          ).map(([value, label, count]) => (
             <Button
               key={value}
               role="tab"
               aria-selected={tab === value}
               variant={tab === value ? "default" : "outline"}
               onClick={() => setTab(value)}
+              className="relative"
             >
               {label}
+              {count > 0 ? (
+                // The bell's badge (notification-bell.tsx at its 40px size):
+                // red, top-right, ringed in the surface it sits on.
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -top-1.5 -right-1.5 z-10 grid h-[15px] min-w-[15px] place-items-center rounded-full bg-[#FF3B30] px-[3.5px] text-[8.5px] font-semibold leading-none tracking-tight text-white tabular-nums ring-2 ring-white"
+                >
+                  {count > 99 ? "99+" : count}
+                </span>
+              ) : null}
             </Button>
           ))}
         </div>
@@ -184,36 +137,45 @@ export function NotificationsDialog({
 
       {tab === "pending" ? (
         // A grid, so every row's buttons share one column and start at the
-        // same x (user 2026-09-27).
+        // same x (user 2026-09-27). It runs 5% past the body's right inset,
+        // which moves the buttons 5% right.
         <div
           role="tabpanel"
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-4"
+          className="-mr-[5%] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-4"
         >
           {tasks.length === 0 ? (
             <Quiet>Nothing needs you right now.</Quiet>
           ) : (
-            tasks.map((task) => (
-              <TaskRow
-                key={`${task.kind}-${task.id}`}
-                task={task}
-                busy={busy === task.id}
-                onApprove={(approve) =>
-                  act(task.id, () =>
-                    task.kind === "join_request"
-                      ? decideJoinRequest(
-                          chrome.organizationId,
-                          task.id,
-                          approve,
-                        )
-                      : decideOwnerClaim(chrome.organizationId, approve),
-                  )
-                }
-                onInvite={() => {
-                  onOpenChange(false);
-                  onInvite(task.kind === "no_owner" ? "owner" : "super_admin");
-                }}
-              />
-            ))
+            <>
+              {/* Label over the first task (user 2026-09-27). */}
+              <DialogSectionTitle className="col-span-2 -mb-3">
+                Tasks
+              </DialogSectionTitle>
+              {tasks.map((task) => (
+                <TaskRow
+                  key={`${task.kind}-${task.id}`}
+                  task={task}
+                  busy={busy === task.id}
+                  onApprove={(approve) =>
+                    act(task.id, () =>
+                      task.kind === "join_request"
+                        ? decideJoinRequest(
+                            chrome.organizationId,
+                            task.id,
+                            approve,
+                          )
+                        : decideOwnerClaim(chrome.organizationId, approve),
+                    )
+                  }
+                  onInvite={() => {
+                    onOpenChange(false);
+                    onInvite(
+                      task.kind === "no_owner" ? "owner" : "super_admin",
+                    );
+                  }}
+                />
+              ))}
+            </>
           )}
           {error ? (
             <p
@@ -246,17 +208,32 @@ export function NotificationsDialog({
                   {newTeamIds.has(team.id) ? <NewChip /> : null}
                   <ClearButton small onClick={() => clearTeam(team.id)} />
                 </div>
-                <ul className="m-0 flex list-none flex-col gap-1 p-0 pl-[40px]">
+                <ul className="m-0 flex list-none flex-col gap-1 p-0 pl-[34px]">
                   {changes.events.slice(0, 5).map((event) => (
                     <li
                       key={event.id}
-                      className={`${satoshi.className} flex items-baseline gap-3 text-[0.875rem]`}
+                      className={`${satoshi.className} group flex items-center gap-3 text-[0.875rem]`}
                     >
                       <span className="min-w-0 flex-1 truncate text-[#1c1917]">
                         {describeChange(event, membersById)}
                       </span>
-                      <span className="shrink-0 text-[var(--app-dim)]">
-                        {relativeTime(event.at)}
+                      {/* Hovering (or focusing) the row swaps the time for a
+                          red minus that removes just this update (user
+                          2026-09-27). */}
+                      <span
+                        className={`${TEAM_CLEAR_WIDTH} relative flex shrink-0 items-center pl-3.5`}
+                      >
+                        <span className="text-[var(--app-dim)] transition-[opacity,transform] duration-150 ease-out group-focus-within:-translate-y-1 group-focus-within:opacity-0 group-hover:-translate-y-1 group-hover:opacity-0 motion-reduce:transform-none">
+                          {relativeTime(event.at)}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label="Remove this update"
+                          onClick={() => dismissUpdate(event.id)}
+                          className="absolute left-3.5 grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[#EA4335] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#d93025] focus-visible:ring-2 focus-visible:ring-[#EA4335]/40 active:scale-90 motion-reduce:scale-100"
+                        >
+                          <span className="h-[2px] w-2 rounded-full bg-white" />
+                        </button>
                       </span>
                     </li>
                   ))}
@@ -388,10 +365,14 @@ function NewChip() {
   );
 }
 
+/** The per-team Clear and the times under it share this width, so the times
+ *  start where "Clear" starts (user 2026-09-27). */
+export const TEAM_CLEAR_WIDTH = "w-[3.25rem]";
+
 /** The Teams panel's scroll area. `-mr-8 pr-8` pushes the scrollbar into a
  *  gutter past the times; the top and bottom edges fade (a mask) only while
  *  there is more to scroll that way, so the edge under the tabs is soft. */
-function FadeScroll({ children }: { children: React.ReactNode }) {
+export function FadeScroll({ children }: { children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const [edges, setEdges] = useState({ top: false, bottom: false });
 
@@ -453,7 +434,7 @@ function ClearButton({
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.96 }}
       className={`${satoshi.className} relative ml-auto flex shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--app-border)] bg-white transition-colors duration-150 hover:border-[#d9d9de] ${
-        small ? "h-[1.6rem] px-2.5" : "h-10 px-4"
+        small ? `h-[1.6rem] ${TEAM_CLEAR_WIDTH}` : "h-10 px-4"
       }`}
     >
       {small ? null : (

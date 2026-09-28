@@ -212,7 +212,7 @@ function RemoveAccountsScreen({
 
   return (
     <>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 px-[5%]">
         <button
           type="button"
           onClick={onBack}
@@ -236,14 +236,14 @@ function RemoveAccountsScreen({
         </h2>
       </div>
       <p
-        className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+        className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
       >
         {many
           ? "Select the accounts you want to remove from this device."
           : "Select the account you want to remove from this device."}
       </p>
       <ul
-        className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-2 p-0`}
+        className={`${satoshi.className} m-0 mx-[2.5%] mt-8 flex list-none flex-col gap-2 p-0`}
       >
         {accounts.map((row) => {
           const checked = isSelected(row.key);
@@ -385,17 +385,17 @@ export function AccountPicker({
     // to push a client boundary up there for one screen.
     <TooltipProvider delay={0}>
       <h2
-        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
         Which account today?
       </h2>
       <p
-        className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+        className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
       >
         Pick up where you left off or continue as another user.
       </p>
       <ul
-        className={`${satoshi.className} m-0 mt-8 flex list-none flex-col gap-0.5 p-0`}
+        className={`${satoshi.className} m-0 mx-[2.5%] mt-8 flex list-none flex-col gap-0.5 p-0`}
       >
         {organizations.map((row) => (
           <li
@@ -461,7 +461,7 @@ export function AccountPicker({
         Continue with another account
       </button>
       <p
-        className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+        className={`${satoshi.className} mt-6 px-[5%] text-[0.8rem] leading-[1.6] text-[#1c1917]`}
       >
         By continuing, you agree to Knohow&rsquo;s{" "}
         <span className="font-bold">
@@ -476,7 +476,7 @@ export function AccountPicker({
       <button
         type="button"
         onClick={() => setRemoving(true)}
-        className={`${satoshi.className} mt-4 inline-flex cursor-pointer items-center gap-[4px] border-b border-current leading-none text-[0.8rem] font-bold text-[#1c1917]`}
+        className={`${satoshi.className} mt-4 ml-[5%] inline-flex cursor-pointer items-center gap-[4px] border-b border-current leading-none text-[0.8rem] font-bold text-[#1c1917]`}
       >
         <UserRoundX className="size-[1em] shrink-0" aria-hidden />
         {removableAccounts(organizations).length > 1

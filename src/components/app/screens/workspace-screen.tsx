@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import {
   ClipboardList,
@@ -30,6 +31,14 @@ import {
 } from "@/lib/drive-preview";
 
 /** What a Drive file's MIME type reads as, in the person's words. */
+/** Google's own marks for its three editors (the New fan's PNGs); every
+ *  other type keeps a line icon on a white tile. */
+const GOOGLE_MARKS: Record<string, string> = {
+  "application/vnd.google-apps.document": "/create/docs.png",
+  "application/vnd.google-apps.spreadsheet": "/create/sheets.png",
+  "application/vnd.google-apps.presentation": "/create/slides.png",
+};
+
 function describe(mime: string): { label: string; Icon: LucideIcon } {
   if (mime === "application/vnd.google-apps.folder")
     return { label: "Folder", Icon: Folder };
@@ -141,21 +150,9 @@ export function WorkspaceScreen() {
             description={`Signed in to Google as ${preview.connectedAs}, and there are no files in it yet.`}
           />
         ) : (
+          // No heading or intro, just the files (user 2026-09-27).
           <div className="p-8">
-            <h2
-              className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
-            >
-              Connected to Google Drive
-            </h2>
-            <p
-              className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
-            >
-              Reading as {preview.connectedAs}. These are your most recently
-              edited files, straight from Google. Nothing here is saved to
-              Knohow.
-            </p>
-
-            <FileGrid files={preview.files} />
+            <FileGrid files={preview.files} className="mt-0" />
           </div>
         )}
         {linked.map((account) => (
@@ -208,9 +205,15 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
 }
 
 /** Recently edited files, as cards. */
-function FileGrid({ files }: { files: DrivePreviewFile[] }) {
+function FileGrid({
+  files,
+  className = "mt-6",
+}: {
+  files: DrivePreviewFile[];
+  className?: string;
+}) {
   return (
-    <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+    <ul className={`${className} grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3`}>
       {files.map((file) => {
         const { label, Icon } = describe(file.mimeType);
         const edited = editedAgo(file.modifiedAt);
@@ -219,9 +222,19 @@ function FileGrid({ files }: { files: DrivePreviewFile[] }) {
             key={file.id}
             className="flex items-start gap-3 rounded-[20px] bg-[var(--app-muted)] p-4"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
-              <Icon size={20} strokeWidth={NAV_STROKE} />
-            </span>
+            {GOOGLE_MARKS[file.mimeType] ? (
+              <Image
+                src={GOOGLE_MARKS[file.mimeType]}
+                alt=""
+                width={96}
+                height={96}
+                className="size-10 shrink-0"
+              />
+            ) : (
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
+                <Icon size={20} strokeWidth={NAV_STROKE} />
+              </span>
+            )}
             <span className={`${satoshi.className} min-w-0`}>
               <span
                 title={file.name}

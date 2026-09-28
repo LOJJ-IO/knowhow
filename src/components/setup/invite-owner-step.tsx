@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  ChoiceLabel,
   SETUP_CHOICE_CLASS,
   SetupAction,
   SetupBody,
@@ -9,7 +10,7 @@ import {
   SetupError,
   SetupField,
   SetupHeading,
-  SetupTerm,
+  OwnerTerm,
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
@@ -60,6 +61,7 @@ export function InviteOwnerStep({
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      shakeSetupField(emailRef.current);
     } finally {
       setSubmitting(false);
     }
@@ -128,7 +130,7 @@ export function InviteOwnerStep({
             setError("");
             clearSetupFieldError(emailRef.current);
           }}
-          className="mt-6"
+          className="mx-[2.5%] mt-6"
         >
           <SetupField
             inputRef={emailRef}
@@ -167,7 +169,7 @@ export function InviteOwnerStep({
           disabled={submitting}
           onClick={() => setPhase("email")}
         >
-          Yes, invite them
+          <ChoiceLabel>Yes, invite them</ChoiceLabel>
         </button>
         <button
           type="button"
@@ -179,14 +181,5 @@ export function InviteOwnerStep({
         </button>
       </SetupChoices>
     </div>
-  );
-}
-
-/** "owner", with its definition (ADR-0023 wording, user 2026-09-27). */
-function OwnerTerm() {
-  return (
-    <SetupTerm definition="The person at the top of your organization in Knohow. They approve org-wide decisions. They may not be the same as your Google Workspace Super Admin.">
-      owner
-    </SetupTerm>
   );
 }

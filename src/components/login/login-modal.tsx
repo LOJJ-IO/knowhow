@@ -113,12 +113,14 @@ export function LoginModal({
       // A new screen while open: hide it until the card has mostly resized,
       // then fade it in, so the old height never shows the new content
       // clipped. Set on the DOM, not state — it must land before the next
-      // paint. Small changes (an error line) and Cal's iframe are left alone.
+      // paint. Small changes (an error line), Cal's iframe, and a screen that
+      // grows in place (`data-grows-in-place`: every Book a Demo step) are
+      // left alone: hiding those reads as a flash.
       if (
         openRef.current &&
         lastFull.current > 0 &&
         delta >= SWAP_MIN_DELTA &&
-        !body.querySelector(".t-demo-booking")
+        !body.querySelector(".t-demo-booking, [data-grows-in-place]")
       ) {
         body.dataset.swapping = "";
         window.clearTimeout(revealTimer);

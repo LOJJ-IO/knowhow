@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import {
+  ChoiceLabel,
+  OwnerTerm,
   SETUP_CHOICE_CLASS,
   SetupAction,
   SetupBody,
@@ -144,14 +146,14 @@ export function JoinPlacementForm({
             className={SETUP_CHOICE_CLASS}
             onClick={() => afterLead(true)}
           >
-            Yes, I&rsquo;m the lead
+            <ChoiceLabel>Yes, I’m the lead</ChoiceLabel>
           </button>
           <button
             type="button"
             className={SETUP_CHOICE_CLASS}
             onClick={() => afterLead(false)}
           >
-            No, just on the team
+            <ChoiceLabel>No, just on the team</ChoiceLabel>
           </button>
         </SetupChoices>
         <SetupError>{error}</SetupError>
@@ -163,14 +165,7 @@ export function JoinPlacementForm({
       <div>
         <SetupHeading>Are you the owner of this organization?</SetupHeading>
         <SetupBody>
-          The{" "}
-          <span
-            className="underline decoration-[#1c1917]/40 underline-offset-2"
-            title="The person at the top of your company's org chart in Knohow — not the same as Google Super Admin."
-          >
-            owner
-          </span>{" "}
-          sits at the top of the chart. You can skip if you&rsquo;re not sure.
+          The <OwnerTerm /> sits at the top of the chart. You can skip if you&rsquo;re not sure.
         </SetupBody>
         <SetupChoices>
           <button
@@ -180,7 +175,7 @@ export function JoinPlacementForm({
               void submit(true);
             }}
           >
-            Yes, I&rsquo;m the owner
+            <ChoiceLabel>Yes, I’m the owner</ChoiceLabel>
           </button>
           <button
             type="button"

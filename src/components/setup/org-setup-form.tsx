@@ -103,14 +103,14 @@ export function OrgSetupForm({
 
   if (bootError)
     return (
-      <p className="m-0 text-[0.95rem] text-[#EA4335]" aria-live="polite">
+      <p className="m-0 px-[5%] text-[0.95rem] text-[#EA4335]" aria-live="polite">
         {bootError}
       </p>
     );
 
   if (!chartReady)
     return (
-      <p className="m-0 text-[0.95rem] text-[#1c1917]/70">Getting ready…</p>
+      <p className="m-0 px-[5%] text-[0.95rem] text-[#1c1917]/70">Getting ready…</p>
     );
 
   if (step === "orgName")

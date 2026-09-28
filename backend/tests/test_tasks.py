@@ -94,3 +94,21 @@ def test_super_admin_task_goes_once_someone_is_verified(db):
     other.super_admin_verified_at = datetime.now(timezone.utc)
     db.commit()
     assert "no_super_admin" not in _kinds(pending_tasks(org.id, founder, db))
+
+
+def test_overview_carries_the_pending_owner_until_confirmed(db):
+    from app.onboarding.service import org_overview
+
+    org, founder, other, chart = _org(db)
+    assert org_overview(org.id, db)["pending_owner"] is None
+
+    chart.pending_owner_member_id = other.id
+    db.commit()
+    assert org_overview(org.id, db)["pending_owner"] == {
+        "id": str(other.id), "email": "other@acme.com", "display_name": None,
+    }
+
+    decide_owner_claim(org.id, founder, True, db)
+    overview = org_overview(org.id, db)
+    assert overview["pending_owner"] is None
+    assert overview["owner_member_id"] == str(other.id)

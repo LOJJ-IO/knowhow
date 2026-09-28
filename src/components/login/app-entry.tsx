@@ -12,6 +12,7 @@ import { SignInSheet } from "@/components/login/sign-in-sheet";
 import {
   clearSignInResultFromUrl,
   readSignInResult,
+  ResultMark,
   type SignInResult,
 } from "@/components/setup/sign-in-result";
 import {
@@ -252,8 +253,13 @@ export function AppEntry({
         />
       ) : kind === "login" ? (
         <>
+          {/* The Google result screens' X, placed the same way (user
+              2026-09-27). */}
+          {joinToken && joinPreview && !joinPreview.valid ? (
+            <ResultMark kind="cross" />
+          ) : null}
           <h2
-            className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+            className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
           >
             {joinToken && joinPreview
               ? joinPreview.valid
@@ -264,7 +270,7 @@ export function AppEntry({
                 : "Log in or sign up in seconds"}
           </h2>
           <p
-            className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+            className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
           >
             {joinToken && joinPreview
               ? joinPreview.description
@@ -286,7 +292,7 @@ export function AppEntry({
           )}
           {!(joinToken && joinPreview && !joinPreview.valid) ? (
             <p
-              className={`${satoshi.className} mt-6 text-[0.8rem] leading-[1.6] text-[#1c1917]`}
+              className={`${satoshi.className} mt-6 px-[5%] text-[0.8rem] leading-[1.6] text-[#1c1917]`}
             >
               By continuing, you agree to Knohow&rsquo;s{" "}
               <span className="font-bold">

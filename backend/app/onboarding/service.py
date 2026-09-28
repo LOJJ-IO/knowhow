@@ -201,10 +201,15 @@ def resolve_join_link_preview(token: str, db: Session) -> dict:
         raise ValueError("join link not found")
 
     now = datetime.now(timezone.utc)
-    valid = link.revoked_at is None and (link.expires_at is None or link.expires_at > now)
+    alive = link.revoked_at is None and (link.expires_at is None or link.expires_at > now)
+    locked = alive and link.locked_at is not None
+    valid = alive and not locked
     domain = org.observed_domain or org.verified_domain
 
-    if valid:
+    if locked:
+        title = "This invite link is locked"
+        description = "Ask whoever sent it to unlock it."
+    elif valid:
         title = f"Join {org.name} on Knohow"
         description = (
             f"Sign in with your {domain} account to get started."
@@ -303,6 +308,44 @@ def revoke_join_link(org_id: uuid.UUID, actor: OrgMember, db: Session) -> int:
             db=db,
         )
     return killed
+
+
+def set_join_link_locked(org_id: uuid.UUID, locked: bool, actor: OrgMember, db: Session) -> JoinLink:
+    """Locks or unlocks the org's current link. Locking stops it letting anyone
+    in without replacing it, so unlocking brings back the same link people
+    already have. Nothing to lock (no live link) is an error."""
+    _require_join_link_role(org_id, actor, db)
+    now = datetime.now(timezone.utc)
+    link = next(
+        iter(
+            db.execute(
+                select(JoinLink)
+                .where(
+                    JoinLink.organization_id == org_id,
+                    JoinLink.revoked_at.is_(None),
+                    or_(JoinLink.expires_at.is_(None), JoinLink.expires_at > now),
+                )
+                .order_by(JoinLink.created_at.desc())
+                .limit(1)
+            ).scalars()
+        ),
+        None,
+    )
+    if link is None:
+        raise ValueError("there is no live join link")
+    if (link.locked_at is not None) == locked:
+        return link
+    link.locked_at = now if locked else None
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="onboarding.join_link.locked" if locked else "onboarding.join_link.unlocked",
+        target_resource_id=str(link.id),
+        details={},
+        db=db,
+    )
+    return link
 
 
 def invite_url(invitation: Invitation) -> str:
@@ -643,6 +686,8 @@ def _org_for_valid_join_token(token: str, db: Session) -> Organization:
     now = datetime.now(timezone.utc)
     if link.revoked_at is not None or (link.expires_at is not None and link.expires_at <= now):
         raise ValueError("this invite link has expired")
+    if link.locked_at is not None:
+        raise ValueError("this invite link is locked")
     org = db.get(Organization, link.organization_id)
     if org is None:
         raise ValueError("join link not found")
@@ -953,6 +998,15 @@ def list_members(org_id: uuid.UUID, db: Session) -> list[OrgMember]:
     )
 
 
+def _pending_owner(chart: OrgChart | None, db: Session) -> dict | None:
+    if chart is None or chart.owner_member_id is not None or chart.pending_owner_member_id is None:
+        return None
+    claimant = db.get(OrgMember, chart.pending_owner_member_id)
+    if claimant is None:
+        return None
+    return {"id": str(claimant.id), "email": claimant.email, "display_name": claimant.display_name}
+
+
 def org_overview(org_id: uuid.UUID, db: Session, viewer: OrgMember | None = None) -> dict:
     """Everything onboarding produced, in one read, for the app's dashboard.
 
@@ -1026,6 +1080,10 @@ def org_overview(org_id: uuid.UUID, db: Session, viewer: OrgMember | None = None
             "setup_completed_at": org.setup_completed_at.isoformat() if org.setup_completed_at else None,
         },
         "owner_member_id": str(chart.owner_member_id) if chart and chart.owner_member_id else None,
+        # Someone said "I'm the owner" and it awaits the founder / a Super
+        # Admin (ADR-0021). Carried whole: the claimant may not be approved
+        # yet, so may not be in `members`.
+        "pending_owner": _pending_owner(chart, db),
         "nominated_super_admin_email": chart.nominated_super_admin_email if chart else None,
         "teams": [
             {
@@ -1057,6 +1115,7 @@ def org_overview(org_id: uuid.UUID, db: Session, viewer: OrgMember | None = None
         ],
         "join_link": {
             "active": link_is_live,
+            "locked": bool(link_is_live and live_link.locked_at is not None),
             "created_at": live_link.created_at.isoformat() if live_link and link_is_live else None,
         },
         "open_invitations": open_invitations,
@@ -1087,10 +1146,11 @@ def mark_dashboard_seen(member: OrgMember, db: Session) -> datetime:
 
 
 def set_auto_accept_workspace_members(org_id: uuid.UUID, requester: OrgMember, enabled: bool, db: Session) -> Organization:
-    """Owner's opt-in to approve same-domain Workspace signups on arrival.
+    """Opt-in to approve same-domain Workspace signups on arrival.
     Applies to future signups only; anyone already waiting stays pending
-    until approved."""
-    _require_owner(org_id, requester, db)
+    until approved. It sits beside the join link in Manage teams, so the same
+    people may flip it (user 2026-09-27)."""
+    _require_join_link_role(org_id, requester, db)
     org = db.get(Organization, org_id)
     org.auto_accept_workspace_members = enabled
     db.commit()

@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
+import { Badge } from "@/components/app/badge";
 import { Button } from "@/components/app/button";
 import { CaretIcon } from "@/components/app/nav-morph";
 import { ManageTeamsButton } from "@/components/app/screens/home-actions";
@@ -17,10 +19,11 @@ import {
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { InviteDialog } from "@/components/app/invite-dialog";
-import { describeChange, relativeTime } from "@/lib/change-text";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
-import { type ChangeEvent, type OverviewMember } from "@/lib/organization";
+import { personColor } from "@/lib/identity/composition";
+import { PALETTE } from "@/lib/identity/palette";
+import { type OverviewMember } from "@/lib/organization";
 import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 
@@ -36,9 +39,8 @@ import { cn } from "@/lib/utils";
  *  `/org-chart` and `/oversight` are gone; this replaced both.
  *
  *  Everything here is real. Changes come from the backend's audit-log feed,
- *  measured against when this person last opened Home, and a
- *  connector only pulses for a team that actually changed. Quiet is the
- *  correct state when nothing has happened. */
+ *  measured against when this person last opened Home; they drive the New
+ *  chips, not the pulses. */
 
 const OWNER_NODE = "owner";
 /** Both cards run 30% bigger than the first pass (user 2026-09-22) — width,
@@ -159,6 +161,29 @@ export function HomeScreen() {
                   // Nobody owns the org yet: an empty seat, never the
                   // viewer's name (user 2026-09-27: a founder who said "No"
                   // was shown at the top).
+                  const claimant = overview.pendingOwner;
+                  // Someone claimed the seat: shown in it, marked as waiting
+                  // on the founder / a Super Admin, and no Invite (user
+                  // 2026-09-27).
+                  if (!owner && claimant) {
+                    const claimantName =
+                      claimant.displayName ?? claimant.email;
+                    return (
+                      <Card selected={selected}>
+                        <div className="flex items-center gap-[13px] p-[9px]">
+                          <PersonAvatar
+                            identity={claimant.email}
+                            label={claimantName}
+                            size={52}
+                          />
+                          <span className="min-w-0 text-left">
+                            <CardTitle>{claimantName}</CardTitle>
+                            <CardMeta>Owner · awaiting confirmation</CardMeta>
+                          </span>
+                        </div>
+                      </Card>
+                    );
+                  }
                   if (!owner)
                     return (
                       <Card selected={selected}>
@@ -205,7 +230,6 @@ export function HomeScreen() {
 
                 const team = overview.teams.find((t) => t.id === node.id);
                 if (!team) return null;
-                const change = overview.changesByTeam[team.id];
                 const open = expanded.includes(team.id);
 
                 return (
@@ -226,11 +250,18 @@ export function HomeScreen() {
                           <span className="truncate">{team.name}</span>
                           {unseen[team.id] ? <NewBadge /> : null}
                         </CardTitle>
-                        <CardMeta>
-                          {team.memberIds.length === 1
-                            ? "1 member"
-                            : `${team.memberIds.length} members`}
-                        </CardMeta>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <MemberStack
+                            members={team.memberIds
+                              .map((id) => membersById.get(id))
+                              .filter((m): m is OverviewMember => Boolean(m))}
+                          />
+                          <CardMeta>
+                            {team.memberIds.length === 1
+                              ? "1 member"
+                              : `${team.memberIds.length} members`}
+                          </CardMeta>
+                        </span>
                       </span>
                       {/* data-ui keeps the canvas from treating this as a drag. */}
                       <Button
@@ -279,8 +310,6 @@ export function HomeScreen() {
                           .map((id) => membersById.get(id))
                           .filter((m): m is OverviewMember => Boolean(m))}
                         leaderId={team.leaderId}
-                        events={change?.events ?? []}
-                        membersById={membersById}
                       />
                     ) : null}
                   </Card>
@@ -299,19 +328,16 @@ export function HomeScreen() {
   );
 }
 
-/** What the caret opens: who is in the team, then what changed in it. The
+/** What the caret opens: who is in the team. What changed in it lives in
+ *  Notifications only; the card just carries New (user 2026-09-27). The
  *  canvas measures node heights, so opening this re-routes the connectors on
  *  its own. */
 function TeamDetail({
   members,
   leaderId,
-  events,
-  membersById,
 }: {
   members: OverviewMember[];
   leaderId: string | null;
-  events: ChangeEvent[];
-  membersById: Map<string, OverviewMember>;
 }) {
   return (
     <div className="px-[9px] pt-[13px] pb-[9px]">
@@ -339,29 +365,13 @@ function TeamDetail({
                   {member.displayName ?? member.email}
                 </span>
                 {member.id === leaderId ? <Badge>Lead</Badge> : null}
+                {member.isSuperAdmin ? <Badge>Super Admin</Badge> : null}
               </span>
             </li>
           ))}
         </ul>
       )}
 
-      {events.length > 0 ? (
-        <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 border-t border-[var(--app-border)] p-0 pt-2.5">
-          {events.map((event) => (
-            <li
-              key={event.id}
-              className={`${satoshi.className} flex items-baseline gap-2 text-[0.975rem] leading-[1.5]`}
-            >
-              <span className="min-w-0 flex-1 truncate text-[#1c1917]">
-                {describeChange(event, membersById)}
-              </span>
-              <span className="shrink-0 text-[var(--app-dim)]">
-                {relativeTime(event.at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 }
@@ -372,16 +382,6 @@ function TeamDetail({
  *  reference then. "Lead" beside a member's name is the same chip. */
 function NewBadge() {
   return <Badge>New</Badge>;
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return (
-    <span
-      className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
-    >
-      {children}
-    </span>
-  );
 }
 
 /** A card on the canvas. Resting, or selected (you clicked it). Change
@@ -417,6 +417,61 @@ function CardTitle({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+/** A team card's people, overlapped in front of its member count like Manage
+ *  teams' stack (user 2026-09-27): three at most, then a fourth circle with
+ *  only a plus. The three are picked so no two share or neighbour a colour on
+ *  the palette wheel; a person's colour is theirs everywhere, so it's who is
+ *  shown that changes, never their colour. */
+function MemberStack({ members }: { members: OverviewMember[] }) {
+  if (members.length === 0) return null;
+  const shown = distinctColours(members, 3);
+  return (
+    <span className="flex shrink-0 items-center">
+      {shown.map((member, i) => (
+        <PersonAvatar
+          key={member.id}
+          identity={member.email}
+          label={member.displayName ?? member.email}
+          size={20}
+          className={i === 0 ? "" : "-ml-1.5 ring-2 ring-white"}
+        />
+      ))}
+      {members.length > 3 ? (
+        <span
+          aria-hidden
+          className="-ml-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-[var(--app-active)] text-[#1c1917] ring-2 ring-white"
+        >
+          <Plus className="size-3" strokeWidth={2.5} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Up to `count` members whose avatar colours are furthest apart: first
+ *  people at least two steps apart on the wheel, then merely different, then
+ *  whoever is left. */
+function distinctColours(members: OverviewMember[], count: number) {
+  const size = PALETTE.length;
+  const hue = (m: OverviewMember) =>
+    PALETTE.indexOf(personColor(m.email) as (typeof PALETTE)[number]);
+  const apart = (a: number, b: number) => {
+    const d = Math.abs(a - b) % size;
+    return Math.min(d, size - d);
+  };
+  const picked: OverviewMember[] = [];
+  for (const minGap of [2, 1, 0]) {
+    for (const member of members) {
+      if (picked.length === count) return picked;
+      if (picked.includes(member)) continue;
+      if (picked.every((p) => apart(hue(p), hue(member)) >= minGap)) {
+        picked.push(member);
+      }
+    }
+  }
+  return picked;
 }
 
 function CardMeta({ children }: { children: React.ReactNode }) {

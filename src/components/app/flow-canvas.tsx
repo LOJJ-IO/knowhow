@@ -12,8 +12,8 @@ import { EdgePulse } from "@/components/app/edge-pulse";
  *  the valuable part and they are kept: node heights are **measured** rather
  *  than assumed (a card whose content wraps still connects correctly), row
  *  offsets are derived from those measurements, connectors are beziers between
- *  anchor points, dragging clamps the card inside the canvas, and a real drag
- *  is not allowed to also toggle selection. Retokenised onto Knohow's own
+ *  anchor points, and a real drag is not allowed to also toggle selection.
+ *  Cards drag freely across the pannable board (no clamp, 2026-09-27). Retokenised onto Knohow's own
  *  surfaces and fonts; the condition/dropdown machinery in the original was
  *  for its own domain and is gone.
  *
@@ -258,24 +258,6 @@ export function FlowCanvas({
   const cw = width || 720;
   const widthOf = (n: FlowNode) => Math.min(n.w, cw * 0.92);
 
-  /** Where each node's centre sits, before any drag. When spreading, a row's
-   *  cards are distributed across the full width: the first starts at the left
-   *  gutter, the last ends at the right one, and what is left over becomes the
-   *  gaps between them. */
-  const baseCx = (n: FlowNode) => {
-    const peers = nodes.filter((p) => p.row === n.row);
-    if (!spread || peers.length < 2) return n.x * cw;
-    const widths = peers.map(widthOf);
-    const total = widths.reduce((sum, w) => sum + w, 0);
-    const gap = Math.max(
-      MIN_COL_GAP,
-      (cw - PAD_X * 2 - total) / (peers.length - 1),
-    );
-    const index = peers.indexOf(n);
-    const before = widths.slice(0, index).reduce((sum, w) => sum + w, 0);
-    return PAD_X + before + gap * index + widths[index] / 2;
-  };
-
   /** The width the widest row needs at scale 1: every card at its own width,
    *  `MIN_COL_GAP` between them, plus the gutters. */
   const neededW = Math.max(
@@ -286,6 +268,29 @@ export function FlowCanvas({
     }),
     0,
   );
+  /** The chart's own width: the canvas, or the widest row when that runs
+   *  past it. Layout, centring and the connector layer all use this, so a
+   *  lone card (the owner) centres over the row actually beneath it and no
+   *  connector is clipped at the canvas's edge (user 2026-09-27). */
+  const boardW = Math.max(cw, neededW);
+
+  /** Where each node's centre sits, before any drag. When spreading, a row's
+   *  cards are distributed across the board: the first starts at the left
+   *  gutter, the last ends at the right one, and what is left over becomes the
+   *  gaps between them. */
+  const baseCx = (n: FlowNode) => {
+    const peers = nodes.filter((p) => p.row === n.row);
+    if (!spread || peers.length < 2) return n.x * boardW;
+    const widths = peers.map(widthOf);
+    const total = widths.reduce((sum, w) => sum + w, 0);
+    const gap = Math.max(
+      MIN_COL_GAP,
+      (boardW - PAD_X * 2 - total) / (peers.length - 1),
+    );
+    const index = peers.indexOf(n);
+    const before = widths.slice(0, index).reduce((sum, w) => sum + w, 0);
+    return PAD_X + before + gap * index + widths[index] / 2;
+  };
 
   /** Fit the board to the chart when there are more teams than fit across it
    *  (user 2026-09-22 asked what happens as teams are added). Zoom out far
@@ -358,17 +363,9 @@ export function FlowCanvas({
       // A few pixels of slop, so a click with a shaky hand is still a click.
       if (!d.moved && Math.hypot(dx - d.baseDx, dy - d.baseDy) < 3) return;
       d.moved = true;
-
-      const { w } = place(node);
-      const h = heightOf(node.id);
-      const base = baseCx(node);
-      const baseTop = rowY[rows.indexOf(node.row)];
-      const cx = Math.min(Math.max(base + dx, w / 2 + 8), cw - w / 2 - 8);
-      const top = Math.min(Math.max(baseTop + dy, 8), canvasH - h - 8);
-      setOffsets((current) => ({
-        ...current,
-        [node.id]: { dx: cx - base, dy: top - baseTop },
-      }));
+      // Unclamped: the board pans and zooms without limit, so a card can go
+      // anywhere on it (user 2026-09-27).
+      setOffsets((current) => ({ ...current, [node.id]: { dx, dy } }));
     };
 
   const onPointerUp = (node: FlowNode) => () => {
@@ -455,6 +452,11 @@ export function FlowCanvas({
   const onBoardPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     touches.current.delete(event.pointerId);
     if (touches.current.size < 2) pinch.current = null;
+    // A click on empty canvas (not a pan) clears the selection (user
+    // 2026-09-27).
+    const d = panDrag.current;
+    if (d && Math.hypot(event.clientX - d.x, event.clientY - d.y) < 3)
+      setSelected(null);
     panDrag.current = null;
   };
 
@@ -486,10 +488,11 @@ export function FlowCanvas({
           transformOrigin: "0 0",
         }}
       >
+        {/* Visible overflow: a card dragged anywhere keeps its connector. */}
         <svg
-          width={cw}
+          width={boardW}
           height={canvasH}
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute inset-0 overflow-visible"
         >
           {edges.map((edge, i) => {
             const d = bezier(edge);
@@ -525,9 +528,15 @@ export function FlowCanvas({
               onPointerDown={onPointerDown(node)}
               onPointerMove={onPointerMove(node)}
               onPointerUp={onPointerUp(node)}
-              onClick={() => {
+              onClick={(event) => {
                 if (drag.current?.moved) return;
-                setSelected(active ? null : node.id);
+                // A control inside the card (its caret, Invite) always
+                // selects it; only a click on the card itself toggles
+                // (user 2026-09-27).
+                const onControl = (event.target as Element).closest(
+                  "[data-ui]",
+                );
+                setSelected(onControl || !active ? node.id : null);
               }}
               className="pointer-events-auto absolute flex -translate-x-1/2 cursor-grab touch-none flex-col items-stretch active:cursor-grabbing"
               style={{

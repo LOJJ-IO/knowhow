@@ -86,6 +86,9 @@ const LAG = 2;
 // a taller window would show the next digit at rest, so the fade rides velocity instead
 const ROLL_FADE = 34;
 const ROLL_VELOCITY = 9;
+// digits sit a little more than a line apart, so pixel rounding at this tiny
+// size can't show a sliver of the neighbour at rest
+const TILE_STEP = 1.3;
 
 const COLORS = {
   red: "bg-[#FF3B30]",
@@ -198,7 +201,12 @@ function BellIcon({
 // this only moves the way the count moved, so the digits roll the right way
 function DigitColumn({ value, reduced }: { value: number; reduced: boolean }) {
   const position = useSpring(value, COLUMN_SPRING);
-  const y = useTransform(position, (p) => `${-p * 100}%`);
+  const y = useTransform(position, (p) => `${-p * TILE_STEP}em`);
+  // the spring can rest a hair off the digit, which peeks the next one in
+  useEffect(
+    () => position.on("animationComplete", () => position.jump(value)),
+    [position, value],
+  );
   const velocity = useVelocity(position);
   const mask = useTransform(velocity, (v) => {
     const fade = Math.min(ROLL_FADE, (Math.abs(v) / ROLL_VELOCITY) * ROLL_FADE);
@@ -229,7 +237,7 @@ function DigitColumn({ value, reduced }: { value: number; reduced: boolean }) {
             <span
               key={tile}
               className="absolute inset-x-0 flex justify-center"
-              style={{ top: `${tile * 100}%` }}
+              style={{ top: `${tile * TILE_STEP}em`, height: "1em" }}
             >
               {digitOf(tile)}
             </span>

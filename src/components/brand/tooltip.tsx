@@ -1,7 +1,7 @@
 "use client";
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip";
-import { useState, type ComponentProps } from "react";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -94,6 +94,9 @@ function TooltipContent({
   );
 }
 
+/** How long a field error stays up (Book a Demo's `--revert-hold`). */
+const ERROR_HOLD_MS = 3000;
+
 /** A field's error, shown above it as the tooltip while there is one (user
  *  2026-09-27: every field error, instead of red text under the field), and
  *  gone as soon as you click or tab back into the field. Open is driven by the message alone, not by hover. The wrapper
@@ -117,6 +120,20 @@ function ErrorTip({
   // state derived from a prop.
   const [shown, setShown] = useState(message ?? "");
   if (message && message !== shown) setShown(message);
+
+  // Book a Demo's hold (user 2026-09-27: every field error behaves that
+  // way): after 3s the caller's dismiss runs, so the tooltip and the red
+  // border fade back on their own. A ref, so a new `onDismiss` each render
+  // doesn't restart the clock.
+  const dismissRef = useRef(onDismiss);
+  useEffect(() => {
+    dismissRef.current = onDismiss;
+  });
+  useEffect(() => {
+    if (!message) return;
+    const id = window.setTimeout(() => dismissRef.current?.(), ERROR_HOLD_MS);
+    return () => window.clearTimeout(id);
+  }, [message]);
 
   return (
     <TooltipPrimitive.Root open={Boolean(message)}>

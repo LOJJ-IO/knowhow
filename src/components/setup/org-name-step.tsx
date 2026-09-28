@@ -76,6 +76,7 @@ export function OrgNameStep({
       onDone(org.name);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      shakeSetupField(inputRef.current);
     } finally {
       setSubmitting(false);
     }

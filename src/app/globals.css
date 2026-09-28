@@ -1106,6 +1106,15 @@ body.t-deck-dragging * {
 /* Autofill: light grey (the mac windows' light well) instead of Chrome's
  * blue. Chrome ignores background-color here, so paint it with an inset
  * shadow; keep the text colour ours. */
+/* Selected text in the fields (the browser selects it on autofill and on
+ * tabbing in): warm ink, not the system blue (user 2026-09-27). */
+.t-input::selection,
+.t-demo-input::selection {
+  background: rgb(28 25 23 / 0.14);
+  color: #1c1917;
+  -webkit-text-fill-color: #1c1917;
+}
+
 .t-demo-input:-webkit-autofill,
 .t-demo-input:-webkit-autofill:hover,
 .t-demo-input:-webkit-autofill:focus {

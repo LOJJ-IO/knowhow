@@ -19,9 +19,8 @@ import { useEffect, useRef } from "react";
  *  - **Periodic, not continuous**: a pulse fires, then nothing for seconds.
  *    `period` sets the gap and `delay` staggers edges so they don't fire in
  *    lockstep, which is what would make it read as decoration.
- *  - **Real events only.** The caller mounts this on an edge *because that team
- *    actually changed*; an edge with no news has a plain static line. Nothing
- *    here invents traffic.
+ *  - **Not tied to updates** (since 2026-09-27, ADR-0026): Home pulses every
+ *    connector, always; what changed lives in Notifications.
  *
  *  Position comes from `getPointAtLength` on the real path element, so a pulse
  *  follows a card being dragged mid-flight rather than animating along a stale
@@ -29,6 +28,10 @@ import { useEffect, useRef } from "react";
  *
  *  Honours `prefers-reduced-motion`: the pulse simply never runs. Recent
  *  updates are still available via the play control without motion. */
+/** When the first pulse on the page started; every edge's phase counts from
+ *  here, so the stagger between edges holds forever. */
+let epoch: number | null = null;
+
 export function EdgePulse({
   /** The connector this rides. Same `d` the line is drawn with. */
   d,
@@ -56,7 +59,8 @@ export function EdgePulse({
 
     const TRAVEL = 680;
     let frame = 0;
-    let start = performance.now() + delay;
+    epoch ??= performance.now();
+    const origin = epoch;
 
     // Starts quickly, settles into the destination: a transfer arriving, not
     // a constant-speed loop.
@@ -65,14 +69,13 @@ export function EdgePulse({
 
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
-      const elapsed = now - start;
-      if (elapsed < 0) {
+      // Phase from one clock shared by every edge, not a per-edge restart:
+      // restarting after a paused tab (rAF stops) re-aligned every edge to
+      // the same frame, so they drifted from one-by-one into firing together.
+      const since = now - origin - delay;
+      const elapsed = since < 0 ? -1 : since % period;
+      if (elapsed < 0 || elapsed > TRAVEL) {
         dot.style.opacity = "0";
-        return;
-      }
-      if (elapsed > TRAVEL) {
-        dot.style.opacity = "0";
-        if (elapsed > period) start = now;
         return;
       }
       const t = ease(elapsed / TRAVEL);
