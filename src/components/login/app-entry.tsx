@@ -45,6 +45,13 @@ const JoinPlacementForm = dynamic(
     ),
   { ssr: false },
 );
+const ConnectWorkspaceStep = dynamic(
+  () =>
+    import("@/components/setup/connect-workspace-step").then(
+      (m) => m.ConnectWorkspaceStep,
+    ),
+  { ssr: false },
+);
 const DelegationConnectStep = dynamic(
   () =>
     import("@/components/setup/delegation-connect-step").then(
@@ -63,7 +70,22 @@ const SignInResultPanel = dynamic(
 /** `--resize-dur` (300ms) in globals.css, plus a frame: the card closing. */
 const CARD_CLOSE_MS = 320;
 
-type EntryKind = "login" | "setup" | "join" | "delegation" | "result";
+type EntryKind =
+  | "login"
+  | "setup"
+  | "join"
+  | "delegation"
+  | "result"
+  | "connect";
+
+/** `?connect=workspace`: the **company** Drive connection, opened from the
+ *  Notifications task (ADR-0026). Not a person's own Drive, which is Google's
+ *  consent screen and never comes through here (ADR-0024). */
+function readConnectRequest() {
+  return (
+    new URLSearchParams(window.location.search).get("connect") === "workspace"
+  );
+}
 
 /** The app's front door (ADR 0022): Log In, founder setup, the join wizard
  *  and whatever Google said on the way back, on the same sky sheet the
@@ -155,6 +177,8 @@ export function AppEntry({
         setKind("setup");
       } else if (result?.needs_join_placement) {
         setKind("join");
+      } else if (result && readConnectRequest()) {
+        setKind("connect");
       } else if (joinToken || readInviteToken() || !result) {
         // A join or invite link gets its own Log In screen first, even when
         // someone is already signed in; nobody signed in gets plain Log In.
@@ -342,6 +366,8 @@ export function AppEntry({
             else setKind("login");
           }}
         />
+      ) : kind === "connect" && me ? (
+        <ConnectWorkspaceStep me={me} onDone={intoTheApp} />
       ) : kind === "delegation" && me ? (
         <DelegationConnectStep me={me} onDone={afterGoogleCheck} />
       ) : null}

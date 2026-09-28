@@ -6,10 +6,7 @@ import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
 import { CaretIcon } from "@/components/app/nav-morph";
-import {
-  ManageTeamsButton,
-  ReplayUpdatesButton,
-} from "@/components/app/screens/home-actions";
+import { ManageTeamsButton } from "@/components/app/screens/home-actions";
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
 import {
@@ -18,30 +15,23 @@ import {
   type FlowNode,
 } from "@/components/app/flow-canvas";
 import { useSession } from "@/components/app/session";
+import { useUpdates } from "@/components/app/updates";
+import { InviteDialog } from "@/components/app/invite-dialog";
+import { describeChange, relativeTime } from "@/lib/change-text";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
-import {
-  fetchOrgOverview,
-  markDashboardSeen,
-  type ChangeEvent,
-  type OrgOverview,
-  type OverviewMember,
-} from "@/lib/organization";
-import {
-  LIMITED_ACCESS_MESSAGE,
-  backendError,
-  backendFetch,
-} from "@/lib/backend";
-import { FormDialog } from "@/components/app/dialog";
+import { type ChangeEvent, type OverviewMember } from "@/lib/organization";
+import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
 import { cn } from "@/lib/utils";
 
 /** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
  *  chart and oversight in one screen.
  *
  *  The owner sits at the top and the teams spread beneath them, which is the
- *  chart. Recent changes play as pulses on the connectors when you press
- *  Recent updates — not as badges or coloured borders on the cards (user
- *  2026-09-26). Quiet cards are the correct resting state.
+ *  chart. Every connector pulses, all the time, on its own: the pulses are
+ *  the chart being alive, not a report of changes (user 2026-09-27). What
+ *  changed lives in Notifications; a team with updates you haven't seen
+ *  carries a quiet "New" beside its name until you've looked.
  *
  *  `/org-chart` and `/oversight` are gone; this replaced both.
  *
@@ -49,41 +39,6 @@ import { cn } from "@/lib/utils";
  *  measured against when this person last opened Home, and a
  *  connector only pulses for a team that actually changed. Quiet is the
  *  correct state when nothing has happened. */
-
-type RecentWindow = { label: string | null; teamIds: Set<string> };
-
-const NO_RECENT: RecentWindow = { label: null, teamIds: new Set() };
-
-/** The narrowest window that holds something, and which teams changed in it. */
-function recentWindow(overview: OrgOverview | null): RecentWindow {
-  if (!overview) return NO_RECENT;
-  const now = Date.now();
-  for (const [hours, label] of RECENT_WINDOWS) {
-    const cutoff = now - hours * 3600_000;
-    const teamIds = new Set(
-      // The week-long feed, not the since-you-last-looked one: the latter is
-      // empty on every visit after the first, which is why the chart had no
-      // pulses at all (user 2026-09-22).
-      Object.entries(overview.recentChangesByTeam)
-        .filter(([, change]) =>
-          change.events.some((event) => Date.parse(event.at) >= cutoff),
-        )
-        .map(([teamId]) => teamId),
-    );
-    if (teamIds.size) return { label, teamIds };
-  }
-  return NO_RECENT;
-}
-
-/** Widening spans, in hours, with the words the button uses for them. */
-const RECENT_WINDOWS: [number, string][] = [
-  [1, "last hour"],
-  [6, "last 6 hours"],
-  [12, "last 12 hours"],
-  [24, "last day"],
-  [24 * 7, "last week"],
-  [24 * 365 * 20, "whole history"],
-];
 
 const OWNER_NODE = "owner";
 /** Both cards run 30% bigger than the first pass (user 2026-09-22) — width,
@@ -93,17 +48,12 @@ const OWNER_W = 348;
 const TEAM_W = 302;
 
 export function HomeScreen() {
-  const { chrome, me } = useSession();
-  const [overview, setOverview] = useState<OrgOverview | null>(null);
-  const [error, setError] = useState("");
+  const { me } = useSession();
+  const { overview, error, unseen, clearAll, clearTeam } = useUpdates();
   const [expanded, setExpanded] = useState<string[]>([]);
-  /** The pulses run on their own; this stops them, and bumping `replay`
-   *  restarts every one of them from the top. */
-  const [playing, setPlaying] = useState(true);
-  const [replay, setReplay] = useState(0);
-  /** True while a replay is actually travelling, which is what the button's
-   *  green is tied to. */
-  const [running, setRunning] = useState(false);
+
+  // Leaving Home counts as having seen its updates (user 2026-09-27).
+  useEffect(() => clearAll, [clearAll]);
   /** Which team's caret the pointer is on. */
   const [caret, setCaret] = useState<string | null>(null);
 
@@ -112,48 +62,12 @@ export function HomeScreen() {
   const awaitingApproval =
     me.standing !== "approved" && !me.is_founding_member;
 
-  useEffect(() => {
-    if (awaitingApproval) return;
-    let cancelled = false;
-    fetchOrgOverview(chrome.organizationId)
-      .then((result) => {
-        if (cancelled) return;
-        setOverview(result);
-        // Stamp after this visit has its data so the next visit's "since you
-        // looked" feed starts clean.
-        void markDashboardSeen(chrome.organizationId);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chrome.organizationId, awaitingApproval]);
-
   const owner = overview?.members.find((m) => m.id === overview.ownerMemberId);
   const [invitingOwner, setInvitingOwner] = useState(false);
   const membersById = useMemo(
     () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
     [overview],
   );
-
-  /** What "recent" means today. The button plays the **last hour**; when
-   *  nothing happened in it, the window widens — 6 hours, 12, a day, a week —
-   *  and stops at the first span that holds something (user 2026-09-22). A
-   *  replay of an empty hour would say nothing; a replay of everything ever
-   *  would say too much.
-   *
-   *  Computed when the data arrives and again on each press, not in a memo:
-   *  it reads the clock, and a memo that reads the clock is a memo that lies
-   *  as soon as time passes.
-   */
-  const [replayWindow, setReplayWindow] = useState<RecentWindow | null>(null);
-  /** The window the chart is currently showing: the one the last press chose,
-   *  or the narrowest non-empty one for the data on screen. `useSyncExternal`
-   *  isn't needed — reading the clock during render is fine here because the
-   *  result is only ever a starting point, and a press recomputes it. */
-  const recent = replayWindow ?? recentWindow(overview);
 
   const { nodes, edges } = useMemo(() => {
     if (!overview) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
@@ -170,14 +84,10 @@ export function HomeScreen() {
           w: TEAM_W,
         })),
       ],
-      edges: teams.map((team) => ({
-        from: OWNER_NODE,
-        to: team.id,
-        // Only a team that changed **inside the window being played**.
-        active: recent.teamIds.has(team.id),
-      })),
+      // Every connector pulses, independent of updates (user 2026-09-27).
+      edges: teams.map((team) => ({ from: OWNER_NODE, to: team.id, active: true })),
     };
-  }, [overview, recent]);
+  }, [overview]);
 
   if (awaitingApproval)
     return (
@@ -239,43 +149,10 @@ export function HomeScreen() {
           <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
               <ManageTeamsButton teams={overview.teams} />
-              <ReplayUpdatesButton
-                playing={playing}
-                running={running}
-                windowLabel={recent.label}
-                onToggle={() => {
-                  if (playing) {
-                    setPlaying(false);
-                    setRunning(false);
-                    return;
-                  }
-                  // Play means play it again, from the beginning.
-                  // Re-read the clock: an hour may have passed since the
-                  // screen loaded.
-                  const window_ = recentWindow(overview);
-                  setReplayWindow(window_);
-                  setPlaying(true);
-                  setReplay((n) => n + 1);
-                  setRunning(true);
-                  // One pass: each edge is staggered by 900ms and a pulse
-                  // travels for 680. When the last one lands the button
-                  // drops its green and its Pause (user 2026-09-22).
-                  window.setTimeout(
-                    () => {
-                      setRunning(false);
-                      setPlaying(false);
-                    },
-                    Math.max(window_.teamIds.size - 1, 0) * 900 + 1200,
-                  );
-                }}
-              />
             </div>
             <FlowCanvas
               nodes={nodes}
-              edges={
-                playing ? edges : edges.map((e) => ({ ...e, active: false }))
-              }
-              pulseKey={replay}
+              edges={edges}
               spread
               renderNode={(node, { selected }) => {
                 if (node.id === OWNER_NODE) {
@@ -347,6 +224,7 @@ export function HomeScreen() {
                       <span className="min-w-0 flex-1 text-left">
                         <CardTitle>
                           <span className="truncate">{team.name}</span>
+                          {unseen[team.id] ? <NewBadge /> : null}
                         </CardTitle>
                         <CardMeta>
                           {team.memberIds.length === 1
@@ -367,13 +245,15 @@ export function HomeScreen() {
                             ? `Hide ${team.name} members`
                             : `Show ${team.name} members`
                         }
-                        onClick={() =>
+                        onClick={() => {
+                          // Looking inside a team counts as seeing its news.
+                          clearTeam(team.id);
                           setExpanded((current) =>
                             current.includes(team.id)
                               ? current.filter((id) => id !== team.id)
                               : [...current, team.id],
-                          )
-                        }
+                          );
+                        }}
                         className="size-9"
                       >
                         {/* Leans down under the pointer; turns over while the
@@ -410,95 +290,12 @@ export function HomeScreen() {
           </div>
         )}
       </div>
-      <InviteOwnerDialog
+      <InviteDialog
+        kind="owner"
         open={invitingOwner}
         onOpenChange={setInvitingOwner}
-        organizationId={me.organization_id}
-        organizationName={chrome.name}
       />
     </AppPage>
-  );
-}
-
-/** Invite whoever sits at the top, from the empty owner card. Same request
- *  as setup's "Do you know who sits at the top?" (a nomination they confirm
- *  by signing in), in the app's form dialog. */
-function InviteOwnerDialog({
-  open,
-  onOpenChange,
-  organizationId,
-  organizationName,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  organizationId: string;
-  organizationName: string;
-}) {
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  return (
-    <FormDialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) setError("");
-      }}
-      title="Invite the owner"
-      description={`We’ll invite them to confirm they sit at the top of ${organizationName}.`}
-      size="sm"
-      submitLabel="Send invite"
-      busy={busy}
-      disabled={!email.trim()}
-      onSubmit={async (event) => {
-        event.preventDefault();
-        setBusy(true);
-        setError("");
-        try {
-          const res = await backendFetch(
-            `/organizations/${organizationId}/invitations`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ kind: "owner", email: email.trim() }),
-            },
-          );
-          if (!res.ok) throw new Error(await backendError(res));
-          setEmail("");
-          onOpenChange(false);
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e));
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      <label className={`${satoshi.className} flex flex-col gap-1.5`}>
-        <span className="text-[0.875rem] text-[#1c1917]">
-          Owner&rsquo;s work email
-        </span>
-        <input
-          type="email"
-          required
-          autoFocus
-          value={email}
-          onChange={(e) => {
-            setEmail(e.target.value);
-            setError("");
-          }}
-          className="h-10 w-full rounded-[10px] border border-[var(--app-border)] bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none focus:border-[#1c1917]"
-        />
-      </label>
-      {error ? (
-        <p
-          aria-live="polite"
-          className={`${satoshi.className} m-0 mt-2 text-[0.8125rem] text-[#EA4335]`}
-        >
-          {error}
-        </p>
-      ) : null}
-    </FormDialog>
   );
 }
 
@@ -533,18 +330,16 @@ function TeamDetail({
                 label={member.displayName ?? member.email}
                 size={29}
               />
-              <span
-                className={`${satoshi.className} min-w-0 flex-1 truncate text-[1.0625rem] leading-[1.4] text-[#1c1917]`}
-              >
-                {member.displayName ?? member.email}
-              </span>
-              {member.id === leaderId ? (
+              {/* Lead sits right after the name, like New after a team's
+                  (user 2026-09-27). */}
+              <span className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span
-                  className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
+                  className={`${satoshi.className} min-w-0 truncate text-[1.0625rem] leading-[1.4] text-[#1c1917]`}
                 >
-                  Lead
+                  {member.displayName ?? member.email}
                 </span>
-              ) : null}
+                {member.id === leaderId ? <Badge>Lead</Badge> : null}
+              </span>
             </li>
           ))}
         </ul>
@@ -558,10 +353,10 @@ function TeamDetail({
               className={`${satoshi.className} flex items-baseline gap-2 text-[0.975rem] leading-[1.5]`}
             >
               <span className="min-w-0 flex-1 truncate text-[#1c1917]">
-                {describe(event, membersById)}
+                {describeChange(event, membersById)}
               </span>
               <span className="shrink-0 text-[var(--app-dim)]">
-                {relative(event.at)}
+                {relativeTime(event.at)}
               </span>
             </li>
           ))}
@@ -571,55 +366,26 @@ function TeamDetail({
   );
 }
 
-/** Audit action types read as machine strings. This turns the ones the app
- *  actually produces into a sentence, and falls back to a tidied version of
- *  the raw type for anything new — a feed that counts every action type must
- *  not render blanks for the ones it hasn't met yet. */
-const ACTIONS: Record<string, string> = {
-  "org_chart.team.created": "Team created",
-  "org_chart.team.edited": "Team renamed",
-  "org_chart.team.deleted": "Team deleted",
-  "org_chart.team.leader_assigned": "Lead assigned",
-  "org_chart.membership.upserted": "Someone joined",
-  "org_chart.membership.removed": "Someone left",
-  "org_chart.member_offboarded": "Member offboarded",
-  "offboard.completed": "Offboarding completed",
-  "transfer_batch.created": "Transfer planned",
-  "transfer_batch.executed": "Ownership moved",
-  "transfer_batch.reversed": "Transfer reversed",
-  "sharing.file_created_handled": "Document created",
-  "sharing.suggested_share_created": "Access suggested",
-  "sharing.suggested_share_confirmed": "Access granted",
-  "sharing.reassignment_requested": "Ownership requested",
-  "sharing.reassignment_confirmed": "Ownership reassigned",
-};
-
-function describe(
-  event: ChangeEvent,
-  membersById: Map<string, OverviewMember>,
-): string {
-  const what =
-    ACTIONS[event.action] ??
-    event.action.split(".").slice(-1)[0].replace(/_/g, " ");
-  const actor = event.actorMemberId
-    ? membersById.get(event.actorMemberId)
-    : undefined;
-  const who = actor?.displayName ?? actor?.email;
-  return who ? `${what} · ${who}` : what;
+/** "New", beside a team's name, while it has updates you haven't seen
+ *  (user 2026-09-27; the chip from 2026-09-22, removed in 4ee5629 and back).
+ *  A muted chip in the app's grey with 5px corners, measured off the user's
+ *  reference then. "Lead" beside a member's name is the same chip. */
+function NewBadge() {
+  return <Badge>New</Badge>;
 }
 
-function relative(iso: string): string {
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+function Badge({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
+    >
+      {children}
+    </span>
+  );
 }
 
 /** A card on the canvas. Resting, or selected (you clicked it). Change
- *  highlighting lives on connector pulses via Recent updates, not on the
- *  card border (user 2026-09-26). */
+ *  news is a "New" chip beside the team's name, not the card border. */
 function Card({
   selected,
   children,

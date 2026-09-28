@@ -30,4 +30,6 @@ export const APP_RETURN_PARAMS = [
   "signup",
   "link",
   "drive_connected",
+  // Notifications' company Drive task (?connect=workspace).
+  "connect",
 ] as const;

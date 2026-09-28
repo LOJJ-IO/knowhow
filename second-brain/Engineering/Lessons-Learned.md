@@ -9,6 +9,13 @@ related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"
 
 # Lessons Learned
 
+## 2026-09-27 — No `openid` scope, no `id_token`
+Google only returns an `id_token` from the code exchange when the auth request included `openid`. A consent
+flow that asks for just an API scope (like `drive`) gets access/refresh tokens and nothing identifying the
+account. Any flow whose callback calls `verify_id_token(tokens["id_token"])` must request `openid` (plus
+`userinfo.email` if it reads `email`). Test mocks that hand back `{"id_token": ...}` regardless of the requested
+scopes hide this; assert on the scopes the start function requests instead.
+
 ## 2026-09-27 — Google Admin's delegation page takes prefill parameters
 `https://admin.google.com/ac/owl/domainwidedelegation?overwriteClientId=true&clientIdToAdd=<id>&clientScopeToAdd=<csv>`
 opens the "Add a new client ID" dialog already filled in. Google doesn't document these parameters (its
@@ -568,3 +575,7 @@ sidebar morphs, the profile menu's swaps and Home's play/pause. Same family as t
 pointer during a press can eat the click. Still on `active:scale-*` (not changed, not asked): setup
 choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction`'s `whileTap`.
 
+
+- **A grant Google holds can be withdrawn on Google's side without telling us (2026-09-27).** Domain-wide delegation lives in the customer's Admin console; our `approved` row is only a cache of "it worked once". Any status derived from it (tasks, connected badges) must re-verify periodically, and the demotion should go to a state the detector already watches (`pending`), so restoring access heals itself without a new flow. See [[Known-Issues]].
+
+- **A tooltip whose `open` is its own message must keep the text through the exit (2026-09-27).** `ErrorTip` opened on `Boolean(message)` and rendered `message`; clearing the error emptied the popup at the same instant the close animation began, so the box collapsed to its padding mid-fade and the arrow, re-centred on it, looked like it lagged. Hold the last non-empty message in state (set during render when a new one arrives) and render that; only `open` follows the live value.

@@ -597,6 +597,66 @@ def test_delegation_detection_approves_once_impersonation_works(db, monkeypatch)
     assert calls == ["it@acme.com"]  # impersonates the verified Super Admin
 
 
+def _approved_org(db, monkeypatch):
+    it = _verified_admin_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "_impersonation_works", lambda subject, scopes: True)
+    monkeypatch.setattr(delegation, "_drive_call_works", lambda subject: True)
+    delegation.check_delegation(it.organization_id, db)
+    return it
+
+
+def _grant(db, org_id):
+    return db.execute(select(DelegationGrant).where(DelegationGrant.organization_id == org_id)).scalar_one()
+
+
+def test_recheck_demotes_a_grant_google_now_refuses(db, monkeypatch):
+    it = _approved_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "_token_refused", lambda subject, scopes: True)
+
+    assert delegation.recheck_delegation(it.organization_id, db, throttle=False) is False
+    grant = _grant(db, it.organization_id)
+    assert grant.status == DelegationStatus.PENDING
+    assert grant.revoked_at is not None
+
+
+def test_recheck_keeps_a_grant_that_still_works(db, monkeypatch):
+    it = _approved_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "_token_refused", lambda subject, scopes: False)
+
+    assert delegation.recheck_delegation(it.organization_id, db, throttle=False) is True
+    assert _grant(db, it.organization_id).status == DelegationStatus.APPROVED
+
+
+def test_recheck_ignores_outages(db, monkeypatch):
+    it = _approved_org(db, monkeypatch)
+
+    def outage(subject, scopes):
+        raise delegation.DelegationCheckError("timeout")
+
+    monkeypatch.setattr(delegation, "_token_refused", outage)
+
+    assert delegation.recheck_delegation(it.organization_id, db, throttle=False) is True
+    assert _grant(db, it.organization_id).status == DelegationStatus.APPROVED
+
+
+def test_missing_key_counts_as_refused(monkeypatch):
+    def gone():
+        raise FileNotFoundError("key.json")
+
+    monkeypatch.setattr(delegation, "load_service_account_info", gone)
+    assert delegation._token_refused("it@acme.com", delegation.DOMAIN_DELEGATION_SCOPES) is True
+
+
+def test_tasks_route_shows_company_drive_once_access_is_lost(db, monkeypatch):
+    it = _approved_org(db, monkeypatch)
+    monkeypatch.setattr(delegation, "_token_refused", lambda subject, scopes: True)
+    delegation._last_recheck.clear()
+
+    kinds = [t["kind"] for t in _client_as(it).get(f"/organizations/{it.organization_id}/tasks").json()]
+
+    assert "company_drive" in kinds
+
+
 def test_delegation_is_not_checked_without_admin_proof(db, monkeypatch):
     sarah = _setup_founder_and_coworker(db, monkeypatch, founder_is_owner=True)
     assert delegation.check_delegation(sarah.organization_id, db).status == "not_started"

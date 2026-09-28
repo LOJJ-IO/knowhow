@@ -14,6 +14,8 @@ import {
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
+import { emailError } from "@/lib/email";
+import { ErrorTip } from "@/components/brand/tooltip";
 import { SetupCopyLink } from "./setup-share-action";
 import { SignInResultPanel } from "./sign-in-result";
 import {
@@ -78,9 +80,10 @@ export function ConnectWorkspaceStep({
 
   async function sendEmailInvite() {
     const input = emailRef.current;
-    if (!input?.checkValidity()) {
+    const problem = emailError(email);
+    if (problem) {
       shakeSetupField(input);
-      setError(input?.validationMessage || "Enter a work email.");
+      setError(problem);
       return;
     }
     clearSetupFieldError(input);
@@ -163,7 +166,14 @@ export function ConnectWorkspaceStep({
           We&rsquo;ll send an invite. Google checks whether they can connect
           Workspace when they sign in.
         </SetupBody>
-        <div className="mt-6">
+        <ErrorTip
+          message={error}
+          onDismiss={() => {
+            setError("");
+            clearSetupFieldError(emailRef.current);
+          }}
+          className="mt-6"
+        >
           <SetupField
             inputRef={emailRef}
             type="email"
@@ -181,8 +191,7 @@ export function ConnectWorkspaceStep({
               if (!submitting) void sendEmailInvite();
             }}
           />
-        </div>
-        <SetupError>{error}</SetupError>
+        </ErrorTip>
         <SetupAction
           label="Send invite"
           onClick={() => void sendEmailInvite()}

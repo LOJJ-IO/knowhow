@@ -13,6 +13,8 @@ import {
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
+import { emailError } from "@/lib/email";
+import { ErrorTip } from "@/components/brand/tooltip";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
 /** Invite the person at the top of the org chart. Founder ≠ owner (ADR-0021):
@@ -36,9 +38,10 @@ export function InviteOwnerStep({
 
   async function sendInvite() {
     const input = emailRef.current;
-    if (!input?.checkValidity()) {
+    const problem = emailError(email);
+    if (problem) {
       shakeSetupField(input);
-      setError(input?.validationMessage || "Enter a work email.");
+      setError(problem);
       return;
     }
     clearSetupFieldError(input);
@@ -119,7 +122,14 @@ export function InviteOwnerStep({
           We&rsquo;ll invite them to confirm they sit at the top of{" "}
           {me.organization_name}.
         </SetupBody>
-        <div className="mt-6">
+        <ErrorTip
+          message={error}
+          onDismiss={() => {
+            setError("");
+            clearSetupFieldError(emailRef.current);
+          }}
+          className="mt-6"
+        >
           <SetupField
             inputRef={emailRef}
             type="email"
@@ -137,8 +147,7 @@ export function InviteOwnerStep({
               if (!submitting) void sendInvite();
             }}
           />
-        </div>
-        <SetupError>{error}</SetupError>
+        </ErrorTip>
         <SetupAction label="Send invite" onClick={() => void sendInvite()} />
       </div>
     );

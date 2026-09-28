@@ -1,7 +1,13 @@
 "use client";
 
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
-import type { FormEvent, ReactNode } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
@@ -44,7 +50,6 @@ export function AppDialog({
   open,
   onOpenChange,
   title,
-  description,
   size = "sm",
   kind = "form",
   footer,
@@ -54,7 +59,6 @@ export function AppDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description?: ReactNode;
   size?: DialogSize;
   kind?: DialogKind;
   footer: ReactNode;
@@ -65,27 +69,16 @@ export function AppDialog({
   const chrome = (
     <>
       <header className="shrink-0 border-b border-[var(--app-border)] px-6 py-5 pr-14">
+        {/* Title only: no sub-line under it (user 2026-09-27), and 10%
+            larger three times over (1.125 → 1.2375 → 1.36125 → 1.4974rem). Indented 5% like the setup
+            screens' headings, as is the body; the footer stays put. */}
         <DialogPrimitive.Title
-          className={`${sohne.className} m-0 text-[1.125rem] leading-[1.35] tracking-tight text-[#1c1917]`}
+          className={`${sohne.className} m-0 pl-[5%] text-[1.4974rem] leading-[1.35] tracking-tight text-[#1c1917]`}
         >
           {title}
         </DialogPrimitive.Title>
-        {description ? (
-          <DialogPrimitive.Description
-            className={`${satoshi.className} m-0 mt-1.5 text-[0.875rem] leading-[1.5] text-[var(--app-dim)]`}
-          >
-            {description}
-          </DialogPrimitive.Description>
-        ) : null}
       </header>
-      <div
-        className={cn(
-          "min-h-0 flex-1 overflow-y-auto px-6",
-          kind === "confirm" ? "py-2" : "py-5",
-        )}
-      >
-        {children}
-      </div>
+      <DialogBody kind={kind}>{children}</DialogBody>
       <footer className="flex shrink-0 justify-end gap-2 border-t border-[var(--app-border)] px-6 py-4">
         {footer}
       </footer>
@@ -129,6 +122,9 @@ export function AppDialog({
             </DialogPrimitive.Close>
             {onSubmit ? (
               <form
+                // Knohow shows its own field errors (ErrorTip), never the
+                // browser's bubble (user 2026-09-27).
+                noValidate
                 onSubmit={onSubmit}
                 className="flex min-h-0 flex-1 flex-col overflow-hidden"
               >
@@ -141,6 +137,61 @@ export function AppDialog({
         </div>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+/** The body, which **tweens its height** when its content changes size (a
+ *  tab switch, a row appearing): the Log In card's resize, on the same curve
+ *  (user 2026-09-27: "tab should switch, then the modal animate"). The content
+ *  is measured and the scroll area gets an explicit px height to transition;
+ *  `shrink` + `min-h-0` still let the popup's max height squeeze it and
+ *  scroll. The first measurement lands without a transition. */
+function DialogBody({
+  kind,
+  children,
+}: {
+  kind: DialogKind;
+  children?: ReactNode;
+}) {
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [height, setHeight] = useState<number>();
+  const [animate, setAnimate] = useState(false);
+
+  useLayoutEffect(() => {
+    const inner = innerRef.current;
+    if (!inner) return;
+    let first = true;
+    const measure = () => {
+      setHeight(inner.offsetHeight);
+      if (first) {
+        first = false;
+        // Let the first height paint before any change animates.
+        requestAnimationFrame(() => setAnimate(true));
+      }
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        "min-h-0 shrink overflow-y-auto",
+        animate && "t-resize",
+      )}
+      style={{ height }}
+    >
+      <div
+        ref={innerRef}
+        className={cn("px-6", kind === "confirm" ? "py-2" : "py-5")}
+      >
+        {/* Same 5% indent as the title, and 5% off the right so fields sit
+            evenly inset (user 2026-09-27); footer unchanged. */}
+        <div className="px-[5%]">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -189,7 +240,6 @@ export function FormDialog({
   open,
   onOpenChange,
   title,
-  description,
   size = "lg",
   submitLabel = "Save",
   cancelLabel = "Cancel",
@@ -201,7 +251,6 @@ export function FormDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description?: ReactNode;
   size?: DialogSize;
   submitLabel?: string;
   cancelLabel?: string;
@@ -216,7 +265,6 @@ export function FormDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      description={description}
       size={size}
       kind="form"
       onSubmit={onSubmit}
@@ -247,7 +295,6 @@ export function ConfirmDialog({
   open,
   onOpenChange,
   title,
-  description,
   confirmLabel,
   cancelLabel = "Cancel",
   destructive = true,
@@ -257,7 +304,6 @@ export function ConfirmDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  description?: ReactNode;
   confirmLabel: string;
   cancelLabel?: string;
   destructive?: boolean;
@@ -269,7 +315,6 @@ export function ConfirmDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={title}
-      description={description}
       kind="confirm"
       footer={
         <>

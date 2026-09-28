@@ -168,6 +168,7 @@
   },
   "active": "131902d57546c591",
   "lastOpenFiles": [
+    "Architecture/Decisions/0026-notifications-tasks-and-updates.md",
     "Architecture/Decisions/0025-linked-personal-drive-visible-to-owner.md",
     "Architecture/Decisions/0024-own-drive-consent-for-work-accounts.md",
     "Architecture/Decisions/0023-founder-setup-google-check-before-owner.md",
@@ -193,7 +194,6 @@
     "Product/Features/FEAT-legal-pages.md",
     "Product/Features/FEAT-landing-book-a-demo.md",
     "Daily.md",
-    "Templates/ADR.md",
     "Features"
   ]
 }

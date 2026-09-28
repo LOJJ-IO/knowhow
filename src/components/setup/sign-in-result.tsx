@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
+import { ErrorTip } from "@/components/brand/tooltip";
 import {
   BACKEND_API_URL,
   backendError,
@@ -223,7 +224,14 @@ export function SignInResultPanel({
           <div>
             {heading("What should we call your workspace?")}
             {body("This is the name you'll see when you sign in.")}
-            <div className="mx-[2.5%] mt-6">
+            <ErrorTip
+              message={error}
+              onDismiss={() => {
+                setError("");
+                clearSetupFieldError(nameRef.current);
+              }}
+              className="mx-[2.5%] mt-6"
+            >
               <SetupField
                 inputRef={nameRef}
                 value={orgName}
@@ -240,8 +248,7 @@ export function SignInResultPanel({
                 placeholder="Workspace name"
                 aria-label="Workspace name"
               />
-            </div>
-            {errorLine}
+            </ErrorTip>
             <SetupAction label="Continue" onClick={submitWorkspaceName} />
           </div>
         );

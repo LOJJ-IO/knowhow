@@ -211,7 +211,7 @@ export function JoinPlacementForm({
           : "No teams have been set up yet. You can continue and join one later."}
       </SetupBody>
       {teams.length > 0 ? (
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mx-[2.5%] mt-6 flex flex-wrap gap-2">
           {teams.map((t) => (
             <ChoicePill
               key={t.id}

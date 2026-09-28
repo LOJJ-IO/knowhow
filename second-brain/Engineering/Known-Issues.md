@@ -3,7 +3,7 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-25
+updated: 2026-09-27
 related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
@@ -15,6 +15,8 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-pur
 ```
 
 ## Recently resolved
+- **[backend / delegation — removed access never noticed]** Fixed 2026-09-27. Once a `DelegationGrant` was `approved` it was never checked again (the 5-min detector only looks at `pending`), so removing Knohow's client ID in the Admin console or deleting/unsetting the service-account key left the app showing "connected" with no company Drive task. New `recheck_delegation` (`app/auth/delegation.py`) mints a token as `approving_admin_email`; if Google refuses (`RefreshError`) or the key can't be loaded, the grant goes back to **pending** (`revoked_at` set, audit `delegation.lost`), which brings back the company Drive task and lets the detector re-approve once access returns. Outages (transport errors) change nothing. Runs on `GET /organizations/{id}/tasks` (throttled to once/min/org/process) and every 5 min in the scheduler (`delegation_recheck`). Notifications re-fetches tasks every time it opens (`reloadTasks` in `updates.tsx`). Tests in `backend/tests/test_domain_check.py`; suite 163 passed.
+- **[backend / Drive consent — "Internal Server Error" after Google]** Fixed 2026-09-27. Connecting your own Drive (`personal_oauth`, ADR-0024) and a linked personal Drive (`linked_drive`, ADR-0025) asked Google for `drive` only, so the token response had no `id_token` and the callback's `tokens["id_token"]` raised `KeyError` (uncaught, so a bare 500 page on the backend). Both consent URLs now request `PERSONAL_OAUTH_CONSENT_SCOPES` (`openid` + `userinfo.email` + `drive`); stored credentials keep `drive` only. Test: `backend/tests/test_consent_scopes.py`. Existing mocks always returned an `id_token`, which is why tests never caught it.
 - **[frontend / home — founder shown as owner]** Fixed 2026-09-27. The Home chart's top card fell back to the viewer's own name (`owner?.displayName ?? … ?? chrome.viewer.name`) labelled "Owner" whenever the org had no owner, so a founder who answered "No" to "Do you sit at the top?" appeared at the top. Now an empty seat: dashed circle, "No owner yet", **Invite** (form dialog → owner invitation).
 - **[frontend / setup — finish looked frozen, then snapped]** Fixed 2026-09-27. Finishing setup in `AppEntry` just called `router.push("/home")`, leaving the last screen up while Home compiled/loaded (dev), so Skip seemed to do nothing and the app snapped in. Now Home is prefetched on mount and `intoTheApp` closes the card first (`CARD_CLOSE_MS`), then navigates.
 - **[frontend / setup — Drive connection step stuck]** Fixed 2026-09-27. `DelegationConnectStep` switched to "Knohow is connected to Google. Taking you to the app…" when `/delegation/setup` returned `approved` on load, but only `checkNow` scheduled `onDone`, so a founder whose org was already connected sat there forever. Now an approved status on load calls `onDone` immediately, and nothing renders while the status loads.

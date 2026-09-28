@@ -180,11 +180,6 @@ export function SettingsDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Settings"
-      description={
-        canEdit
-          ? "How Knohow behaves for your organization."
-          : "How Knohow behaves for your organization. Only the owner can change some of these."
-      }
       size="lg"
       footer={
         <>
@@ -203,7 +198,8 @@ export function SettingsDialog({
               Saved.
             </p>
           ) : null}
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          {/* Every dialog's bottom Close is black (user 2026-09-27). */}
+          <Button onClick={() => onOpenChange(false)}>
             Close
           </Button>
           {canEdit ? (

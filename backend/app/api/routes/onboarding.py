@@ -11,10 +11,12 @@ from app.api.routes.auth import (  # reuse: same cookie contract as login
     set_session_cookies,
     signup_redirect,
 )
+from app.auth.delegation import recheck_delegation
 from app.auth.identity import start_link_account_for_pending_personal
 from app.auth.pkce import InvalidOAuthState
 from app.models.invitation import InvitationKind
 from app.models.org_member import OrgMember
+from app.onboarding.tasks import decide_owner_claim, pending_tasks
 from app.onboarding.service import (
     add_member,
     claim_pending_owner,
@@ -454,6 +456,41 @@ def join_placement_route(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@router.get("/organizations/{org_id}/tasks")
+def tasks_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> list[dict]:
+    """What this member still has to do, for Notifications (ADR-0026)."""
+    try:
+        if member.organization_id == org_id:
+            recheck_delegation(org_id, db)
+        return pending_tasks(org_id, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+class OwnerClaimDecisionRequest(BaseModel):
+    approve: bool
+
+
+@router.post("/organizations/{org_id}/owner-claim/decision")
+def owner_claim_decision_route(
+    org_id: uuid.UUID,
+    body: OwnerClaimDecisionRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    try:
+        chart = decide_owner_claim(org_id, member, body.approve, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"owner_member_id": str(chart.owner_member_id) if chart.owner_member_id else None}
 
 
 @router.get("/organizations/{org_id}/team-join-requests")

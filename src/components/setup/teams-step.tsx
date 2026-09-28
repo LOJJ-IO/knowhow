@@ -13,6 +13,7 @@ import {
 import type { SetupTeam } from "./types";
 import { DragStepper } from "@/components/ui/drag-stepper";
 import { TeamIcon } from "@/components/identity/team-icon";
+import { ErrorTip } from "@/components/brand/tooltip";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
 
 /** How many teams, then what they are called — two screens, one decision
@@ -38,6 +39,8 @@ export function TeamsStep({
   const [names, setNames] = useState<string[]>([]);
   const [saved, setSaved] = useState<(SetupTeam | null)[]>([]);
   const [error, setError] = useState("");
+  /** Which team field the error is about, so it sits above that field. */
+  const [errorAt, setErrorAt] = useState<number | null>(null);
   const slotsRef = useRef<HTMLDivElement>(null);
 
   // Whatever was saved on an earlier visit is already the answer.
@@ -116,6 +119,7 @@ export function TeamsStep({
       return savedTeam;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setErrorAt(index);
       return null;
     }
   }
@@ -162,12 +166,20 @@ export function TeamsStep({
                 />
               )}
             </div>
-            <div className="min-w-0 flex-1">
+            <ErrorTip
+              message={errorAt === i ? error : null}
+              onDismiss={() => {
+                setError("");
+                setErrorAt(null);
+              }}
+              className="min-w-0 flex-1"
+            >
               <SetupField
                 aria-label={`Team ${i + 1}`}
                 value={name}
                 onChange={(e) => {
                   setError("");
+                  setErrorAt(null);
                   clearSetupFieldError(e.currentTarget);
                   setNames((current) => {
                     const next = [...current];
@@ -197,26 +209,28 @@ export function TeamsStep({
                   (inputs?.[i + 1] as HTMLInputElement | undefined)?.focus();
                 }}
               />
-            </div>
+            </ErrorTip>
           </div>
         ))}
       </div>
-      <SetupError>{error}</SetupError>
+      {/* Only an error that isn't about one field (loading the teams). */}
+      <SetupError>{errorAt === null ? error : ""}</SetupError>
       <SetupAction
         label="Continue"
         onClick={() => {
           void (async () => {
             const inputs = slotsRef.current?.querySelectorAll("input");
-            let incomplete = false;
+            let firstEmpty: number | null = null;
             for (let i = 0; i < names.length; i += 1) {
               if ((names[i] ?? "").trim()) continue;
               shakeSetupField(
                 (inputs?.[i] as HTMLInputElement | undefined) ?? null,
               );
-              incomplete = true;
+              firstEmpty ??= i;
             }
-            if (incomplete) {
+            if (firstEmpty !== null) {
               setError("Name every team.");
+              setErrorAt(firstEmpty);
               return;
             }
             const next: (SetupTeam | null)[] = [...saved];

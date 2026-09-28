@@ -1,6 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { emailError } from "@/lib/email";
+import { websiteError } from "@/lib/website";
+import { ErrorTip } from "@/components/brand/tooltip";
 import { useEffect, useRef, useState } from "react";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
@@ -34,6 +37,9 @@ const DEMO_FIELDS = [
   { name: "email", label: "Work email", type: "email", autoComplete: "email" },
   { name: "website", label: "Company website", type: "text", autoComplete: "url" },
 ] as const;
+
+/** Fields with a format of their own, beyond "not empty". */
+const FORMAT_CHECKS = { email: emailError, website: websiteError } as const;
 
 /** ms an error stays up before border + message fade back (`--revert-hold`). */
 const DEMO_ERROR_HOLD_MS = 3000;
@@ -101,6 +107,13 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
 
   function clearError(name: string) {
     window.clearTimeout(timers.current[name]);
+    // The message is the tooltip's open state now, so it has to go too.
+    setMessages((m) => {
+      if (!(name in m)) return m;
+      const next = { ...m };
+      delete next[name];
+      return next;
+    });
     wraps.current[name]?.classList.remove("is-error");
     inputs.current[name]?.classList.remove("is-error");
     inputs.current[name]?.removeAttribute("aria-invalid");
@@ -151,6 +164,9 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
     for (const { name } of shown) {
       const input = inputs.current[name];
       if (!input) continue;
+      // Shared format checks, stricter than the browser's (user 2026-09-27).
+      const check = FORMAT_CHECKS[name as keyof typeof FORMAT_CHECKS];
+      if (check) input.setCustomValidity(check(input.value) ?? "");
       if (input.checkValidity()) {
         clearError(name);
         continue;
@@ -270,49 +286,53 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
             >
               {f.label}
             </label>
-            <input
-              ref={(el) => {
-                inputs.current[f.name] = el;
-              }}
-              id={`demo-${f.name}`}
-              name={f.name}
-              type={f.type}
-              autoComplete={f.autoComplete}
-              inputMode={f.name === "website" ? "url" : undefined}
-              required
-              defaultValue={
-                f.name === "firstName"
-                  ? values.firstName
-                  : f.name === "lastName"
-                    ? values.lastName
-                    : f.name === "email"
-                      ? values.email
-                      : values.website
-              }
-              onInput={(e) => {
-                const v = e.currentTarget.value;
-                setValues((prev) => ({
-                  ...prev,
-                  ...(f.name === "firstName"
-                    ? { firstName: v }
-                    : f.name === "lastName"
-                      ? { lastName: v }
-                      : f.name === "email"
-                        ? { email: v }
-                        : { website: v }),
-                }));
-                if (e.currentTarget.checkValidity()) clearError(f.name);
-              }}
-              aria-describedby={`demo-${f.name}-error`}
-              className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
-            />
-            <p
-              id={`demo-${f.name}-error`}
-              aria-live="polite"
-              className="t-error-msg m-0 mt-1 min-h-[1.2rem] text-[0.75rem] leading-[1.2rem] text-[#EA4335]"
+            {/* Every field's error rides above it as the tooltip, and goes
+                when you click back in (user 2026-09-27). */}
+            <ErrorTip
+              message={messages[f.name]}
+              onDismiss={() => clearError(f.name)}
             >
-              {messages[f.name]}
-            </p>
+              <input
+                ref={(el) => {
+                  inputs.current[f.name] = el;
+                }}
+                id={`demo-${f.name}`}
+                name={f.name}
+                type={f.type}
+                autoComplete={f.autoComplete}
+                inputMode={f.name === "website" ? "url" : undefined}
+                required
+                defaultValue={
+                  f.name === "firstName"
+                    ? values.firstName
+                    : f.name === "lastName"
+                      ? values.lastName
+                      : f.name === "email"
+                        ? values.email
+                        : values.website
+                }
+                onInput={(e) => {
+                  const v = e.currentTarget.value;
+                  setValues((prev) => ({
+                    ...prev,
+                    ...(f.name === "firstName"
+                      ? { firstName: v }
+                      : f.name === "lastName"
+                        ? { lastName: v }
+                        : f.name === "email"
+                          ? { email: v }
+                          : { website: v }),
+                  }));
+                  const check =
+                    FORMAT_CHECKS[f.name as keyof typeof FORMAT_CHECKS];
+                  if (check) e.currentTarget.setCustomValidity(check(v) ?? "");
+                  if (e.currentTarget.checkValidity()) clearError(f.name);
+                }}
+                  className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+              />
+            </ErrorTip>
+            {/* Keeps the gap the message under the field used to hold. */}
+            <div aria-hidden className="mt-1 min-h-[1.2rem]" />
           </div>
         ))}
       </div>

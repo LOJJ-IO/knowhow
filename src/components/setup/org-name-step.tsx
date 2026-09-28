@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   SetupAction,
   SetupBody,
-  SetupError,
   SetupField,
   SetupHeading,
   clearSetupFieldError,
   shakeSetupField,
 } from "./shell";
 import { backendError, backendFetch, type Me } from "@/lib/backend";
+import { ErrorTip } from "@/components/brand/tooltip";
 
 /** A Workspace org is created with its hosted domain as its name, because at
  *  that moment nobody has been asked. `acme.org` is a placeholder; this turns
@@ -85,7 +85,14 @@ export function OrgNameStep({
     <div>
       <SetupHeading>What&rsquo;s your organization called?</SetupHeading>
       <SetupBody>This is the name your team sees when they join.</SetupBody>
-      <div className="mx-[2.5%] mt-6">
+      <ErrorTip
+        message={error}
+        onDismiss={() => {
+          setError("");
+          clearSetupFieldError(inputRef.current);
+        }}
+        className="mx-[2.5%] mt-6"
+      >
         <SetupField
           inputRef={inputRef}
           aria-label="Organization name"
@@ -103,8 +110,7 @@ export function OrgNameStep({
             void submit();
           }}
         />
-      </div>
-      <SetupError>{error}</SetupError>
+      </ErrorTip>
       <SetupAction label="Continue" onClick={() => void submit()} />
     </div>
   );

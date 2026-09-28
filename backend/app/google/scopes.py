@@ -51,6 +51,16 @@ ADMIN_CONSOLE_DELEGATION_SCOPES: list[str] = [*DOMAIN_DELEGATION_SCOPES, REPORTS
 # this at the flow level is what yields a refresh token to store.
 PERSONAL_OAUTH_SCOPES: list[str] = [DRIVE_SCOPE]
 
+# What the consent screen actually asks for. `openid` + email make Google
+# return the id_token the callback uses to check the consenting account is the
+# member's own; without them the token response has no id_token at all.
+# Stored credentials keep PERSONAL_OAUTH_SCOPES — identity isn't needed later.
+PERSONAL_OAUTH_CONSENT_SCOPES: list[str] = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    *PERSONAL_OAUTH_SCOPES,
+]
+
 # Admin proof (onboarding spec, "Workspace authority is proven by Google"):
 # read-only Directory access under the person's *own* authorization, used for
 # one call — looking up their own user record for `isAdmin`. Only a Super

@@ -19,7 +19,7 @@ from app.audit.service import record_audit_entry
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
 from app.auth.pkce import build_state_token, decode_state_token, derive_code_challenge, generate_code_verifier
 from app.config import get_settings
-from app.google.scopes import PERSONAL_OAUTH_SCOPES
+from app.google.scopes import PERSONAL_OAUTH_CONSENT_SCOPES, PERSONAL_OAUTH_SCOPES
 from app.models.linked_drive_credential import LinkedDriveCredential
 from app.models.org_member import AuthType, OrgMember
 from app.models.person_email import PersonEmail
@@ -80,7 +80,7 @@ def start_linked_drive_consent(member: OrgMember, email: str, db: Session) -> Li
         extra={"member_id": str(member.id), "email": normalized},
     )
     url = build_authorization_url(
-        PERSONAL_OAUTH_SCOPES,
+        PERSONAL_OAUTH_CONSENT_SCOPES,
         state=state,
         code_challenge=derive_code_challenge(code_verifier),
         access_type="offline",  # a refresh token, so the view keeps working

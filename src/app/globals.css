@@ -71,26 +71,28 @@ html {
    whose positioner has no z-index lands in the body's default layer, where
    ordinary page content can paint over it. */
 :root {
+  --modal-reveal-dur: 500ms;
   --modal-open-dur: 250ms;
   --modal-close-dur: 150ms;
-  --modal-scale: 0.96;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Dialogs open the way the Log In card does (user 2026-09-27): from a thin
+ * line across the middle, growing up and down to full height, on the card
+ * resize's curve but slower (500ms, user the same day), and close back into
+ * the line. A clip-path reveal
+ * rather than a height tween, since a dialog's height isn't measured. The
+ * open state's inset is negative so the drop shadow isn't clipped. */
 .app-modal {
-  transform-origin: var(--transform-origin, center);
-  transition-property: transform, opacity;
-  transition-duration: var(--modal-open-dur);
-  transition-timing-function: var(--modal-ease);
-  will-change: transform, opacity;
+  clip-path: inset(-80px round 28px);
+  transition-property: clip-path;
+  transition-duration: var(--modal-reveal-dur);
+  transition-timing-function: var(--resize-ease);
+  will-change: clip-path;
 }
 .app-modal[data-starting-style],
 .app-modal[data-ending-style] {
-  transform: scale(var(--modal-scale));
-  opacity: 0;
-}
-.app-modal[data-ending-style] {
-  transition-duration: var(--modal-close-dur);
+  clip-path: inset(calc(50% - 0.5px) 0 round 28px);
 }
 
 /* The backdrop only fades; scaling a full-screen wash does nothing. */
