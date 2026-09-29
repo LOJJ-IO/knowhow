@@ -41,6 +41,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# generated Prisma client + stray SQLite db — Prisma/SQLite are banned on this
+# repo (invariant 6). These regenerate/appear from stale tooling; never commit them.
+/src/generated/
+dev.db
+
 # trial fonts (not licensed for production — keep untracked until a design + licensing decision is made)
 /greed-font-family/
 /sohne-font-family/

@@ -10,6 +10,7 @@ from app.api.routes import (
     delegation,
     demo,
     drive_preview,
+    librarian,
     files,
     health,
     offboard,
@@ -53,6 +54,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Knohow Backend", lifespan=lifespan)
 
 settings = get_settings()
+
+
+# Registered before CORS, so it sits *inside* it: an unexpected crash still
+# answers with CORS headers and a JSON body. Without this, Starlette's own
+# 500 comes from outside CORS and the browser reports only "Failed to fetch".
+@app.middleware("http")
+async def _unexpected_errors(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        logger.exception("request.unhandled_error", path=request.url.path)
+        return JSONResponse(status_code=500, content={"detail": "Something went wrong on our side. Try again."})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[settings.frontend_origin],
@@ -97,6 +112,7 @@ app.include_router(demo.router)
 app.include_router(org_chart.router)
 app.include_router(files.router)
 app.include_router(drive_preview.router)
+app.include_router(librarian.router)
 app.include_router(search.router)
 app.include_router(suggested_share.router)
 app.include_router(reassignments.router)

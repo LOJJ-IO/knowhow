@@ -214,3 +214,25 @@ def check_delegation(org_id: uuid.UUID, db: Session) -> DelegationCheck:
     grant.granted_scopes = scopes
     approve_delegation(org_id, admin.email, db)
     return DelegationCheck(status="approved")
+
+
+def mark_delegation_lost(org_id: uuid.UUID, db: Session) -> None:
+    """Google refused a delegated token (`unauthorized_client`) for a grant
+    Knohow had approved: the Admin console entry was removed or its scopes
+    changed. Drop back to pending so the connect guide shows again and the
+    scheduler re-checks, instead of every Drive call failing forever."""
+    org = db.get(Organization, org_id)
+    grant = org.delegation_grant if org is not None else None
+    if grant is None or grant.status != DelegationStatus.APPROVED:
+        return
+    grant.status = DelegationStatus.PENDING
+    grant.approved_at = None
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=None,
+        action_type="delegation.lost",
+        target_resource_id=str(grant.id),
+        details={"reason": "unauthorized_client"},
+        db=db,
+    )

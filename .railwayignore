@@ -1,0 +1,10 @@
+node_modules/
+.next/
+backend/
+second-brain/
+docs/
+src/generated/
+dev.db
+.env
+.env.*
+!.env.example

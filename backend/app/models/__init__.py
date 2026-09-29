@@ -14,6 +14,14 @@ from app.models.pending_reassignment import PendingReassignment, ReassignmentSta
 from app.models.person import Person
 from app.models.person_email import PersonEmail
 from app.models.hidden_remembered_email import HiddenRememberedEmail
+from app.models.librarian import (
+    FolderFile,
+    KnohowFolder,
+    LibrarianCandidate,
+    LibrarianPersonalMark,
+    LibrarianStatus,
+    LibrarianSuggestion,
+)
 from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
@@ -29,6 +37,12 @@ from app.models.transfer_batch import (
 from app.models.unresolved_ownership import UnresolvedOwnership
 
 __all__ = [
+    "FolderFile",
+    "KnohowFolder",
+    "LibrarianCandidate",
+    "LibrarianPersonalMark",
+    "LibrarianStatus",
+    "LibrarianSuggestion",
     "AuditLogEntry",
     "AuthType",
     "DelegationGrant",
