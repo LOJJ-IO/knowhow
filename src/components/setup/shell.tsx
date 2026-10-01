@@ -26,7 +26,7 @@ import {
 export function SetupHeading({ children }: { children: ReactNode }) {
   return (
     <h2
-      className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      className={`${sohne.className} m-0 pl-[7%] pr-[3%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
     >
       {children}
     </h2>
@@ -36,7 +36,7 @@ export function SetupHeading({ children }: { children: ReactNode }) {
 export function SetupBody({ children }: { children: ReactNode }) {
   return (
     <p
-      className={`${sohne.className} mt-3 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+      className={`${sohne.className} mt-3 pl-[7%] pr-[3%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
     >
       {children}
     </p>

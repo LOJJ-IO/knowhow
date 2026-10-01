@@ -19,6 +19,8 @@ import {
   type TeamChanges,
 } from "@/lib/organization";
 import { fetchTasks, type Task } from "@/lib/tasks";
+import { Toast } from "@base-ui/react/toast";
+import { OPEN_NOTIFICATIONS_EVENT } from "@/components/app/app-toasts";
 
 const POLL_MS = 30_000;
 
@@ -75,6 +77,15 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
   const [version, setVersion] = useState(0);
   /** Every change event already counted or passed over, across reads. */
   const knownIds = useRef(new Set<string>());
+  /** Tasks already seen, so only ones that arrive mid-visit toast. Null
+   *  until the first read: what was already waiting never toasts. */
+  const knownTasks = useRef<Set<string> | null>(null);
+  const toastManager = Toast.useToastManager();
+  // A ref, so raising a toast never re-runs the fetch effect.
+  const toastsRef = useRef(toastManager);
+  useEffect(() => {
+    toastsRef.current = toastManager;
+  });
 
   /** Joined through the link but not approved yet: the org's data stays
    *  closed to them, so there is nothing to fetch. */
@@ -104,14 +115,25 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
         // seen before are new, so cleared badges stay cleared. The person's
         // own actions never notify them.
         const fresh: Record<string, ChangeEvent[]> = {};
+        /** Team changes about this person: the only team news that toasts. */
+        const aboutYouLines: string[] = [];
         for (const [teamId, changes] of Object.entries(result.changesByTeam)) {
           for (const event of changes.events) {
             if (known.has(event.id)) continue;
             known.add(event.id);
             if (event.actorMemberId === me.id) continue;
             (fresh[teamId] ??= []).push(event);
+            if (event.subjectMemberId === me.id) {
+              const team = result.teams.find((t) => t.id === teamId)?.name;
+              const line = aboutYou(event.action, team);
+              if (line) aboutYouLines.push(line);
+            }
           }
         }
+        if (aboutYouLines.length === 1)
+          toastsRef.current.add({ description: aboutYouLines[0] });
+        else if (aboutYouLines.length > 1)
+          toastsRef.current.add({ description: `${aboutYouLines.length} changes to your teams.` });
         if (Object.keys(fresh).length === 0) return;
         setUnseen((current) => {
           const next = { ...current };
@@ -137,7 +159,26 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
       });
     fetchTasks(chrome.organizationId)
       .then((result) => {
-        if (!cancelled) setTasks(result);
+        if (cancelled) return;
+        setTasks(result);
+        // New Pending tasks toast, collapsed into one; never the first read.
+        const keys = result.map((t) => `${t.kind}:${t.id}`);
+        const known = knownTasks.current;
+        knownTasks.current = new Set(keys);
+        if (!known) return;
+        const arrived = result.filter((t) => !known.has(`${t.kind}:${t.id}`));
+        if (arrived.length === 0) return;
+        toastsRef.current.add({
+          description:
+            arrived.length === 1
+              ? taskLine(arrived[0])
+              : `${arrived.length} new things in Pending.`,
+          actionProps: {
+            children: "View",
+            onClick: () =>
+              window.dispatchEvent(new Event(OPEN_NOTIFICATIONS_EVENT)),
+          },
+        });
       })
       .catch(() => {
         // The bell just shows no tasks; the app itself is unaffected.
@@ -283,7 +324,12 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
   const reloadTasks = useCallback(() => {
     if (awaitingApproval) return;
     fetchTasks(chrome.organizationId)
-      .then(setTasks)
+      .then((result) => {
+        setTasks(result);
+        // Seen in Notifications already: don't toast these later.
+        const known = knownTasks.current;
+        if (known) for (const t of result) known.add(`${t.kind}:${t.id}`);
+      })
       .catch(() => {});
   }, [chrome.organizationId, awaitingApproval]);
 
@@ -308,4 +354,27 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
       {children}
     </UpdatesContext.Provider>
   );
+}
+
+/** A new Pending task, as one toast line. */
+function taskLine(task: Task): string {
+  const name = (p: { displayName: string | null; email: string } | null) =>
+    p?.displayName ?? p?.email ?? "Someone";
+  switch (task.kind) {
+    case "join_request":
+      return `${name(task.person)} wants to join ${task.team.name ?? "a team"}.`;
+    case "owner_claim":
+      return `${name(task.person)} says they’re the owner.`;
+    default:
+      return "Something new needs you in Pending.";
+  }
+}
+
+/** A team change about this person, as one toast line. */
+function aboutYou(action: string, team: string | undefined): string | null {
+  const where = team ?? "a team";
+  if (action === "org_chart.membership.upserted") return `You were added to ${where}.`;
+  if (action === "org_chart.membership.removed") return `You were removed from ${where}.`;
+  if (action === "org_chart.team.leader_assigned") return `You’re now the lead of ${where}.`;
+  return null;
 }

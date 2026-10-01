@@ -86,4 +86,17 @@ def test_callback_rejects_tampered_state(monkeypatch):
         app.dependency_overrides.clear()
 
     assert calls == []
-    assert response.status_code == 400
+    # Back to the login card as an X screen, never a raw error page, and no
+    # session is set.
+    assert response.status_code == 302
+    assert "signin_error=state_expired" in response.headers["location"]
+    assert "knohow_access_token" not in response.headers.get("set-cookie", "")
+
+
+def test_sign_in_error_codes():
+    from app.api.routes.auth import _sign_in_error_code
+
+    assert _sign_in_error_code("join links are for work Google accounts only") == ("work_account_required", None)
+    assert _sign_in_error_code("sign in with a acme.com account to join") == ("wrong_domain", "acme.com")
+    assert _sign_in_error_code("this invite link is locked") == ("link_locked", None)
+    assert _sign_in_error_code("something unexpected") == ("error", None)

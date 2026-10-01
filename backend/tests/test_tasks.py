@@ -140,3 +140,32 @@ def test_unconnected_linked_drive_is_a_task_until_connected(db):
     )
     db.commit()
     assert _kinds(pending_tasks(org.id, other, db)) == ["own_drive"]
+
+
+def test_founder_super_admin_owner_claim_confirms_itself(db):
+    from app.onboarding.service import claim_pending_owner, confirm_founder_admin_owner_claim
+
+    org, founder, other, chart = _org(db)
+    founder.super_admin_verified_at = datetime.now(timezone.utc)
+    db.commit()
+    assert claim_pending_owner(org.id, founder, db) == "owner"
+    db.refresh(chart)
+    assert chart.owner_member_id == founder.id and chart.pending_owner_member_id is None
+
+    # A plain member's claim still waits for someone else.
+    chart.owner_member_id = None
+    db.commit()
+    assert claim_pending_owner(org.id, other, db) == "pending"
+    assert confirm_founder_admin_owner_claim(org.id, other, db) is False
+
+
+def test_founder_claim_before_admin_proof_is_confirmed_on_proof(db):
+    from app.onboarding.service import claim_pending_owner, confirm_founder_admin_owner_claim
+
+    org, founder, _other, chart = _org(db)
+    assert claim_pending_owner(org.id, founder, db) == "pending"
+    founder.super_admin_verified_at = datetime.now(timezone.utc)
+    db.commit()
+    assert confirm_founder_admin_owner_claim(org.id, founder, db) is True
+    db.refresh(chart)
+    assert chart.owner_member_id == founder.id and chart.pending_owner_member_id is None

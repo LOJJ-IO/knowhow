@@ -11,6 +11,7 @@ import { FooterStubLink } from "@/components/landing/footer-stub-link";
 import { SignInSheet } from "@/components/login/sign-in-sheet";
 import {
   clearSignInResultFromUrl,
+  isSignInError,
   readSignInResult,
   ResultMark,
   type SignInResult,
@@ -116,6 +117,11 @@ export function AppEntry({
    *  so the modal sizes once (the Cal embed taught us that — see
    *  FEAT-landing-book-a-demo). */
   const [rememberedOrgs, setRememberedOrgs] = useState<RememberedOrg[]>([]);
+  /** The remembered accounts are known, and if there are any, the picker's
+   *  code has loaded. Until then the Log In card stays closed: opening it
+   *  first sized the card to an empty body (or to plain Log In), then grew it
+   *  again for the picker, so it opened twice (user 2026-09-29). */
+  const [loginReady, setLoginReady] = useState(false);
   const [joinToken] = useState<string | null>(
     () => joinTokenProp ?? readJoinToken(),
   );
@@ -125,9 +131,20 @@ export function AppEntry({
 
   useEffect(() => {
     let cancelled = false;
-    void fetchRememberedOrgs().then((orgs) => {
-      if (!cancelled) setRememberedOrgs(orgs);
-    });
+    void fetchRememberedOrgs()
+      .then(async (orgs) => {
+        if (orgs.length > 0)
+          await import("@/components/account-picker/account-picker");
+        return orgs;
+      })
+      .then((orgs) => {
+        if (cancelled) return;
+        setRememberedOrgs(orgs);
+        setLoginReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLoginReady(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -225,7 +242,7 @@ export function AppEntry({
     <SignInSheet
       open
       atTop
-      cardOpen={kind !== null}
+      cardOpen={kind !== null && (kind !== "login" || loginReady)}
       onClose={() => window.location.assign(siteUrl("/"))}
     >
       {kind === "login" && rememberedOrgs.length > 0 ? (
@@ -259,7 +276,7 @@ export function AppEntry({
             <ResultMark kind="cross" />
           ) : null}
           <h2
-            className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+            className={`${sohne.className} m-0 pl-[7%] pr-[3%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
           >
             {joinToken && joinPreview
               ? joinPreview.valid
@@ -270,7 +287,7 @@ export function AppEntry({
                 : "Log in or sign up in seconds"}
           </h2>
           <p
-            className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+            className={`${sohne.className} mt-6 pl-[7%] pr-[3%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
           >
             {joinToken && joinPreview
               ? joinPreview.description
@@ -335,6 +352,12 @@ export function AppEntry({
               : undefined
           }
           onDone={() => {
+            // A failed sign-in goes back to Log In, whatever the session.
+            if (isSignInError(signInResult)) {
+              setSignInResult(null);
+              setKind("login");
+              return;
+            }
             if (signInResult === "admin_verified") {
               setSignInResult(null);
               void fetchMe().then((next) => {

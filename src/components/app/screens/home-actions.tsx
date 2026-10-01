@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/app/button";
-import { AppDialog } from "@/components/app/dialog";
+import { AppDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
 import { JoiningSection } from "@/components/app/joining-section";
 import { NewTeamDialog } from "@/components/app/new-team-dialog";
 import { TeamMembersSection } from "@/components/app/team-members-section";
@@ -39,6 +39,16 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"joining" | "teams">("joining");
   const [creating, setCreating] = useState(false);
+  /** A handoff between Manage teams and New team is under way: both keep
+   *  the backdrop steady (no flash). */
+  const [swapping, setSwapping] = useState(false);
+  const swap = (run: () => void) => {
+    setSwapping(true);
+    window.setTimeout(() => {
+      run();
+      window.setTimeout(() => setSwapping(false), MODAL_SWAP_MS);
+    }, MODAL_SWAP_MS);
+  };
   return (
     <>
       <Button
@@ -71,6 +81,7 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
       </Button>
       <AppDialog
         open={open}
+        swap={swapping}
         onOpenChange={setOpen}
         title="Manage teams"
         size="sm"
@@ -104,7 +115,12 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
             <Button
               variant="outline"
               className="group ml-auto"
-              onClick={() => setCreating(true)}
+              onClick={() => {
+              // No overlapping dialogs: Manage teams closes, then New team
+              // opens (MODAL_SWAP_MS).
+              setOpen(false);
+              swap(() => setCreating(true));
+            }}
             >
               {/* New link's plus (joining-section.tsx). */}
               <svg
@@ -126,7 +142,15 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
           {tab === "joining" ? <JoiningSection /> : <TeamMembersSection />}
         </div>
       </AppDialog>
-      <NewTeamDialog open={creating} onOpenChange={setCreating} />
+      <NewTeamDialog
+        open={creating}
+        swap={swapping}
+        onOpenChange={(next) => {
+          setCreating(next);
+          // Back to Manage teams (still on Teams) once New team has closed.
+          if (!next) swap(() => setOpen(true));
+        }}
+      />
     </>
   );
 }

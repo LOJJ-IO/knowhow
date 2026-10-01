@@ -14,6 +14,8 @@ import { ProfileMenu } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { NotificationsDialog } from "@/components/app/notifications-dialog";
+import { OPEN_NOTIFICATIONS_EVENT } from "@/components/app/app-toasts";
+import { MODAL_SWAP_MS } from "@/components/app/dialog";
 import { InviteDialog } from "@/components/app/invite-dialog";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import {
@@ -53,6 +55,22 @@ export function Topbar({
   const { chrome } = useSession();
   const { tasks, teamUpdates, unseen, clearAll } = useUpdates();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  // A toast's View opens Notifications (app-toasts.tsx).
+  useEffect(() => {
+    const open = () => setNotificationsOpen(true);
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+  }, []);
+  /** Notifications ↔ Invite handoff under way: steady backdrop. */
+  const [swapping, setSwapping] = useState(false);
+  const swap = (run: () => void) => {
+    setSwapping(true);
+    window.setTimeout(() => {
+      run();
+      window.setTimeout(() => setSwapping(false), MODAL_SWAP_MS);
+    }, MODAL_SWAP_MS);
+  };
   /** Teams whose updates were unseen when Notifications opened, so the
    *  dialog can still mark them after opening clears the cards. */
   const [newTeamIds, setNewTeamIds] = useState<Set<string>>(new Set());
@@ -189,15 +207,28 @@ export function Topbar({
       <NotificationsDialog
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
+        swap={swapping}
         newTeamIds={newTeamIds}
-        onInvite={setInviting}
+        onInvite={(kind) => {
+          setInviting(kind);
+          swap(() => setInviteOpen(true));
+        }}
       />
+      {/* No overlapping dialogs (MODAL_SWAP_MS): Notifications has closed
+          itself; Invite opens after it, and closing Invite brings
+          Notifications back. Kept mounted so it animates closed. */}
       {inviting ? (
         <InviteDialog
           kind={inviting}
-          open
+          open={inviteOpen}
+          swap={swapping}
           onOpenChange={(open) => {
-            if (!open) setInviting(null);
+            if (open) return;
+            setInviteOpen(false);
+            swap(() => {
+              setInviting(null);
+              setNotificationsOpen(true);
+            });
           }}
         />
       ) : null}

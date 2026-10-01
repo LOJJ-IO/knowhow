@@ -6,6 +6,7 @@ import { CalendarDays, ChevronDown, Lock, LockOpen } from "lucide-react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { Button } from "@/components/app/button";
+import { SpinnerCursor } from "@/components/app/spinner-cursor";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { CopyField } from "@/components/ui/copy-field";
@@ -23,6 +24,10 @@ const LIFETIMES = [
 const PILL =
   "flex h-9 w-28 shrink-0 whitespace-nowrap cursor-pointer items-center justify-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 transition-colors duration-150 hover:border-[#d9d9de]";
 
+/** The shortest the spinner cursor shows for, so it reads as a step, not a
+ *  flicker (600ms was still too fast, user 2026-09-29). */
+const MIN_CREATING_MS = 1200;
+
 /** Who gets in without the owner deciding each time: auto-approve for
  *  Workspace accounts, and the join link (ADR-0021). Lives in Manage teams
  *  (moved from Settings, user 2026-09-27). There's no Save there, so the
@@ -37,12 +42,20 @@ export function JoiningSection() {
   const [reissuing, setReissuing] = useState(false);
   /** A new link was just made: the plus shows a tick for 1.5s, like Copy. */
   const [created, setCreated] = useState(false);
+  /** Where the pointer was on New link's click: the spinner cursor starts
+   *  there. */
+  const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   /** Its own flag: sharing Create's made that button flash "Creating…". */
   const [locking, setLocking] = useState(false);
   const [error, setError] = useState("");
 
   const canManageJoinLink =
-    me.is_owner || me.is_super_admin || me.is_team_lead || me.is_founding_member;
+    me.is_owner ||
+    me.is_super_admin ||
+    me.is_team_lead ||
+    me.is_founding_member;
   const canEditAutoAccept = canManageJoinLink;
   const checked = autoAccept ?? overview?.autoAcceptWorkspaceMembers ?? false;
   /** Set by this dialog's own changes until the overview re-reads. */
@@ -100,14 +113,16 @@ export function JoiningSection() {
     setReissuing(true);
     setError("");
     try {
-      const res = await backendFetch(
-        `/organizations/${chrome.organizationId}/join-link`,
-        {
+      // The spinner stays up at least this long: locally the request returns
+      // in a few ms and the label only flickered (user 2026-09-29).
+      const [res] = await Promise.all([
+        backendFetch(`/organizations/${chrome.organizationId}/join-link`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ lifetime }),
-        },
-      );
+        }),
+        new Promise((resolve) => window.setTimeout(resolve, MIN_CREATING_MS)),
+      ]);
       if (!res.ok) throw new Error(await backendError(res));
       const body = (await res.json()) as { url: string };
       setJoinUrl(body.url);
@@ -173,35 +188,48 @@ export function JoiningSection() {
             </div>
             <Button
               variant="outline"
-              className="group"
-              disabled={reissuing}
-              onClick={() => void reissueLink()}
+              className="group relative"
+              aria-busy={reissuing}
+              onClick={(e) => {
+                setPointerAt({ x: e.clientX, y: e.clientY });
+                void reissueLink();
+              }}
             >
-              {/* Drawn on a 16px grid with 2px bars so both strokes land on
+              <span className="inline-flex items-center gap-1.5">
+                {/* Drawn on a 16px grid with 2px bars so both strokes land on
                   whole pixels; Lucide's 24-unit Plus blurs unevenly at 16px. */}
-              <svg
-                aria-hidden
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                className="size-4 shrink-0 transform-gpu transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110 group-disabled:scale-100 motion-reduce:transition-none"
-              >
-                {created ? (
-                  <path d="M3 8.5l3.5 3.5L13 4.5" strokeLinejoin="round" />
-                ) : (
-                  <path d="M8 3v10M3 8h10" />
-                )}
-              </svg>
-              {reissuing ? "Creating…" : "New link"}
+                <svg
+                  aria-hidden
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  className="size-4 shrink-0 transform-gpu transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110 group-disabled:scale-100 motion-reduce:transition-none"
+                >
+                  {created ? (
+                    // Drawn in rather than swapped (user 2026-09-29).
+                    <path
+                      d="M3 8.5l3.5 3.5L13 4.5"
+                      strokeLinejoin="round"
+                      pathLength={1}
+                      className="app-draw-in"
+                    />
+                  ) : (
+                    <path d="M8 3v10M3 8h10" />
+                  )}
+                </svg>
+                New link
+              </span>
+              {reissuing ? <span className="sr-only">Creating</span> : null}
             </Button>
+            {/* While a link is made the mouse pointer is the landing's Get
+                Started spinner (user 2026-09-29). */}
+            <SpinnerCursor active={reissuing} from={pointerAt} />
           </div>
         </div>
       ) : null}
-      <Row
-        label="Let people from your domain in automatically"
-      >
+      <Row label="Let people from your domain in automatically">
         <Switch
           checked={checked}
           disabled={!canEditAutoAccept || savingSwitch}
@@ -217,16 +245,8 @@ export function JoiningSection() {
               ? "Join link is locked"
               : "Join link is open"
         }
-        display={
-          linkOn ? (
-            <>
-              Join link is{" "}
-              <span className={locked ? "text-[#EA4335]" : "text-[#34A853]"}>
-                {locked ? "locked" : "open"}
-              </span>
-            </>
-          ) : undefined
-        }
+        // All ink: one colour per line, and the Lock / Unlock button keeps
+        // it (user 2026-09-29).
       >
         {/* Locks the live link rather than replacing it (user 2026-09-27). */}
         <LockButton
@@ -337,11 +357,7 @@ function LifetimeMenu({
         />
       </Menu.Trigger>
       <Menu.Portal>
-        <Menu.Positioner
-          align="end"
-          sideOffset={6}
-          className="isolate z-[550]"
-        >
+        <Menu.Positioner align="end" sideOffset={6} className="isolate z-[550]">
           <Menu.Popup
             className={`${satoshi.className} app-modal min-w-[11rem] rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none`}
           >
@@ -382,7 +398,7 @@ function LockButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`${satoshi.className} ${PILL} ${locked ? "text-[#34A853]" : "text-[#EA4335]"} disabled:cursor-default disabled:opacity-50`}
+      className={`${satoshi.className} ${PILL} ${locked ? "text-[#1c1917]" : "text-[#EA4335]"} disabled:cursor-default disabled:opacity-50`}
     >
       <Icon aria-hidden className="size-4 shrink-0" />
       <span className="text-[13px] font-medium tracking-tight">

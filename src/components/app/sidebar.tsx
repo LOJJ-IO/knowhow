@@ -81,7 +81,20 @@ export function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
             const items = APP_NAV.filter((item) => item.section === section);
             if (items.length === 0) return null;
             return (
-              <div key={section} className="mt-6 first:mt-2">
+              <div
+                key={section}
+                className={cn(
+                  "first:mt-2",
+                  // In the rail a short hairline sits between groups, in the
+                  // middle of the same 24px gap (user 2026-09-29).
+                  collapsed
+                    ? "mt-3 [&:first-child>hr]:hidden"
+                    : "mt-6",
+                )}
+              >
+                {collapsed ? (
+                  <hr className="mx-auto mt-0 mb-3 h-px w-6 border-0 bg-[var(--app-border)]" />
+                ) : null}
                 {collapsed ? null : (
                   <p
                     className={`${satoshi.className} px-4 pb-2 text-[0.8125rem] leading-[1.3] text-[var(--app-dim)]`}

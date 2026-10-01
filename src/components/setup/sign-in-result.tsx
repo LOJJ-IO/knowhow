@@ -35,7 +35,27 @@ export type SignInResult =
   | "personal"
   | "invite_wrong_account"
   | "link_linked"
-  | "link_already_linked";
+  | "link_already_linked"
+  | SignInError;
+
+/** A sign-in that failed on the backend (`?signin_error=`), shown as an X
+ *  screen instead of a raw JSON page (user 2026-09-29). */
+const SIGN_IN_ERRORS = [
+  "work_account_required",
+  "wrong_domain",
+  "link_expired",
+  "link_locked",
+  "link_not_found",
+  "other_organization",
+  "no_account",
+  "state_expired",
+  "error",
+] as const;
+export type SignInError = (typeof SIGN_IN_ERRORS)[number];
+
+export function isSignInError(result: SignInResult): result is SignInError {
+  return (SIGN_IN_ERRORS as readonly string[]).includes(result);
+}
 
 export function readSignInResult(): SignInResult | null {
   const params = new URLSearchParams(window.location.search);
@@ -48,13 +68,24 @@ export function readSignInResult(): SignInResult | null {
   const link = params.get("link");
   if (link === "linked") return "link_linked";
   if (link === "already_linked") return "link_already_linked";
+  const failed = params.get("signin_error");
+  SIGN_IN_DETAIL.value = params.get("detail");
+  if (failed)
+    return (SIGN_IN_ERRORS as readonly string[]).includes(failed)
+      ? (failed as SignInError)
+      : "error";
   return null;
 }
+
+/** `?detail=` from the same redirect, kept here because the URL is cleared
+ *  as soon as the result is read. */
+const SIGN_IN_DETAIL: { value: string | null } = { value: null };
 
 /** Drops the result from the URL so a reload doesn't show it again. */
 export function clearSignInResultFromUrl() {
   const url = new URL(window.location.href);
-  for (const key of ["admin_proof", "signup", "invite", "link"]) url.searchParams.delete(key);
+  for (const key of ["admin_proof", "signup", "invite", "link", "signin_error", "detail"])
+    url.searchParams.delete(key);
   window.history.replaceState(null, "", url);
 }
 
@@ -93,6 +124,9 @@ export function SignInResultPanel({
    *  question, ADR-0023) instead of jumping into the app. */
   onContinue?: () => void;
 }) {
+  /** The org's domain on a wrong-domain failure; read before the URL is
+   *  cleared, so it's taken once at mount. */
+  const [detail] = useState(() => SIGN_IN_DETAIL.value);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -294,6 +328,55 @@ export function SignInResultPanel({
           <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
+    case "work_account_required":
+    case "wrong_domain":
+    case "link_expired":
+    case "link_locked":
+    case "link_not_found":
+    case "other_organization":
+    case "no_account":
+    case "state_expired":
+    case "error": {
+      // Sign-in failures (user 2026-09-29): the same X, one heading, one
+      // line, back to Log In.
+      const copy: Record<SignInError, [string, string]> = {
+        work_account_required: [
+          "Join with your work account",
+          "Join links only work with a company Google account. Sign in with your work email.",
+        ],
+        wrong_domain: [
+          detail ? `That isn’t a ${detail} account` : "That’s the wrong account",
+          detail
+            ? `Sign in with your ${detail} work account to join.`
+            : "Sign in with your work account to join.",
+        ],
+        link_expired: ["This link has expired", "Ask whoever sent it for a new one."],
+        link_locked: ["This link is locked", "Ask whoever sent it to unlock it."],
+        link_not_found: [
+          "This link doesn’t work",
+          "Check the link, or ask whoever sent it for a new one.",
+        ],
+        other_organization: [
+          "That account is already in use",
+          "It belongs to another organization on Knohow. Sign in with a different account.",
+        ],
+        no_account: [
+          "There’s no Knohow account for that email",
+          "Ask your team for a join link, or sign up.",
+        ],
+        state_expired: ["That sign-in took too long", "Nothing changed. Try again."],
+        error: ["We couldn’t sign you in", "Nothing changed. Try again in a moment."],
+      };
+      const [title, line] = copy[result];
+      return (
+        <div>
+          <ResultMark kind="cross" />
+          {heading(title)}
+          {body(line)}
+          <SetupAction label="Back to log in" onClick={onDone} />
+        </div>
+      );
+    }
     case "invite_wrong_account":
       return (
         <div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { FormDialog } from "@/components/app/dialog";
+import { FormDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
@@ -37,10 +37,13 @@ export function InviteDialog({
   kind,
   open,
   onOpenChange,
+  swap,
 }: {
   kind: keyof typeof COPY;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Opened or closed as part of a dialog swap (no backdrop flash). */
+  swap?: boolean;
 }) {
   const { chrome } = useSession();
   const { refresh } = useUpdates();
@@ -52,6 +55,18 @@ export function InviteDialog({
   const copy = COPY[kind];
 
   useEffect(() => () => window.clearTimeout(holdTimer.current), []);
+
+  // Focus the field once the dialog has finished opening, not on its first
+  // frame: an instant black border and caret made this open feel snappier
+  // than the other dialogs (user 2026-09-29).
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(
+      () => inputRef.current?.focus(),
+      MODAL_SWAP_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [open]);
 
   function clearError() {
     window.clearTimeout(holdTimer.current);
@@ -70,6 +85,7 @@ export function InviteDialog({
 
   return (
     <FormDialog
+      swap={swap}
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -121,7 +137,6 @@ export function InviteDialog({
           <SetupField
             inputRef={inputRef}
             type="email"
-            autoFocus
             className="rounded-[10px]"
             value={email}
             onChange={(e) => {

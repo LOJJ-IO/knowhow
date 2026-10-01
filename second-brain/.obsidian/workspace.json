@@ -166,8 +166,9 @@
       "bases:Create new base": false
     }
   },
-  "active": "131902d57546c591",
+  "active": "40c4de43c1f5610c",
   "lastOpenFiles": [
+    "Architecture/Decisions/0027-founder-super-admin-owner-claim-auto-confirms.md",
     "Architecture/Decisions/0026-notifications-tasks-and-updates.md",
     "Architecture/Decisions/0025-linked-personal-drive-visible-to-owner.md",
     "Architecture/Decisions/0024-own-drive-consent-for-work-accounts.md",
@@ -193,7 +194,6 @@
     "Architecture/Decisions/0009-contractor-work-created-as-the-org.md",
     "Product/Features/FEAT-legal-pages.md",
     "Product/Features/FEAT-landing-book-a-demo.md",
-    "Daily.md",
     "Features"
   ]
 }

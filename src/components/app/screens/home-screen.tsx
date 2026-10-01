@@ -260,7 +260,11 @@ export function HomeScreen() {
                 const open = expanded.includes(team.id);
 
                 return (
-                  <Card selected={selected}>
+                  <Card
+                    // No black outline when a team card is clicked (user
+                    // 2026-09-29).
+                    selected={false}
+                  >
                     {/* An inset panel, so the line under it curves up at the
                         corners with the card (like the reference) instead of
                         cutting straight across. Drawn as a shadow so opening

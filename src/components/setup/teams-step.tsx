@@ -189,7 +189,13 @@ export function TeamsStep({
           is read out of the name — it is only a seed. */}
       <div ref={slotsRef} className="mt-6 flex flex-col gap-3 pb-3">
         {names.map((name, i) => (
-          <div key={i} className="group relative flex items-center gap-2.5 pr-[5%]">
+          // The field stops short so the minus has the same room on its
+          // left as it has to the card's edge on its right (user
+          // 2026-09-29): 5% + the card's side padding.
+          <div
+            key={i}
+            className="group relative flex items-center gap-2.5 pr-[calc(5%+var(--login-modal-pad-x))]"
+          >
             {/* The icon's column is the icon plus 5% of the row; the field
                 gives that 5% up from its left edge (user, 2026-09-27). */}
             <div className="flex w-[calc(3rem+5%)] shrink-0 justify-center">

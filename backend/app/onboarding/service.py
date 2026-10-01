@@ -1316,7 +1316,9 @@ def complete_join_placement(
 def claim_pending_owner(
     org_id: uuid.UUID, member: OrgMember, db: Session, *, commit: bool = True
 ) -> str:
-    """Joiner said "I'm the owner" while owner unset — records a pending claim."""
+    """Someone said "I'm the owner" while owner unset — records a pending
+    claim, or confirms it at once for the founder who is also the verified
+    Super Admin (see `confirm_founder_admin_owner_claim`)."""
     chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id).with_for_update()).scalar_one_or_none()
     if chart is None:
         raise ValueError("organization has no org chart yet")
@@ -1324,6 +1326,13 @@ def claim_pending_owner(
         if chart.owner_member_id == member.id:
             return "already_owner"
         raise ValueError("this organization already has an owner")
+    if is_founding_member(org_id, member.id, db) and is_verified_super_admin(org_id, member):
+        chart.pending_owner_member_id = None
+        chart.owner_member_id = member.id
+        _record_auto_owner_confirmation(org_id, member, chart, db)
+        if commit:
+            db.commit()
+        return "owner"
     chart.pending_owner_member_id = member.id
     record_audit_entry(
         org_id=org_id,
@@ -1336,6 +1345,40 @@ def claim_pending_owner(
     if commit:
         db.commit()
     return "pending"
+
+
+def _record_auto_owner_confirmation(org_id: uuid.UUID, member: OrgMember, chart: OrgChart, db: Session) -> None:
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=member.id,
+        action_type="onboarding.owner_claim_confirmed",
+        target_resource_id=str(member.id),
+        details={"automatic": True, "reason": "founder_is_verified_super_admin"},
+        db=db,
+    )
+
+
+def confirm_founder_admin_owner_claim(org_id: uuid.UUID, member: OrgMember, db: Session) -> bool:
+    """A founder's own owner claim can't be confirmed by anyone else when the
+    founder is also the only confirmer (founder + Super Admin), so it would
+    wait forever. Google proving they're a Super Admin of the company's
+    Workspace is enough: the claim is confirmed automatically (user
+    2026-09-29). Covers a claim made before the proof. Returns True if it
+    confirmed one."""
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id).with_for_update()).scalar_one_or_none()
+    if (
+        chart is None
+        or chart.owner_member_id is not None
+        or chart.pending_owner_member_id != member.id
+        or not is_founding_member(org_id, member.id, db)
+        or not is_verified_super_admin(org_id, member)
+    ):
+        return False
+    chart.pending_owner_member_id = None
+    chart.owner_member_id = member.id
+    _record_auto_owner_confirmation(org_id, member, chart, db)
+    db.commit()
+    return True
 
 
 def list_pending_team_join_requests(org_id: uuid.UUID, actor: OrgMember, db: Session) -> list[TeamJoinRequest]:

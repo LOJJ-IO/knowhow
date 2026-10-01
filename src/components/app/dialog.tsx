@@ -46,6 +46,12 @@ const SIZE: Record<DialogSize, string> = {
   xl: "max-w-5xl",
 };
 
+/** **Dialogs never overlap** (user 2026-09-29). A dialog that opens another
+ *  closes itself first; the second opens once the first has closed (this
+ *  long: `--modal-reveal-dur`), and when the second closes the first opens
+ *  again, the same way. */
+export const MODAL_SWAP_MS = 500;
+
 export function AppDialog({
   open,
   onOpenChange,
@@ -54,6 +60,7 @@ export function AppDialog({
   kind = "form",
   footer,
   onSubmit,
+  swap = false,
   children,
 }: {
   open: boolean;
@@ -62,6 +69,8 @@ export function AppDialog({
   size?: DialogSize;
   kind?: DialogKind;
   footer: ReactNode;
+  /** Part of a dialog swap right now: the backdrop holds steady. */
+  swap?: boolean;
   /** When given, header/body/footer are wrapped in a form. */
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   children?: ReactNode;
@@ -88,7 +97,10 @@ export function AppDialog({
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="app-modal-backdrop fixed inset-0 z-[500] bg-black/35" />
+        <DialogPrimitive.Backdrop
+          data-swap={swap || undefined}
+          className="app-modal-backdrop fixed inset-0 z-[500] bg-black/35"
+        />
         {/* Centring is done by this wrapper, not by a translate on the popup:
             `app-modal` animates `transform`, and a scale and a translate on
             one element fight over the same property. The wrapper ignores the
@@ -256,6 +268,7 @@ export function FormDialog({
   busy = false,
   disabled = false,
   onSubmit,
+  swap,
   children,
 }: {
   open: boolean;
@@ -268,10 +281,12 @@ export function FormDialog({
   /** The action can't be taken yet — nothing has changed, or it isn't valid. */
   disabled?: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
+  swap?: boolean;
   children: ReactNode;
 }) {
   return (
     <AppDialog
+      swap={swap}
       open={open}
       onOpenChange={onOpenChange}
       title={title}

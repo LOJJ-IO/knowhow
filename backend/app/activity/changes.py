@@ -105,6 +105,10 @@ def team_changes(
         if entry.action_type == "org_chart.membership.upserted":
             user_id = (entry.details or {}).get("user_id")
             return user_id if isinstance(user_id, str) else None
+        if entry.action_type == "org_chart.team.leader_assigned":
+            # The new lead, so their own toast can say so (2026-09-29).
+            leader_id = (entry.details or {}).get("new_leader_id")
+            return leader_id if isinstance(leader_id, str) else None
         return None
 
     teams: dict[str, dict] = {}

@@ -212,7 +212,7 @@ function RemoveAccountsScreen({
 
   return (
     <>
-      <div className="flex items-center gap-3 px-[5%]">
+      <div className="flex items-center gap-3 pl-[7%] pr-[3%]">
         <button
           type="button"
           onClick={onBack}
@@ -236,7 +236,7 @@ function RemoveAccountsScreen({
         </h2>
       </div>
       <p
-        className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+        className={`${sohne.className} mt-6 pl-[7%] pr-[3%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
       >
         {many
           ? "Select the accounts you want to remove from this device."
@@ -385,12 +385,12 @@ export function AccountPicker({
     // to push a client boundary up there for one screen.
     <TooltipProvider delay={0}>
       <h2
-        className={`${sohne.className} m-0 px-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 pl-[7%] pr-[3%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
         Which account today?
       </h2>
       <p
-        className={`${sohne.className} mt-6 px-[5%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+        className={`${sohne.className} mt-6 pl-[7%] pr-[3%] text-[0.95rem] leading-[1.6] text-[#1c1917]`}
       >
         Pick up where you left off or continue as another user.
       </p>

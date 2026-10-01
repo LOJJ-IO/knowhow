@@ -26,8 +26,8 @@ const PEEK_MS = 4000;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   // Collapsed by default (user 2026-09-27). The topbar toggle opens and
-  // closes it for good. Clicking the rail expands it, and clicking a nav
-  // option (rail or open sidebar) collapses it 4s later.
+  // closes it for good. Clicking a nav option in the open sidebar collapses
+  // it 4s later.
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -45,13 +45,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   const onSidebarClick = (event: React.MouseEvent) => {
+    // Clicking the rail no longer expands it (user 2026-09-29); only the
+    // topbar toggle does.
     const option = (event.target as Element).closest("a[href]");
-    if (!sidebarVisible) {
-      setSidebarVisible(true);
-      collapseSoon();
-    } else if (option) {
-      collapseSoon();
-    }
+    if (sidebarVisible && option) collapseSoon();
   };
 
   useEffect(() => cancelCollapse, []);

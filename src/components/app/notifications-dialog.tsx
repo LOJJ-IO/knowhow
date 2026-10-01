@@ -37,11 +37,14 @@ import {
 export function NotificationsDialog({
   open,
   onOpenChange,
+  swap,
   newTeamIds,
   onInvite,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Closing for / reopening after Invite (a dialog swap). */
+  swap?: boolean;
   /** Teams whose updates were unseen when the dialog opened. */
   newTeamIds: Set<string>;
   onInvite: (kind: "owner" | "super_admin") => void;
@@ -85,6 +88,7 @@ export function NotificationsDialog({
   return (
     <AppDialog
       open={open}
+      swap={swap}
       onOpenChange={onOpenChange}
       title="Notifications"
       size="sm"

@@ -1,4 +1,5 @@
 import uuid
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from pydantic import BaseModel
@@ -250,6 +251,28 @@ def login() -> RedirectResponse:
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
 
+def _sign_in_error_code(message: str) -> tuple[str, str | None]:
+    """A sign-in ValueError's message → (code, detail) for the frontend."""
+    if message == "join links are for work Google accounts only":
+        return "work_account_required", None
+    if message.startswith("sign in with a ") and message.endswith(" account to join"):
+        return "wrong_domain", message[len("sign in with a ") : -len(" account to join")]
+    if message == "this invite link has expired":
+        return "link_expired", None
+    if message == "this invite link is locked":
+        return "link_locked", None
+    if message == "join link not found":
+        return "link_not_found", None
+    if message == "this Google account already belongs to another organization":
+        return "other_organization", None
+    return "error", None
+
+
+def sign_in_error_redirect(code: str, detail: str | None = None) -> RedirectResponse:
+    query = urlencode({"signin_error": code, **({"detail": detail} if detail else {})})
+    return RedirectResponse(f"{get_settings().frontend_origin}?{query}", status_code=status.HTTP_302_FOUND)
+
+
 @router.get("/callback")
 def login_callback(
     code: str,
@@ -277,16 +300,14 @@ def login_callback(
             )
         result = complete_login(code, state, db)
         needs_admin_proof = accept_invitations_on_sign_in(result.member, db)
-    except InvalidOAuthState as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"invalid or expired login state: {exc}") from exc
+    # Failures go back to the login card as an X screen, never a raw JSON
+    # page (user 2026-09-29). `sign_in_error_redirect` picks the code.
+    except InvalidOAuthState:
+        return sign_in_error_redirect("state_expired")
+    except MemberNotProvisioned:
+        return sign_in_error_redirect("no_account")
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
-    except MemberNotProvisioned as exc:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            f"no Knohow account exists for {exc.email} yet — organization onboarding must add this "
-            "member before they can log in",
-        ) from exc
+        return sign_in_error_redirect(*_sign_in_error_code(str(exc)))
 
     response = RedirectResponse(
         ADMIN_PROOF_START_PATH if needs_admin_proof else settings.frontend_origin, status_code=status.HTTP_302_FOUND
