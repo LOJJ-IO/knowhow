@@ -18,6 +18,7 @@ from app.google.scopes import ADMIN_CONSOLE_DELEGATION_SCOPES, DOMAIN_DELEGATION
 from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.org_member import OrgMember
 from app.models.organization import Organization
+from app.sandbox import is_sandbox_org
 
 ADMIN_CONSOLE_DELEGATION_URL = "https://admin.google.com/ac/owl/domainwidedelegation"
 
@@ -221,6 +222,8 @@ def recheck_delegation(org_id: uuid.UUID, db: Session, *, throttle: bool = True)
     reappears, and the detector re-approves it once access is restored.
     Returns whether the grant is (still) approved. With `throttle`, at most
     once a minute per organization per process."""
+    if is_sandbox_org(org_id):
+        return True  # no Google behind it to ask
     org = db.get(Organization, org_id)
     grant = org.delegation_grant if org else None
     if grant is None or grant.status != DelegationStatus.APPROVED or grant.approving_admin_email is None:

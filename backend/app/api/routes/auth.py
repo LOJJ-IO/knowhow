@@ -1,7 +1,7 @@
 import uuid
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -85,6 +85,12 @@ ADMIN_PROOF_START_PATH = "/auth/admin-proof/start"
 SIGNUP_PATH = "/onboarding/signup"
 
 
+def api_path(path: str) -> str:
+    """A path on this API as the browser should reach it: through the
+    frontend's origin when PUBLIC_API_BASE is set, else as-is."""
+    return f"{get_settings().public_api_base}{path}"
+
+
 def cookie_kwargs() -> dict:
     settings = get_settings()
     is_prod = settings.environment != "development"
@@ -144,7 +150,7 @@ def signup_redirect(
     if result.needs_admin_proof:
         # Invited as Super Admin: straight on to Google's check. The session
         # cookies set here ride along on the next hop (same backend origin).
-        location = ADMIN_PROOF_START_PATH
+        location = api_path(ADMIN_PROOF_START_PATH)
     elif result.invite_wrong_account:
         location = f"{settings.frontend_origin}?invite=wrong_account"
     else:
@@ -275,12 +281,19 @@ def sign_in_error_redirect(code: str, detail: str | None = None) -> RedirectResp
 
 @router.get("/callback")
 def login_callback(
+    request: Request,
     code: str,
     state: str,
     db: Session = Depends(get_db),
     knohow_device: str | None = Cookie(default=None),
 ) -> RedirectResponse:
     settings = get_settings()
+    # Google calls back on the registered URI (this service's own host). When
+    # browsers reach the API through the frontend's origin, hop there first so
+    # this browser's cookies are read, and the session set, first-party.
+    if settings.public_api_base and request.query_params.get("via") != "app":
+        query = urlencode({**request.query_params, "via": "app"})
+        return RedirectResponse(api_path(f"/auth/callback?{query}"), status_code=status.HTTP_302_FOUND)
     try:
         # Signup shares this redirect URI with login (one GOOGLE_OAUTH_REDIRECT_URI),
         # so Google returns a signup here too — route it by its state purpose.
@@ -310,7 +323,8 @@ def login_callback(
         return sign_in_error_redirect(*_sign_in_error_code(str(exc)))
 
     response = RedirectResponse(
-        ADMIN_PROOF_START_PATH if needs_admin_proof else settings.frontend_origin, status_code=status.HTTP_302_FOUND
+        api_path(ADMIN_PROOF_START_PATH) if needs_admin_proof else settings.frontend_origin,
+        status_code=status.HTTP_302_FOUND,
     )
     set_session_cookies(response, result.access_token, result.refresh_token)
     remember_on_this_device(response, knohow_device, result.member, db)
@@ -555,7 +569,7 @@ def link_account_start(
     try:
         member = get_current_member(knohow_access_token, db)
     except HTTPException:
-        return RedirectResponse(SIGNUP_PATH, status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(api_path(SIGNUP_PATH), status_code=status.HTTP_302_FOUND)
     person_for(member, db)
     return RedirectResponse(start_link_account(member).authorization_url, status_code=status.HTTP_302_FOUND)
 

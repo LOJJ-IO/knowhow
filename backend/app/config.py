@@ -45,6 +45,13 @@ class Settings(BaseSettings):
     # Origin the landing is served from (knohow.app). Allowed by CORS and used
     # for landing-only links (Book a Demo recovery). Empty = same as the app.
     site_origin: str = ""
+    # Where browsers reach this API, when it sits behind the frontend's own
+    # origin (e.g. https://app.example/api). Set in production so every cookie
+    # is first-party: two *.up.railway.app hosts are different sites, and
+    # Safari, Firefox, Brave and private windows drop third-party cookies.
+    # Google still calls back on GOOGLE_OAUTH_REDIRECT_URI; that hit is
+    # bounced here. Empty = browsers talk to this service directly.
+    public_api_base: str = ""
 
     @property
     def landing_origin(self) -> str:

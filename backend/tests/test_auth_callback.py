@@ -100,3 +100,26 @@ def test_sign_in_error_codes():
     assert _sign_in_error_code("sign in with a acme.com account to join") == ("wrong_domain", "acme.com")
     assert _sign_in_error_code("this invite link is locked") == ("link_locked", None)
     assert _sign_in_error_code("something unexpected") == ("error", None)
+
+
+def test_callback_hops_onto_the_frontend_origin_when_proxied(monkeypatch):
+    """Behind the frontend's /api proxy, Google's direct hit on the registered
+    URI is bounced onto the proxy (query intact, plus via=app) so cookies are
+    first-party; the proxied hit itself is processed, not bounced again."""
+    from fastapi.testclient import TestClient
+
+    from app.config import get_settings
+    from app.main import app
+
+    monkeypatch.setattr(get_settings(), "public_api_base", "https://app.example/api")
+    client = TestClient(app)
+    res = client.get("/auth/callback?code=abc&state=xyz&scope=openid", follow_redirects=False)
+    assert res.status_code == 302
+    loc = res.headers["location"]
+    assert loc.startswith("https://app.example/api/auth/callback?")
+    assert "code=abc" in loc and "state=xyz" in loc and "scope=openid" in loc and "via=app" in loc
+
+    # The proxied hit is handled (here: a bad state goes to the sign-in error screen).
+    again = client.get("/auth/callback?code=abc&state=xyz&via=app", follow_redirects=False)
+    assert again.status_code == 302
+    assert "/api/auth/callback" not in again.headers["location"]

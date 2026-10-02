@@ -6,6 +6,7 @@ import { CalendarDays, ChevronDown, Lock, LockOpen } from "lucide-react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { Button } from "@/components/app/button";
+import { Switch } from "@/components/app/screen-kit";
 import { SpinnerCursor } from "@/components/app/spinner-cursor";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
@@ -296,38 +297,6 @@ function Row({
   );
 }
 
-function Switch({
-  checked,
-  disabled,
-  label,
-  onChange,
-}: {
-  checked: boolean;
-  disabled?: boolean;
-  label: string;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 cursor-pointer rounded-full transition-[background-color,translate] duration-150 active:translate-y-px disabled:cursor-default disabled:opacity-60 ${
-        checked ? "bg-[#1c1917]" : "bg-[var(--app-active)]"
-      }`}
-    >
-      <span
-        aria-hidden
-        className={`absolute top-0.5 size-5 rounded-full bg-white transition-[left] duration-150 ${
-          checked ? "left-[1.125rem]" : "left-0.5"
-        }`}
-      />
-    </button>
-  );
-}
 
 /** The link lifetime as a compact dropdown, drawn like the profile menu. It
  *  opens inside a dialog, so it sits above dialogs (500), under tooltips. */

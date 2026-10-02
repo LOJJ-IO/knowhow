@@ -9,6 +9,7 @@ import {
   Video,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 import { NAV_STROKE } from "@/components/app/icon";
@@ -31,6 +32,32 @@ export function describeFile(mime: string): { label: string; Icon: LucideIcon } 
   if (mime.startsWith("image/")) return { label: "Image", Icon: ImageIcon };
   if (mime.startsWith("video/")) return { label: "Video", Icon: Video };
   return { label: "File", Icon: File };
+}
+
+/** Google's own marks for its three editors (the New fan's PNGs). */
+const GOOGLE_MARKS: Record<string, string> = {
+  "application/vnd.google-apps.document": "/create/docs.png",
+  "application/vnd.google-apps.spreadsheet": "/create/sheets.png",
+  "application/vnd.google-apps.presentation": "/create/slides.png",
+};
+
+/** A file's icon on a white tile: Google's mark for Docs, Sheets and
+ *  Slides, a line icon for everything else. One look across the app. */
+export function FileIcon({ mimeType, size = 40 }: { mimeType: string; size?: number }) {
+  const mark = GOOGLE_MARKS[mimeType];
+  const { Icon } = describeFile(mimeType);
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]"
+      style={{ width: size, height: size }}
+    >
+      {mark ? (
+        <Image src={mark} alt="" width={64} height={64} style={{ width: size * 0.62, height: size * 0.62 }} />
+      ) : (
+        <Icon size={Math.round(size / 2)} strokeWidth={NAV_STROKE} />
+      )}
+    </span>
+  );
 }
 
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
@@ -68,7 +95,7 @@ export function FileTile({
   className?: string;
   children?: ReactNode;
 }) {
-  const { label, Icon } = describeFile(mimeType);
+  const { label } = describeFile(mimeType);
   const edited = editedAgo(modifiedAt);
   return (
     <div
@@ -77,9 +104,7 @@ export function FileTile({
         className,
       )}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
-        <Icon size={20} strokeWidth={NAV_STROKE} />
-      </span>
+      <FileIcon mimeType={mimeType} />
       <span className={`${satoshi.className} min-w-0 flex-1`}>
         <span
           title={name}

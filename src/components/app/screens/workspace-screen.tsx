@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, ExternalLink, Library, Plus, X } from "lucide-react";
+import { ExternalLink, Library, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/app/button";
 import {
@@ -14,6 +14,7 @@ import { FileTile } from "@/components/app/file-meta";
 import { Folder } from "@/components/app/folder";
 import { NAV_STROKE } from "@/components/app/icon";
 import { useSession } from "@/components/app/session";
+import { Bar, Breadcrumb, Window } from "@/components/app/screen-kit";
 import { AppPage } from "@/components/app/shell";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
@@ -341,51 +342,7 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
   );
 }
 
-/** Where you are in Workspace: Folders › this folder. Every segment but the
- *  last is a button back to that level. The topbar already says "Workspace",
- *  so the trail starts at Folders. */
-function Breadcrumb({
-  trail,
-}: {
-  trail: { label: string; onClick?: () => void }[];
-}) {
-  return (
-    <nav aria-label="Breadcrumb" className={`${satoshi.className} flex items-center gap-1 text-[0.875rem]`}>
-      {trail.map((seg, i) => {
-        const last = i === trail.length - 1;
-        return (
-          <span key={i} className="flex items-center gap-1">
-            {seg.onClick && !last ? (
-              <button
-                type="button"
-                onClick={seg.onClick}
-                className="cursor-pointer rounded-[6px] px-1 py-0.5 text-[var(--app-dim)] outline-none hover:text-[#1c1917] focus-visible:outline-2 focus-visible:outline-[#1c1917]"
-              >
-                {seg.label}
-              </button>
-            ) : (
-              <span className={cn("px-1 py-0.5", last ? "text-[#1c1917]" : "text-[var(--app-dim)]")}>
-                {seg.label}
-              </span>
-            )}
-            {last ? null : (
-              <ChevronRight size={14} strokeWidth={NAV_STROKE} className="text-[var(--app-dim)]" />
-            )}
-          </span>
-        );
-      })}
-    </nav>
-  );
-}
 
-/** The screen's one white window, as on Home. */
-function Window({ children }: { children: React.ReactNode }) {
-  return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[32px] bg-white">
-      {children}
-    </section>
-  );
-}
 
 function FolderGrid({ children }: { children: React.ReactNode }) {
   return (
@@ -395,54 +352,6 @@ function FolderGrid({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** A muted strip with an icon tile, a line of text and its actions. */
-function Bar({
-  icon,
-  title,
-  body,
-  footnote,
-  error,
-  className,
-  children,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  footnote?: string;
-  error?: boolean;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-4 rounded-[24px] bg-[var(--app-muted)] p-5",
-        className,
-      )}
-    >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-white text-[#57534e]">
-        {icon}
-      </span>
-      <div className={`${satoshi.className} min-w-[14rem] flex-1`}>
-        <div className={`${sohne.className} text-[1rem] tracking-tight text-[#1c1917]`}>
-          {title}
-        </div>
-        <p
-          className={cn(
-            "mt-0.5 text-[0.875rem] leading-[1.5]",
-            error ? "text-[#EA4335]" : "text-[var(--app-dim)]",
-          )}
-        >
-          {body}
-        </p>
-        {footnote ? (
-          <p className="mt-0.5 text-[0.8125rem] text-[var(--app-dim)]">{footnote}</p>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">{children}</div>
-    </div>
-  );
-}
 
 const SUGGESTION_TEXT = {
   company: "Looks like company work",

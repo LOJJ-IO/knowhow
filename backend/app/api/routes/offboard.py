@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,10 @@ def offboard(
     db: Session = Depends(get_db),
     member: OrgMember = Depends(require_same_org),
 ) -> dict:
+    from app.api.routes.governance import _may_offboard
+
+    if not _may_offboard(member, body.user_id, db):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only an owner, Super Admin or their team lead can offboard someone")
     result = revoke_and_offboard(body.user_id, org_id, body.transfer_to_user_id, db)
     return {
         "user_id": str(result.user_id),

@@ -9,6 +9,7 @@ from app.audit.service import record_audit_entry
 from app.exceptions import CrossOrgAccessDenied
 from app.google.drive_client import get_drive_client_for_user
 from app.google.ownership import revoke_permission_if_not_owner, transfer_ownership
+from app.models.file_index import FileIndex
 from app.models.org_member import AuthType, OrgMember
 from app.models.transfer_batch import (
     TransferBatch,
@@ -121,6 +122,14 @@ def create_transfer_batch(
     return batch
 
 
+def record_new_owner(org_id: uuid.UUID, file_id: str, owner_id: uuid.UUID, db: Session) -> None:
+    """Keep Knohow's record in step with Drive after ownership moves, so
+    screens never show the previous owner."""
+    row = db.get(FileIndex, file_id)
+    if row is not None and row.org_id == org_id:
+        row.owner_user_id = owner_id
+
+
 def _execute_item(item: TransferBatchItem, current_owner: OrgMember, proposed_owner: OrgMember) -> None:
     drive = get_drive_client_for_user(current_owner.id)
     transfer_ownership(drive, item.file_id, proposed_owner.email)
@@ -155,6 +164,7 @@ def _execute_batch(batch: TransferBatch, db: Session) -> None:
 
         try:
             _execute_item(item, current_owner, proposed_owner)
+            record_new_owner(batch.org_id, item.file_id, proposed_owner.id, db)
         except HttpError as exc:
             item.status = TransferItemStatus.FAILED
             item.detail = str(exc)
@@ -273,6 +283,7 @@ def reverse_transfer_batch(batch_id: uuid.UUID, org_id: uuid.UUID, actor_member_
             transfer_ownership(drive, item.file_id, prior_owner.email)
             revoke_permission_if_not_owner(drive, item.file_id, proposed_owner.email)
             item.status = TransferItemStatus.REVERSED
+            record_new_owner(org_id, item.file_id, prior_owner.id, db)
         except HttpError as exc:
             item.detail = f"reversal failed: {exc}"
 

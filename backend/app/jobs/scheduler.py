@@ -13,6 +13,7 @@ from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.organization import Organization
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
+from app.sandbox import is_sandbox_org
 
 logger = get_logger(__name__)
 
@@ -30,6 +31,8 @@ def run_reconciliation_sweeps() -> None:
     try:
         org_ids = db.execute(select(Organization.id)).scalars().all()
         for org_id in org_ids:
+            if is_sandbox_org(org_id):
+                continue
             try:
                 result = reconcile_organization(org_id, db)
                 logger.info("jobs.reconciliation_swept", **result)

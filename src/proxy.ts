@@ -101,5 +101,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Pages only — not Next's assets or files in public/.
-  matcher: "/((?!_next/|favicon\\.ico|.*\\.[^/]+$).*)",
+  matcher: "/((?!_next/|api/|favicon\\.ico|.*\\.[^/]+$).*)",
 };

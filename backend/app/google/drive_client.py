@@ -12,6 +12,7 @@ from app.exceptions import CrossOrgAccessDenied, DelegationNotApproved, Personal
 from app.google.scopes import DOMAIN_DELEGATION_SCOPES, PERSONAL_OAUTH_SCOPES
 from app.models.delegation_grant import DelegationStatus
 from app.models.org_member import AuthType, OrgMember
+from app.sandbox import is_sandbox_org
 from app.security.crypto import decrypt_refresh_token
 
 
@@ -116,7 +117,14 @@ def _client_for(member: OrgMember, db: Session) -> Resource:
     approved it. Until then, a domain member who connected their own Drive
     (the Workspace screen's "Connect your Google Drive") is read through that
     consent (ADR-0024). The fallback only runs one way: a personal-account
-    member is never routed to delegation, which cannot reach Gmail."""
+    member is never routed to delegation, which cannot reach Gmail.
+
+    Sandbox members (the sales demo org) get an in-memory Drive and never
+    reach Google at all."""
+    if is_sandbox_org(member.organization_id):
+        from app.sandbox.drive import SandboxDrive
+
+        return SandboxDrive(member.email, member.display_name)
     if member.auth_type == AuthType.DOMAIN_DELEGATED:
         try:
             return _domain_delegated_client(member, db)

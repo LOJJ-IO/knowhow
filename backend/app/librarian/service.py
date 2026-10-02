@@ -47,6 +47,7 @@ from app.models.org_member import OrgMember
 from app.models.org_membership import OrgMembership
 from app.models.organization import Organization
 from app.models.team import Team
+from app.sandbox import SANDBOX_DOMAIN, is_sandbox_org
 from app.onboarding.service import is_owner, is_verified_super_admin
 from app.sharing.visibility import can_view_file
 
@@ -66,6 +67,8 @@ class LibrarianError(ValueError):
 
 
 def _org_domain(org: Organization) -> str:
+    if is_sandbox_org(org.id):
+        return SANDBOX_DOMAIN
     return (org.verified_domain or org.observed_domain or "").lower()
 
 

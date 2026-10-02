@@ -12,6 +12,7 @@ from app.google.ownership import revoke_permission_if_not_owner, transfer_owners
 from app.google.retry import google_api_call
 from app.models.org_member import AuthType, OrgMember
 from app.models.unresolved_ownership import UnresolvedOwnership, UnresolvedOwnershipReason
+from app.transfers.service import record_new_owner
 
 
 @dataclass
@@ -128,6 +129,7 @@ def revoke_and_offboard(
                 if can_transfer_ownership:
                     try:
                         transfer_ownership(drive, file_id, recipient.email)
+                        record_new_owner(org_id, file_id, recipient.id, session)
                         result.files.append(FileOffboardResult(file_id, file_name, "ownership_transferred"))
                         revoke_permission_if_not_owner(drive, file_id, departing.email)
                     except HttpError as exc:

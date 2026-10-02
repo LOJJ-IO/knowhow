@@ -1,11 +1,12 @@
-import { EmptyScreen } from "@/components/app/empty-screen";
+import { Suspense } from "react";
+
+import { SearchScreen } from "@/components/app/screens/search-screen";
 
 export default function SearchPage() {
+  // useSearchParams (the ?q= in the URL) needs a Suspense boundary.
   return (
-    <EmptyScreen
-      href="/search"
-      title="Search your organization"
-      description="Type to find any document your teams own, across every team you can see. There is nothing to search until documents are synced."
-    />
+    <Suspense>
+      <SearchScreen />
+    </Suspense>
   );
 }

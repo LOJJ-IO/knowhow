@@ -32,7 +32,10 @@ def _canonical_content(
         "target_resource_id": target_resource_id,
         "details": details,
         "sequence": sequence,
-        "created_at": created_at.isoformat(),
+        # Always UTC: Postgres hands timestamps back in the session's time
+        # zone, and every writer stores UTC, so the verifier must hash the
+        # same string the writer did whatever the server's TimeZone is.
+        "created_at": created_at.astimezone(timezone.utc).isoformat(),
     }
     return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 

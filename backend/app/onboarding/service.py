@@ -7,6 +7,7 @@ from jose import JWTError, jwt
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.sandbox import is_sandbox_org
 from app.activity.changes import team_changes
 from app.audit.service import record_audit_entry
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
@@ -193,7 +194,8 @@ def resolve_join_link_preview(token: str, db: Session) -> dict:
     tags and the sign-in screen when someone arrives on the link. Deliberately
     exposes only the org name and domain, never member data."""
     link = db.execute(select(JoinLink).where(JoinLink.token == token)).scalar_one_or_none()
-    if link is None:
+    # The sales sandbox can make links, but nobody real can arrive through one.
+    if link is None or is_sandbox_org(link.organization_id):
         raise ValueError("join link not found")
 
     org = db.get(Organization, link.organization_id)
@@ -404,6 +406,8 @@ def create_invitation(
 
 def find_invitation(token: str, db: Session) -> Invitation | None:
     invitation = db.execute(select(Invitation).where(Invitation.token == token)).scalar_one_or_none()
+    if invitation is not None and is_sandbox_org(invitation.organization_id):
+        return None
     if invitation is None or invitation.consumed_at is not None or invitation.expires_at <= datetime.now(timezone.utc):
         return None
     return invitation
@@ -681,7 +685,7 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
 
 def _org_for_valid_join_token(token: str, db: Session) -> Organization:
     link = db.execute(select(JoinLink).where(JoinLink.token == token)).scalar_one_or_none()
-    if link is None:
+    if link is None or is_sandbox_org(link.organization_id):
         raise ValueError("join link not found")
     now = datetime.now(timezone.utc)
     if link.revoked_at is not None or (link.expires_at is not None and link.expires_at <= now):

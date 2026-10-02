@@ -1,11 +1,5 @@
-import { EmptyScreen } from "@/components/app/empty-screen";
+import { HelpScreen } from "@/components/app/screens/help-screen";
 
 export default function HelpPage() {
-  return (
-    <EmptyScreen
-      href="/help"
-      title="Nothing to read yet"
-      description="Guides and a way to reach us will live here. Until then, ask whoever set up your organization."
-    />
-  );
+  return <HelpScreen />;
 }

@@ -12,11 +12,13 @@ from app.api.routes import (
     drive_preview,
     librarian,
     files,
+    governance,
     health,
     offboard,
     onboarding,
     org_chart,
     reassignments,
+    sandbox,
     search,
     suggested_share,
     transfer_batches,
@@ -118,3 +120,5 @@ app.include_router(suggested_share.router)
 app.include_router(reassignments.router)
 app.include_router(transfer_batches.router)
 app.include_router(webhooks.router)
+app.include_router(sandbox.router)
+app.include_router(governance.router)

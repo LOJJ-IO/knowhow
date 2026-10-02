@@ -25,6 +25,12 @@ const ACTIONS: Record<string, string> = {
   "sharing.suggested_share_confirmed": "Access granted",
   "sharing.reassignment_requested": "Ownership requested",
   "sharing.reassignment_confirmed": "Ownership reassigned",
+  "offboard.file.ownership_transferred": "File handed over",
+  "offboard.file.unresolved_ownership": "File needs moving by hand",
+  "document.created": "Document created",
+  "librarian.confirmed_company": "Filed as company work",
+  "librarian.imported_personal": "Files brought in",
+  "ownership.unresolved_cleared": "Moved by hand",
 };
 
 /** Joins and leaves name the person they were about instead of "Someone"

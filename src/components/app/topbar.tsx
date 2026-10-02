@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
@@ -53,7 +53,19 @@ export function Topbar({
   onToggleSidebar: () => void;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { chrome } = useSession();
+  // ⌘K / Ctrl+K opens Search from anywhere in the app, as the pill says.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        router.push(APP_SEARCH.href);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [router]);
   const { tasks, teamUpdates, unseen, clearAll } = useUpdates();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);

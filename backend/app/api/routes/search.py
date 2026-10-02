@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_approved_member, get_db
+from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
 from app.search.deepsearch import search
 
@@ -16,6 +18,15 @@ def deepsearch(
     member: OrgMember = Depends(get_approved_member),
 ) -> dict:
     results = search(member.organization_id, member.id, q, db, limit=limit)
+    # Knohow's own record adds the team (and owner) for company files.
+    indexed = {
+        f.file_id: f
+        for f in db.execute(
+            select(FileIndex).where(
+                FileIndex.org_id == member.organization_id, FileIndex.file_id.in_([r.file_id for r in results])
+            )
+        ).scalars()
+    }
     return {
         "query": q,
         "results": [
@@ -26,6 +37,9 @@ def deepsearch(
                 "owner_email": r.owner_email,
                 "modified_at": r.modified_at,
                 "matched_via_member_ids": r.matched_via_member_ids,
+                "team_id": str(indexed[r.file_id].team_id) if r.file_id in indexed and indexed[r.file_id].team_id else None,
+                "owner_id": str(indexed[r.file_id].owner_user_id) if r.file_id in indexed and indexed[r.file_id].owner_user_id else None,
+                "company": r.file_id in indexed,
             }
             for r in results
         ],

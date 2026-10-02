@@ -14,7 +14,10 @@ export type JoinLinkPreview = {
 export async function fetchJoinPreview(
   token: string,
 ): Promise<JoinLinkPreview | null> {
-  const base = process.env.NEXT_PUBLIC_BACKEND_API_URL;
+  // Server-side, a relative `/api` base can't be fetched, so go straight to
+  // the backend here.
+  const base =
+    process.env.BACKEND_PROXY_TARGET ?? process.env.NEXT_PUBLIC_BACKEND_API_URL;
   if (!base) return null;
   try {
     const res = await fetch(

@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -166,7 +166,14 @@ def offboard_route(
     revoke_and_offboard with org-chart cleanup (membership removal, leader
     reassignment) — see app/org_chart/service.py::offboard_member. Distinct
     from POST /organizations/{org_id}/offboard in the auth module, which
-    only does the Drive-side revoke/transfer."""
+    only does the Drive-side revoke/transfer.
+
+    Allowed for the owner, a verified Super Admin, or a lead of one of the
+    departing member's teams — never on yourself."""
+    from app.api.routes.governance import _may_offboard
+
+    if not _may_offboard(member, body.user_id, db):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only an owner, Super Admin or their team lead can offboard someone")
     result = offboard_member(member.organization_id, body.user_id, body.transfer_to_user_id, member.id, db)
     return {
         "user_id": str(result.user_id),
