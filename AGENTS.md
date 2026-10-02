@@ -2,6 +2,8 @@
 
 **Second-brain is mandatory:** always find, read, and write `second-brain/` (entry: `second-brain/Current/Current-Context.md`). Authoritative over chat memory. Write back the same turn after durable work.
 
+**Name who did it:** every vault entry names the person (Ronald = git `ronaldwopara`, Tolu = git `tolulase007`), never just "the user". Check `git config user.name`. **If it's `tolulase007`, write fuller entries:** what changed, why, files/settings touched, how it was checked, what's left for Ronald. Details in `second-brain/README.md`.
+
 Before non-trivial work: read Current-Context and follow `CLAUDE.md` / `GEMINI.md` invariants.
 
 **Google Antigravity:** customizations in workspace `.agents/` + root `GEMINI.md` / `AGENTS.md`. PreInvocation hook injects Current-Context every turn (`.agents/hooks.json`). (`~/.gemini/antigravity/builtin/skills/*` is built-in product documentation, not Knowhow config.) MCP: `.agents/mcp_config.json`.

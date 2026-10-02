@@ -10,6 +10,7 @@ Vault: `second-brain/`. Authoritative over chat memory.
 2. **Always read it** before non-trivial work (Current-Context first; then ADR / Known-Issues / Lessons / FEAT as relevant). A PreInvocation hook also injects Current-Context — still open the real files when editing.
 3. **Always write it** after durable work in the **same turn**: update Current-Context; add/update ADR, Known-Issues, Lessons-Learned, or FEAT as needed. Skill: `update-second-brain`. Do not end until the vault matches reality (skip only pure Q&A with no durable facts).
 4. Link `[[Note-Name]]`; keep YAML frontmatter; bump `updated`. Prefer edit over new notes.
+5. **Name who did it:** every vault entry names the person (Ronald = git `ronaldwopara`, Tolu = git `tolulase007`), never just "the user". Check `git config user.name`. **If it's `tolulase007`, write fuller entries:** what changed, why, files/settings touched, how it was checked, what's left for Ronald. Details in `second-brain/README.md`.
 
 ## Other non-negotiables
 

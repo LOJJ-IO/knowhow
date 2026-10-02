@@ -275,7 +275,13 @@ export function HomeScreen() {
                         open && "shadow-[0_0_0_1px_var(--app-border)]",
                       )}
                     >
-                      <TeamIcon name={team.name} size={52} />
+                      {/* Search's rounded square (TeamChip: 6px at 20px),
+                          scaled to 52px (user 2026-10-02). */}
+                      <TeamIcon
+                        name={team.name}
+                        size={52}
+                        className="rounded-[16px]"
+                      />
                       <span className="min-w-0 flex-1 text-left">
                         <CardTitle>
                           <span className="truncate">{team.name}</span>

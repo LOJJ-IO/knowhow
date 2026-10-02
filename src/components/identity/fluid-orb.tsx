@@ -8,27 +8,25 @@ import { cn } from "@/lib/utils";
  *  supplied by the user 2026-09-22 and kept as written — the shader is the
  *  valuable part).
  *
- *  Two things are ours. **A context budget:** every orb holds a live WebGL
- *  context, and browsers keep only ~16 per page before they start losing the
- *  oldest ones, so a team card with a dozen members could blank the sidebar's
- *  avatar. Past `MAX_LIVE_ORBS` an orb simply doesn't take a context, and the
- *  caller's static gradient stays visible underneath. **And a pause when
- *  offscreen:** an orb that isn't on screen stops its animation frame instead
- *  of burning a GPU loop behind a scrolled panel. */
+ *  Two things are ours. **One context for every orb:** browsers keep only ~16
+ *  WebGL contexts per page before they start losing the oldest, so an orb no
+ *  longer owns one. A single hidden canvas holds the page's only orb context;
+ *  each frame it draws every visible orb in turn and copies the result into
+ *  that orb's own 2D canvas, which has no such limit. So a screen full of
+ *  people animates every avatar, not just the first ten (it used to cap at
+ *  ten and leave the rest on the static gradient). **And a pause when
+ *  offscreen:** an orb that isn't on screen isn't drawn, and with none on
+ *  screen the frame loop stops. */
 
 export type FluidOrbProps = React.ComponentProps<"div"> & {
   size?: number;
   color?: string;
-  /** Fires when the orb starts, and again if it gives its context up. The
-   *  caller uses it to hide whatever it is showing underneath: the orb's edge
-   *  is antialiased into transparency, so anything behind it survives as a
-   *  rim around the sphere. */
+  /** Fires when the orb starts, and again if it stops being drawn (the shared
+   *  context was lost, or WebGL isn't available). The caller uses it to hide
+   *  whatever it is showing underneath: the orb's edge is antialiased into
+   *  transparency, so anything behind it survives as a rim around the sphere. */
   onPainted?: (painted: boolean) => void;
 };
-
-/** Below the browser's context ceiling, with room for the chrome's own orbs. */
-const MAX_LIVE_ORBS = 10;
-let liveOrbs = 0;
 
 const VERT = `
 attribute vec2 a_pos;
@@ -129,6 +127,166 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
   return shader;
 }
 
+type Orb = {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  /** Device pixels per side. */
+  px: number;
+  rgb: [number, number, number];
+  /** Each orb keeps its own clock, so neighbours don't drift in lockstep. */
+  start: number;
+  visible: boolean;
+  setPainted: (painted: boolean) => void;
+};
+
+type Renderer = {
+  canvas: HTMLCanvasElement;
+  gl: WebGLRenderingContext;
+  uResolution: WebGLUniformLocation | null;
+  uTime: WebGLUniformLocation | null;
+  uColor: WebGLUniformLocation | null;
+  ready: boolean;
+};
+
+const orbs = new Set<Orb>();
+/** `undefined` until first needed; `null` once WebGL turned out unavailable. */
+let renderer: Renderer | null | undefined;
+let observer: IntersectionObserver | null = null;
+const orbByCanvas = new WeakMap<Element, Orb>();
+let raf = 0;
+
+function reducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Compiles the program into `gl`. Run again after a lost context comes back:
+ *  everything a context held goes with it. */
+function setUp(r: Renderer) {
+  const { gl } = r;
+  const program = gl.createProgram();
+  const vert = compile(gl, gl.VERTEX_SHADER, VERT);
+  const frag = compile(gl, gl.FRAGMENT_SHADER, FRAG);
+  if (!program || !vert || !frag) return false;
+  gl.attachShader(program, vert);
+  gl.attachShader(program, frag);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error(gl.getProgramInfoLog(program));
+    return false;
+  }
+  gl.useProgram(program);
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+    gl.STATIC_DRAW,
+  );
+  const aPos = gl.getAttribLocation(program, "a_pos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  r.uResolution = gl.getUniformLocation(program, "u_resolution");
+  r.uTime = gl.getUniformLocation(program, "u_time");
+  r.uColor = gl.getUniformLocation(program, "u_color");
+  r.ready = true;
+  return true;
+}
+
+function getRenderer(): Renderer | null {
+  if (renderer !== undefined) return renderer;
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
+  if (!gl) return (renderer = null);
+  const r: Renderer = {
+    canvas,
+    gl,
+    uResolution: null,
+    uTime: null,
+    uColor: null,
+    ready: false,
+  };
+  canvas.addEventListener("webglcontextlost", (event) => {
+    // Asking for the context back; until then every caller shows its fallback.
+    event.preventDefault();
+    r.ready = false;
+    cancelAnimationFrame(raf);
+    raf = 0;
+    orbs.forEach((orb) => orb.setPainted(false));
+  });
+  canvas.addEventListener("webglcontextrestored", () => {
+    if (!setUp(r)) return;
+    const now = performance.now();
+    orbs.forEach((orb) => {
+      paint(orb, now);
+      orb.setPainted(true);
+    });
+    loop();
+  });
+  if (!setUp(r)) return (renderer = null);
+  return (renderer = r);
+}
+
+/** Draws one orb into the shared canvas's bottom-left corner (WebGL's origin)
+ *  and copies that square into the orb's own canvas. */
+function paint(orb: Orb, now: number) {
+  const r = renderer;
+  if (!r || !r.ready) return;
+  const { gl, canvas } = r;
+  if (canvas.width < orb.px || canvas.height < orb.px) {
+    canvas.width = Math.max(canvas.width, orb.px);
+    canvas.height = Math.max(canvas.height, orb.px);
+  }
+  gl.viewport(0, 0, orb.px, orb.px);
+  gl.uniform2f(r.uResolution, orb.px, orb.px);
+  gl.uniform3f(r.uColor, ...orb.rgb);
+  gl.uniform1f(r.uTime, reducedMotion() ? 0 : (now - orb.start) / 1000);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  orb.ctx.clearRect(0, 0, orb.px, orb.px);
+  orb.ctx.drawImage(
+    canvas,
+    0,
+    canvas.height - orb.px,
+    orb.px,
+    orb.px,
+    0,
+    0,
+    orb.px,
+    orb.px,
+  );
+}
+
+/** One frame loop for every orb, running only while one is on screen. */
+function loop() {
+  if (raf || reducedMotion()) return;
+  const frame = (now: number) => {
+    raf = 0;
+    if (!renderer?.ready) return;
+    let any = false;
+    orbs.forEach((orb) => {
+      if (!orb.visible) return;
+      any = true;
+      paint(orb, now);
+    });
+    if (any) raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+}
+
+function getObserver() {
+  observer ??= new IntersectionObserver((entries) => {
+    let shown = false;
+    for (const entry of entries) {
+      const orb = orbByCanvas.get(entry.target);
+      if (!orb) continue;
+      orb.visible = entry.isIntersecting;
+      shown ||= orb.visible;
+    }
+    if (shown) loop();
+  });
+  return observer;
+}
+
 export function FluidOrb({
   size = 240,
   color = "#1A73F2",
@@ -138,107 +296,55 @@ export function FluidOrb({
   ...props
 }: FluidOrbProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  /** False until a context is actually running, so the caller's fallback is
-   *  what shows while this is starting, throttled, or unsupported. */
+  /** False until the orb has actually been drawn, so the caller's fallback is
+   *  what shows while this is starting, unsupported, or its context is lost. */
   const [painted, setPainted] = useState(false);
   /** Kept in a ref so the effect doesn't restart when the caller passes a new
    *  inline function on every render. */
   const onPaintedRef = useRef(onPainted);
-  onPaintedRef.current = onPainted;
+  useEffect(() => {
+    onPaintedRef.current = onPainted;
+  });
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (liveOrbs >= MAX_LIVE_ORBS) return;
+    const r = getRenderer();
+    const ctx = canvas.getContext("2d");
+    if (!r || !ctx) return;
 
-    const gl = canvas.getContext("webgl", { antialias: true, alpha: true });
-    // `getContext` hands back the *same* context for a canvas every time, so a
-    // context that has been lost stays lost for the life of the element — and
-    // a lost context fails every compile with a null info log. Bail rather
-    // than log nonsense; the caller's fallback covers it.
-    if (!gl || gl.isContextLost()) return;
-
-    const program = gl.createProgram();
-    const vert = compile(gl, gl.VERTEX_SHADER, VERT);
-    const frag = compile(gl, gl.FRAGMENT_SHADER, FRAG);
-    if (!program || !vert || !frag) return;
-
-    liveOrbs += 1;
-
-    gl.attachShader(program, vert);
-    gl.attachShader(program, frag);
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error(gl.getProgramInfoLog(program));
-      liveOrbs -= 1;
-      return;
-    }
-    gl.useProgram(program);
-
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
-      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
-      gl.STATIC_DRAW,
-    );
-    const aPos = gl.getAttribLocation(program, "a_pos");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-
-    const uResolution = gl.getUniformLocation(program, "u_resolution");
-    const uTime = gl.getUniformLocation(program, "u_time");
-    gl.uniform3f(gl.getUniformLocation(program, "u_color"), ...hexToRgb(color));
-
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const px = Math.round(size * dpr);
+    const px = Math.round(size * Math.min(window.devicePixelRatio || 1, 2));
     canvas.width = px;
     canvas.height = px;
-    gl.viewport(0, 0, px, px);
-    gl.uniform2f(uResolution, px, px);
 
-    const reduce = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-    const start = performance.now();
-    let raf = 0;
-    let visible = true;
-
-    const render = (now: number) => {
-      gl.uniform1f(uTime, reduce ? 0 : (now - start) / 1000);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      if (!reduce && visible) raf = requestAnimationFrame(render);
+    const orb: Orb = {
+      canvas,
+      ctx,
+      px,
+      rgb: hexToRgb(color),
+      start: performance.now(),
+      // Drawn once straight away; the observer says soon after if it's offscreen.
+      visible: true,
+      setPainted: (next) => {
+        setPainted(next);
+        onPaintedRef.current?.(next);
+      },
     };
-    render(start);
-    setPainted(true);
-    onPaintedRef.current?.(true);
+    orbs.add(orb);
+    orbByCanvas.set(canvas, orb);
+    getObserver().observe(canvas);
 
-    // Nothing offscreen keeps a frame loop running.
-    const observer = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (visible && !reduce) {
-        cancelAnimationFrame(raf);
-        raf = requestAnimationFrame(render);
-      }
-    });
-    observer.observe(canvas);
+    if (r.ready) {
+      paint(orb, orb.start);
+      orb.setPainted(true);
+      loop();
+    }
 
     return () => {
-      observer.disconnect();
-      cancelAnimationFrame(raf);
-      gl.deleteProgram(program);
-      gl.deleteShader(vert);
-      gl.deleteShader(frag);
-      gl.deleteBuffer(buffer);
-      // Deliberately *not* `WEBGL_lose_context.loseContext()`: this canvas
-      // outlives the effect (React runs effects twice in development, and any
-      // re-render with a new size or colour restarts this one), and losing its
-      // one context breaks every later mount. Dropping the program, shaders
-      // and buffer is what there is to release; the context goes with the
-      // element.
-      liveOrbs -= 1;
-      setPainted(false);
-      onPaintedRef.current?.(false);
+      observer?.unobserve(canvas);
+      orbByCanvas.delete(canvas);
+      orbs.delete(orb);
+      orb.setPainted(false);
     };
   }, [size, color]);
 

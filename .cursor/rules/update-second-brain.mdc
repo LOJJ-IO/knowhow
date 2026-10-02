@@ -11,4 +11,6 @@ Vault: `second-brain/`. Entry: `second-brain/Current/Current-Context.md`. Author
 2. **Read** — before non-trivial work, open Current-Context; then ADR / Known-Issues / Lessons / FEAT as relevant.
 3. **Write** — after any durable completed work, follow the project skill **update-second-brain** (`.cursor/skills/update-second-brain/SKILL.md`) before ending the turn.
 
+**Name who did it:** every vault entry names the person (Ronald = git `ronaldwopara`, Tolu = git `tolulase007`), never just "the user". Check `git config user.name`. **If it's `tolulase007`, write fuller entries:** what changed, why, files/settings touched, how it was checked, what's left for Ronald. Details in `second-brain/README.md`.
+
 Minimum bar: if behavior, architecture, bugs, features, lessons, or priorities changed, `second-brain/Current/Current-Context.md` (and any matching ADR / Known-Issues / Lessons-Learned / FEAT note) must be updated in the same turn — not deferred to a later chat. Skip only pure Q&A with no durable facts.

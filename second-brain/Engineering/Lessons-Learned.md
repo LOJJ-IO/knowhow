@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-27
+updated: 2026-10-02
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -591,4 +591,5 @@ choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction
 - **A session check that treats every failure as "signed out" bounces people on any blip (2026-10-01).** `fetchMe` returned `null` for 401 and for 5xx / network errors alike; the landing only forwards a signed-in visitor on success and the app sends `null` to `/`, so one transient failure right after login dropped the person on the get-started page. Only 401/403 mean signed out; retry the rest (`ME_RETRY_DELAYS_MS`).
 - **Git Bash rewrites a leading `/` in CLI arguments into a Windows path (2026-10-01).** `railway variables --set "NEXT_PUBLIC_BACKEND_API_URL=/api"` stored `C:/Program Files/Git/api`. MSYS path conversion applies to any argument that looks like a POSIX path. Prefix the command with `MSYS_NO_PATHCONV=1` (or use PowerShell), and read the value back after setting it.
 - **Third-party cookies "work" in default Chrome, which hides cross-site bugs (2026-10-01).** Test cross-origin auth with Chromium's `--test-third-party-cookie-phaseout` flag (Playwright `launch(args=[...])`); it blocks third-party cookies the way Safari and private windows do.
+- **Many WebGL views on one page: share one context, copy into 2D canvases (2026-10-02).** Browsers cap live WebGL contexts (~16) and silently lose the oldest. Render every instance with one offscreen context (viewport at the bottom-left, since GL's origin is there) and `drawImage(glCanvas, 0, h - px, px, px, …)` into each element's own 2D canvas in the same task, before the buffer is presented, so no `preserveDrawingBuffer` is needed. — [[Known-Issues]]
 - **Hash a timestamp only after normalising its zone (2026-10-01).** A database returns timestamps in the session's TimeZone, so `isoformat()` of the read value can differ from the written one. Anything hashed or signed must use `astimezone(timezone.utc)` first.

@@ -44,3 +44,4 @@ Treat vault facts as more authoritative than chat memory. Never ask the user to 
 - YAML frontmatter on every note: `type`, `status`, `tags`, `created`, `updated`, `related` — bump `updated`
 - Prefer editing an existing note over creating a new one
 - No secrets / `.env` values in the vault
+- **Name who did it:** every vault entry names the person (Ronald = git `ronaldwopara`, Tolu = git `tolulase007`), never just "the user". Check `git config user.name`. **If it's `tolulase007`, write fuller entries:** what changed, why, files/settings touched, how it was checked, what's left for Ronald. Details in `second-brain/README.md`.

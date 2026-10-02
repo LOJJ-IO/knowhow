@@ -16,10 +16,10 @@ import { cn } from "@/lib/utils";
  *  seed and first pick, so nobody's colour changed in the swap.
  *
  *  **The gradient it replaced is still underneath**, and it is not decoration:
- *  the orb needs a live WebGL context, and a page has a limited number of them
- *  (see `FluidOrb`). Where one can't be had — past the budget, no WebGL, a
- *  context lost — the avatar is the gradient, at the same size and the same
- *  hue, and nothing about the layout notices. */
+ *  the orb needs WebGL (one shared context for the page, see `FluidOrb`).
+ *  Where that can't be had — no WebGL, the context lost — the avatar is the
+ *  gradient, at the same size and the same hue, and nothing about the layout
+ *  notices. */
 export function PersonAvatar({
   identity,
   label,

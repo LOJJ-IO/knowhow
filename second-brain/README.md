@@ -32,6 +32,18 @@ This vault follows the same conventions as [Sage's second-brain](../../Sage_v1/s
 - **Frontmatter on every note.**
 - **Link, don't duplicate.**
 - **Every ADR and feature spec gets a unique, never-reused ID.**
+- **Name who did it.** Two people work in this repo. Every entry you write says who asked for or did the work, by name, never just "the user":
+  - **Ronald** (git `ronaldwopara`, Mac)
+  - **Tolu** (git `tolulase007`, Windows; owner of the Railway project, co-owner of GCP `knohow-staging`)
+
+  Tell who you're working for from `git config user.name` (or the machine). Write it inline with the date, e.g. "(Tolu, 2026-10-02)" or "Tolu added the redirect URI". Entries from before 2026-10-02 that say "the user" are ambiguous: don't guess who it was.
+
+  **Working for Tolu (git `tolulase007`)? Write fuller entries** (Ronald asked, 2026-10-02). Ronald reads them to catch up on work he didn't see happen, so a one-liner isn't enough. Each entry covers:
+  1. **What changed:** the behaviour, screen or service, in plain words.
+  2. **Why:** what Tolu asked for or what problem it fixed.
+  3. **Where:** files, routes, migrations, env vars, Railway/GCP settings touched (no secret values).
+  4. **How it was checked:** tests run and their result, or what was clicked through. Say so if nothing was verified.
+  5. **What's left:** open problems, and anything Ronald has to do or decide.
 
 ## Naming conventions
 

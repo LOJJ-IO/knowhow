@@ -3,7 +3,7 @@ type: known-issues
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-27
+updated: 2026-10-02
 related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-purge-old-app]]"]
 ---
 
@@ -15,6 +15,7 @@ related: ["[[Lessons-Learned]]", "[[Current-Context]]", "[[0004-landing-only-pur
 ```
 
 ## Recently resolved
+- **Some avatars showed the static gradient instead of the animated orb (fixed 2026-10-02, Ronald).** Each `FluidOrb` held its own WebGL context, capped at 10 (`MAX_LIVE_ORBS`) because browsers drop the oldest past ~16 per page. On busy screens (team canvas, Ownership with 61 avatars) everyone past the first 10 to mount fell back to `PersonAvatar`'s gradient, which read as "inactive". Now one hidden canvas holds the page's only orb context, draws each visible orb in turn and `drawImage`s it into the orb's own 2D canvas (`src/components/identity/fluid-orb.tsx`); one shared frame loop and one IntersectionObserver; lost context → every orb shows its fallback, restored → repainted. Shader unchanged. Checked headless (local `/demo`): Home 20/20 painted and all changing between frames, Ownership 61/61. Also fixed the file's pre-existing `react-hooks/refs` lint error. Not deployed to Railway yet.
 - **Railway sign-in bounced back to the get-started page (fixed 2026-10-01).** Frontend and backend on two `*.up.railway.app` hosts are different sites, so the backend's session cookies were third-party; Safari, Firefox, Brave and private windows dropped them. Fixed by putting the API behind the app's own origin (`/api` proxy) and hopping Google's callback onto it: [[0030-browser-reaches-api-through-app-origin]]. Verified on Railway with third-party cookies blocked. Also: `fetchMe` no longer treats a transient 5xx/network failure as "signed out" (it retries; only 401/403 mean signed out).
 - **The tamper-evident audit log reported tampering on untouched rows (fixed 2026-10-01).** `_canonical_content` hashed `created_at.isoformat()`, but Postgres hands timestamps back in the session's TimeZone (local DB: `America/Denver`), so the verifier hashed `…-06:00` where the writer had hashed `…+00:00`. Every chain failed verification on any non-UTC database. Now normalised to UTC before hashing; backward compatible because every writer stored UTC. Both local chains verify.
 - **Ownership moves didn't update Knohow's record (fixed 2026-10-01).** Transfers, reversals and offboarding changed the owner in Drive but left `FileIndex.owner_user_id` on the previous owner. `record_new_owner` (`app/transfers/service.py`) now updates it on every successful move.
