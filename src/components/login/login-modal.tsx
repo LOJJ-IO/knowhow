@@ -67,6 +67,12 @@ export function ReservedCountdown({ startedAt }: { startedAt: number }) {
   );
 }
 
+/** Height change that counts as a new screen rather than an error line. */
+const SWAP_MIN_DELTA = 48;
+/** How long new content stays hidden; the fade (globals.css) then overlaps
+ *  the tail of the 300ms resize. */
+const SWAP_HOLD_MS = 180;
+
 /** Log In panel's centred modal. Closed it's a thin line (border only); once
  *  `open` it grows to its content. Height can't transition to/from `auto`, so
  *  the body is measured and the shell gets an explicit px height for
@@ -83,11 +89,16 @@ export function LoginModal({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [heights, setHeights] = useState<{ border: number; full: number }>();
   const lastFull = useRef(0);
+  const openRef = useRef(open);
+  useEffect(() => {
+    openRef.current = open;
+  });
 
   useLayoutEffect(() => {
     const shell = shellRef.current;
     const body = bodyRef.current;
     if (!shell || !body) return;
+    let revealTimer = 0;
     const measure = () => {
       const border = shell.offsetHeight - shell.clientHeight;
       const full = body.offsetHeight + border;
@@ -97,14 +108,36 @@ export function LoginModal({
       // setHeights call triggers a React re-render and the .t-resize CSS
       // transition tweens the modal height — the visible "blink".  A 1px
       // threshold absorbs sub-pixel jitter without hiding real content swaps.
-      if (Math.abs(full - lastFull.current) < 2) return;
+      const delta = Math.abs(full - lastFull.current);
+      if (delta < 2) return;
+      // A new screen while open: hide it until the card has mostly resized,
+      // then fade it in, so the old height never shows the new content
+      // clipped. Set on the DOM, not state — it must land before the next
+      // paint. Small changes (an error line), Cal's iframe, and a screen that
+      // grows in place (`data-grows-in-place`: every Book a Demo step) are
+      // left alone: hiding those reads as a flash.
+      if (
+        openRef.current &&
+        lastFull.current > 0 &&
+        delta >= SWAP_MIN_DELTA &&
+        !body.querySelector(".t-demo-booking, [data-grows-in-place]")
+      ) {
+        body.dataset.swapping = "";
+        window.clearTimeout(revealTimer);
+        revealTimer = window.setTimeout(() => {
+          delete body.dataset.swapping;
+        }, SWAP_HOLD_MS);
+      }
       lastFull.current = full;
       setHeights({ border, full });
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(body);
-    return () => ro.disconnect();
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(revealTimer);
+    };
   }, []);
 
   return (

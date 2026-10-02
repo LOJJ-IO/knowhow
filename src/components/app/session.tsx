@@ -1,9 +1,15 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import { useRouter } from "next/navigation";
 
-import { satoshi } from "@/components/brand/fonts";
+import { LoadingMark } from "@/components/brand/loading-mark";
 import { type Me } from "@/lib/backend";
 import { fetchMe } from "@/lib/remembered-accounts";
 import { chromeFromMe, type OrganizationChrome } from "@/lib/organization";
@@ -16,7 +22,12 @@ import { chromeFromMe, type OrganizationChrome } from "@/lib/organization";
  *
  *  No session means no app — the landing owns signing in, so we send them
  *  there rather than rendering a shell around nothing. */
-type Session = { me: Me; chrome: OrganizationChrome };
+type Session = {
+  me: Me;
+  chrome: OrganizationChrome;
+  /** After a rename in Settings, so the sidebar and topbar follow. */
+  setOrganizationName: (name: string) => void;
+};
 
 const SessionContext = createContext<Session | null>(null);
 
@@ -32,7 +43,22 @@ export function AppSessionProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<Omit<
+    Session,
+    "setOrganizationName"
+  > | null>(null);
+  const setOrganizationName = useCallback(
+    (name: string) =>
+      setSession((current) =>
+        current
+          ? {
+              me: { ...current.me, organization_name: name },
+              chrome: { ...current.chrome, name },
+            }
+          : current,
+      ),
+    [],
+  );
   const [checked, setChecked] = useState(false);
   const router = useRouter();
 
@@ -52,17 +78,20 @@ export function AppSessionProvider({
     if (checked && !session) router.replace("/");
   }, [checked, session, router]);
 
+  // Loading, and on the way back to the landing: the turning mark, not a
+  // line of text (user 2026-09-27).
   if (!session)
     return (
-      <div
-        className={`${satoshi.className} flex h-dvh items-center justify-center bg-[var(--app-ground)] text-[0.9375rem] text-[var(--app-dim)]`}
-      >
-        {checked ? "Taking you to sign in…" : ""}
+      <div className="flex h-dvh items-center justify-center bg-[var(--app-ground)]">
+        <LoadingMark
+          label={checked ? "Taking you to sign in" : "Loading"}
+          className="w-16"
+        />
       </div>
     );
 
   return (
-    <SessionContext.Provider value={session}>
+    <SessionContext.Provider value={{ ...session, setOrganizationName }}>
       {children}
     </SessionContext.Provider>
   );

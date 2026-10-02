@@ -1,5 +1,5 @@
 """The librarian's first layer: deterministic rules on Drive metadata
-(ADR-0022, FEAT-drive-file-classification layer 1).
+(ADR-0028, FEAT-drive-file-classification layer 1).
 
 Pure functions over one file's metadata, so they can be tested without
 Google. They **read** the metadata in memory and **return** only a
@@ -95,7 +95,7 @@ def _evidence(file: dict, org_domain: str) -> tuple[dict[str, int], dict[str, in
 
 def classify(file: dict, org_domain: str) -> Verdict | None:
     """Company vs personal for a file whose ownership is genuinely in question
-    — a **personal Gmail** account's Drive (ADR-0023). Returns None for files
+    — a **personal Gmail** account's Drive (ADR-0029). Returns None for files
     the librarian skips. Not used for Workspace accounts; see
     `classify_workspace`."""
     if _skipped(file):
@@ -113,7 +113,7 @@ def classify(file: dict, org_domain: str) -> Verdict | None:
 def classify_workspace(file: dict, org_domain: str) -> Verdict | None:
     """A file in a **Workspace** account is the organization's — Google makes
     the org its owner — so it is Company, with no company-vs-personal guess
-    (ADR-0023). Skips the same non-files `classify` does. The company reason
+    (ADR-0029). Skips the same non-files `classify` does. The company reason
     counts are kept as context for the review screen, never as a verdict."""
     if _skipped(file):
         return None
@@ -124,7 +124,7 @@ def classify_workspace(file: dict, org_domain: str) -> Verdict | None:
 def org_collaborator_emails(file: dict, org_domain: str) -> list[str]:
     """The org-domain people a file is shared with or was last edited by, for
     routing a confirmed file to the team most of its collaborators are on
-    (ADR-0023). Emails are mapped to teams in memory and never stored."""
+    (ADR-0029). Emails are mapped to teams in memory and never stored."""
     org_domain = org_domain.lower()
     emails: list[str] = []
     for perm in file.get("permissions") or []:

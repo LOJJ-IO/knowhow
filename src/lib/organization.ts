@@ -118,6 +118,8 @@ export type ChangeEvent = {
   id: string;
   action: string;
   actorMemberId: string | null;
+  /** Who a join / leave was about (the member added or removed). */
+  subjectMemberId: string | null;
   at: string;
 };
 
@@ -136,11 +138,16 @@ export type OrgOverview = {
   setupStep: string | null;
   setupCompleted: boolean;
   ownerMemberId: string | null;
+  /** Said "I'm the owner"; awaiting the founder or a Super Admin (ADR-0021).
+   *  Only while there's no owner. */
+  pendingOwner: { id: string; email: string; displayName: string | null } | null;
   /** An owner named during setup who hasn't signed in yet. */
   nominatedSuperAdminEmail: string | null;
   teams: OverviewTeam[];
   members: OverviewMember[];
   joinLinkActive: boolean;
+  /** The live link is locked: same link, letting nobody in until unlocked. */
+  joinLinkLocked: boolean;
   openInvitations: number;
   pendingMembers: number;
   /** What changed since this viewer last opened Home, keyed by team
@@ -183,6 +190,11 @@ type OverviewResponse = {
     setup_completed_at: string | null;
   };
   owner_member_id: string | null;
+  pending_owner: {
+    id: string;
+    email: string;
+    display_name: string | null;
+  } | null;
   nominated_super_admin_email: string | null;
   teams: {
     id: string;
@@ -201,7 +213,7 @@ type OverviewResponse = {
     team_ids: string[];
     org_wide_roles: string[];
   }[];
-  join_link: { active: boolean };
+  join_link: { active: boolean; locked?: boolean };
   open_invitations: number;
   pending_members: number;
   changes: ChangeFeed;
@@ -213,7 +225,12 @@ export async function fetchOrgOverview(
   organizationId: string,
 ): Promise<OrgOverview> {
   const res = await backendFetch(`/organizations/${organizationId}/overview`);
-  if (!res.ok) throw new Error(await backendError(res));
+  if (!res.ok)
+    // The status rides along so Home can tell "signed out" (401) from a
+    // failed load.
+    throw Object.assign(new Error(await backendError(res)), {
+      status: res.status,
+    });
   const body = (await res.json()) as OverviewResponse;
   return {
     organizationId: body.organization.id,
@@ -223,6 +240,13 @@ export async function fetchOrgOverview(
     setupStep: body.organization.setup_step,
     setupCompleted: body.organization.setup_completed_at !== null,
     ownerMemberId: body.owner_member_id,
+    pendingOwner: body.pending_owner
+      ? {
+          id: body.pending_owner.id,
+          email: body.pending_owner.email,
+          displayName: body.pending_owner.display_name,
+        }
+      : null,
     nominatedSuperAdminEmail: body.nominated_super_admin_email,
     teams: body.teams.map((team) => ({
       id: team.id,
@@ -242,6 +266,7 @@ export async function fetchOrgOverview(
       orgWideRoles: member.org_wide_roles,
     })),
     joinLinkActive: body.join_link.active,
+    joinLinkLocked: Boolean(body.join_link.locked),
     openInvitations: body.open_invitations,
     pendingMembers: body.pending_members,
     changesByTeam: byTeam(body.changes),
@@ -268,12 +293,14 @@ function toChangeEvent(event: {
   id: string;
   action: string;
   actor_member_id: string | null;
+  subject_member_id?: string | null;
   at: string;
 }): ChangeEvent {
   return {
     id: event.id,
     action: event.action,
     actorMemberId: event.actor_member_id,
+    subjectMemberId: event.subject_member_id ?? null,
     at: event.at,
   };
 }
@@ -291,4 +318,34 @@ export async function markDashboardSeen(organizationId: string): Promise<void> {
   } catch {
     // Nothing to recover.
   }
+}
+
+/** Manage teams' member menu: make someone the team's lead. */
+export async function assignTeamLead(
+  organizationId: string,
+  teamId: string,
+  memberId: string,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}/leader`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: memberId }),
+    },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+}
+
+/** Manage teams' member menu: take someone off one team (not the org). */
+export async function removeFromTeam(
+  organizationId: string,
+  teamId: string,
+  memberId: string,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/memberships/${memberId}?team_id=${teamId}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
 }

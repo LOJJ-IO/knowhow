@@ -38,8 +38,17 @@ class Settings(BaseSettings):
     jwt_refresh_token_ttl_seconds: int = 60 * 60 * 24 * 30
 
     # --- Frontend ---
-    # Origin the Next.js app is served from, for CORS + post-login redirects.
+    # Origin the Next.js *app* is served from (app.knohow.app): CORS, every
+    # post-Google redirect, join and invite links. The landing lives on its own
+    # origin (site_origin); see ADR 0022.
     frontend_origin: str
+    # Origin the landing is served from (knohow.app). Allowed by CORS and used
+    # for landing-only links (Book a Demo recovery). Empty = same as the app.
+    site_origin: str = ""
+
+    @property
+    def landing_origin(self) -> str:
+        return self.site_origin or self.frontend_origin
 
     # --- Resend (abandoned Book a Demo recovery) ---
     resend_api_key: str = ""

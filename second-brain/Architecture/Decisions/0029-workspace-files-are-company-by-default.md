@@ -4,20 +4,20 @@ status: active
 tags: [area/backend, area/product, librarian, privacy]
 created: 2026-09-29
 updated: 2026-09-29
-related: ["[[0022-rules-based-librarian-knohow-folders]]", "[[FEAT-drive-file-classification]]", "[[0005-layered-file-classification-no-llm-first]]", "[[Current-Context]]"]
+related: ["[[0028-rules-based-librarian-knohow-folders]]", "[[FEAT-drive-file-classification]]", "[[0005-layered-file-classification-no-llm-first]]", "[[Current-Context]]"]
 ---
 
-# ADR-0023: Workspace files are Company by default; the company/personal classifier is only for personal-Gmail imports
+# ADR-0029: Workspace files are Company by default; the company/personal classifier is only for personal-Gmail imports
 
 ## Status
-`active` (user decision, 2026-09-29; **built same day**). Refines [[0022-rules-based-librarian-knohow-folders]] and supersedes the part of [[FEAT-drive-file-classification]] that had the librarian guess company-vs-personal for **Workspace** accounts.
+`active` (user decision, 2026-09-29; **built same day**). Refines [[0028-rules-based-librarian-knohow-folders]] and supersedes the part of [[FEAT-drive-file-classification]] that had the librarian guess company-vs-personal for **Workspace** accounts.
 
 ## Context
 The librarian's first layer (`backend/app/librarian/rules.py`) decides *company vs personal* for every scanned file from **sharing** signals: shared with coworkers / the domain / edited by a coworker → company; shared only with free-mail contacts → personal; both or neither → unsure. That logic was written under the older spec premise "don't assume everything an employee owns belongs to the company."
 
 But that premise conflates two very different account types:
 - **Google Workspace account** (e.g. `@knohow.app`): Google itself makes the organization the owner of every file — the Workspace admin already owns it. There is no "personal" file here in an ownership sense, so guessing company-vs-personal is wasted effort and a source of **false "personal" calls** that hide real company work.
-- **Personal Gmail** (the "first Workspace" migration / Picker import — [[0022-rules-based-librarian-knohow-folders]], Current-Context 2026-09-29): the files are legally the person's and only *some* are work. Here the company-vs-personal question is real.
+- **Personal Gmail** (the "first Workspace" migration / Picker import — [[0028-rules-based-librarian-knohow-folders]], Current-Context 2026-09-29): the files are legally the person's and only *some* are work. Here the company-vs-personal question is real.
 
 Privacy for Workspace accounts is still a concern — a person may not want a sensitive company file (e.g. an HR complaint) surfaced org-wide in DeepSearch — but that is what **Private** already means in the spec: a *company* file restricted from coworkers ([[FEAT-drive-file-classification]] → Terms). It does not require pretending the file is "personal."
 
@@ -39,5 +39,5 @@ Privacy for Workspace accounts is still a concern — a person may not want a se
 - The formal rules in [[FEAT-drive-file-classification]] (categories Company/Personal/External; `InFileIndex → Confirmed(Company)`; confirmer ≠ proposer) still hold; what changes is that **Workspace files reach "Company" without the evidence quiz**, much like `InOrgSharedDrive → Company` already bypasses it.
 
 ## Related
-- Refines [[0022-rules-based-librarian-knohow-folders]]; supersedes the Workspace-classification portion of [[FEAT-drive-file-classification]].
+- Refines [[0028-rules-based-librarian-knohow-folders]]; supersedes the Workspace-classification portion of [[FEAT-drive-file-classification]].
 - Code: `backend/app/librarian/rules.py`, `backend/app/librarian/service.py`, `backend/app/librarian/import_personal.py`.

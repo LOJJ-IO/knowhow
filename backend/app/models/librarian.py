@@ -26,7 +26,7 @@ class LibrarianStatus(str, enum.Enum):
 
 
 class LibrarianCandidate(Base):
-    """One Drive file the librarian has an opinion about (ADR-0022,
+    """One Drive file the librarian has an opinion about (ADR-0028,
     FEAT-drive-file-classification constraint 7).
 
     **Never stores the title, path or any other name.** Only the Drive file
@@ -61,7 +61,7 @@ class LibrarianCandidate(Base):
 
 
 class KnohowFolder(Base):
-    """A Knohow-only grouping of company files (ADR-0022). Drive is never
+    """A Knohow-only grouping of company files (ADR-0028). Drive is never
     reorganised: a file can sit in a folder here and anywhere in Drive."""
 
     __tablename__ = "knohow_folders"

@@ -18,6 +18,10 @@ import { AppPage } from "@/components/app/shell";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import {
+  fetchLinkedDrivePreviews,
+  type LinkedDrivePreview,
+} from "@/lib/drive-preview";
+import {
   confirmProposal,
   createFolder,
   declineProposal,
@@ -48,7 +52,7 @@ function without<T>(record: Record<string, T>, key: string) {
 const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
-/** Workspace: where the librarian lives (ADR-0022). It goes through your
+/** Workspace: where the librarian lives (ADR-0028). It goes through your
  *  Drive, you say what's company work, a lead confirms, and confirmed files
  *  land in Knohow folders. Drive itself is never reorganised. */
 export function WorkspaceScreen() {
@@ -74,6 +78,22 @@ export function WorkspaceScreen() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [proposalsOpen, setProposalsOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+  /** Personal accounts linked to you (ADR-0025), shown only to you. */
+  const [linked, setLinked] = useState<LinkedDrivePreview[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchLinkedDrivePreviews(org)
+      .then((rows) => {
+        if (!cancelled) setLinked(rows);
+      })
+      // The folders are the screen; a linked account failing to load
+      // shouldn't take it down.
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [org]);
 
   const refreshFolders = useCallback(async () => {
     try {
@@ -243,6 +263,13 @@ export function WorkspaceScreen() {
             </FolderGrid>
           )}
         </div>
+        {/* An unconnected linked account is a Pending task in Notifications,
+            not a prompt here (user 2026-09-27). */}
+        {linked
+          .filter((account) => account.connected)
+          .map((account) => (
+            <LinkedAccount key={account.email} account={account} />
+          ))}
       </Window>
 
       <ReviewDialog
@@ -273,6 +300,44 @@ export function WorkspaceScreen() {
         onCreated={() => void refreshFolders()}
       />
     </AppPage>
+  );
+}
+
+/** A connected personal account linked to you (ADR-0025): its recent files.
+ *  Shown only to you; nothing here is saved to Knohow. Connecting one is a
+ *  Pending task in Notifications. */
+function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
+  return (
+    <div className="border-t border-[var(--app-border)] p-8">
+      <h2
+        className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
+      >
+        Personal account
+      </h2>
+      <p
+        className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
+      >
+        {`Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`}
+      </p>
+      {account.error ? (
+        <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#b42318]`}>
+          {account.error}
+        </p>
+      ) : null}
+      {account.files.length ? (
+        <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+          {account.files.map((file) => (
+            <li key={file.id} className="min-w-0">
+              <FileTile
+                name={file.name}
+                mimeType={file.mimeType}
+                modifiedAt={file.modifiedAt}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -458,7 +523,6 @@ function ReviewDialog({
       }}
       size="lg"
       title="Sort your Drive"
-      description="Say which files are company work. A lead confirms before anything becomes company property."
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
       {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
@@ -595,7 +659,6 @@ function ProposalsDialog({
       }}
       size="lg"
       title="Confirm company work"
-      description="Your team put these forward as company files. Confirming files them in their team's folder."
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
       {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
@@ -665,7 +728,6 @@ function NewFolderDialog({
         onOpenChange(o);
       }}
       title="New folder"
-      description="For work that cuts across teams. Files stay where they are in Drive."
       submitLabel="Create"
       busy={busy}
       disabled={!name.trim()}
@@ -830,7 +892,6 @@ function FolderView({
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title={`Delete ${folder?.name ?? "this folder"}?`}
-        description="The files stay in Drive and in Knohow. Only this grouping goes."
         confirmLabel="Delete folder"
         destructive
         busy={deleting}
@@ -900,7 +961,6 @@ function AddFilesDialog({
       }}
       size="lg"
       title="Add files"
-      description="Company files you can see. A file can sit in more than one folder."
       submitLabel={picked.length ? `Add ${picked.length}` : "Add"}
       busy={busy}
       disabled={!picked.length}

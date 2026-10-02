@@ -102,6 +102,11 @@ def complete_admin_proof(code: str, state: str, db: Session) -> AdminProofResult
         details={"domain": hosted_domain, "domain_bound": bound_domain},
         db=db,
     )
+    # A founder who already claimed the top seat is confirmed now: nobody
+    # else could confirm it (user 2026-09-29).
+    from app.onboarding.service import confirm_founder_admin_owner_claim
+
+    confirm_founder_admin_owner_claim(org.id, member, db)
     # Delegation setup starts on proof, with the domain Google reported —
     # never from a self-declared answer or the email string.
     initiate_delegation(org_id=org.id, verified_domain=hosted_domain, requested_by_member_id=member.id, db=db)

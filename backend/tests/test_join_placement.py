@@ -23,6 +23,8 @@ from app.onboarding.service import (
     create_join_link,
     create_org_chart,
     is_team_lead,
+    claim_pending_owner,
+    record_setup_step,
     live_join_link,
     revoke_join_link,
     start_signup,
@@ -217,3 +219,16 @@ def test_live_join_link_ignores_expired(db):
     link.expires_at = datetime.now(timezone.utc) - timedelta(minutes=1)
     db.commit()
     assert live_join_link(org.id, founder, db) is None
+
+
+def test_founder_owner_claim_is_pending_not_granted(db):
+    org, founder, _team, _link = _seed_org_with_link(db)
+    assert claim_pending_owner(org.id, founder, db) == "pending"
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org.id)).scalar_one()
+    assert chart.pending_owner_member_id == founder.id
+    assert chart.owner_member_id is None
+
+
+def test_connect_workspace_is_a_setup_step(db):
+    org, _founder, _team, _link = _seed_org_with_link(db)
+    assert record_setup_step(org.id, "connectWorkspace", db).setup_step == "connectWorkspace"

@@ -71,26 +71,28 @@ html {
    whose positioner has no z-index lands in the body's default layer, where
    ordinary page content can paint over it. */
 :root {
+  --modal-reveal-dur: 500ms;
   --modal-open-dur: 250ms;
   --modal-close-dur: 150ms;
-  --modal-scale: 0.96;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Dialogs open the way the Log In card does (user 2026-09-27): from a thin
+ * line across the middle, growing up and down to full height, on the card
+ * resize's curve but slower (500ms, user the same day), and close back into
+ * the line. A clip-path reveal
+ * rather than a height tween, since a dialog's height isn't measured. The
+ * open state's inset is negative so the drop shadow isn't clipped. */
 .app-modal {
-  transform-origin: var(--transform-origin, center);
-  transition-property: transform, opacity;
-  transition-duration: var(--modal-open-dur);
-  transition-timing-function: var(--modal-ease);
-  will-change: transform, opacity;
+  clip-path: inset(-80px round 28px);
+  transition-property: clip-path;
+  transition-duration: var(--modal-reveal-dur);
+  transition-timing-function: var(--resize-ease);
+  will-change: clip-path;
 }
 .app-modal[data-starting-style],
 .app-modal[data-ending-style] {
-  transform: scale(var(--modal-scale));
-  opacity: 0;
-}
-.app-modal[data-ending-style] {
-  transition-duration: var(--modal-close-dur);
+  clip-path: inset(calc(50% - 0.5px) 0 round 28px);
 }
 
 /* The backdrop only fades; scaling a full-screen wash does nothing. */
@@ -103,6 +105,13 @@ html {
 }
 .app-modal-backdrop[data-ending-style] {
   transition-duration: var(--modal-close-dur);
+}
+/* A dialog swap (MODAL_SWAP_MS, UI-Consistency-Rules 6c): the backdrop
+ * neither fades out under the closing dialog nor fades in under the opening
+ * one, so the page stays dimmed across the handoff instead of flashing. */
+.app-modal-backdrop[data-swap][data-starting-style],
+.app-modal-backdrop[data-swap][data-ending-style] {
+  opacity: 1;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -941,7 +950,7 @@ body.t-deck-dragging * {
 .t-login-modal {
   --login-button-radius: 10px;
   --login-modal-pad-x: 1.1rem;
-  width: min(420px, 100% - 32px);
+  width: min(399px, 100% - 32px);
   overflow: hidden;
   background: #fbfaf8;
   border: 1px solid rgb(0 0 0 / 0.08);
@@ -953,6 +962,17 @@ body.t-deck-dragging * {
 
 .t-login-modal-body {
   padding: 2.5rem var(--login-modal-pad-x);
+  transition: opacity 220ms var(--resize-ease);
+}
+/* Set by LoginModal while the card resizes to a new screen. */
+.t-login-modal-body[data-swapping] {
+  opacity: 0;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-login-modal-body[data-swapping] {
+    opacity: 1;
+  }
 }
 
 /* Book a Demo's booking step — Cal's embed brings its own white surface, so
@@ -1093,6 +1113,15 @@ body.t-deck-dragging * {
 /* Autofill: light grey (the mac windows' light well) instead of Chrome's
  * blue. Chrome ignores background-color here, so paint it with an inset
  * shadow; keep the text colour ours. */
+/* Selected text in the fields (the browser selects it on autofill and on
+ * tabbing in): warm ink, not the system blue (user 2026-09-27). */
+.t-input::selection,
+.t-demo-input::selection {
+  background: rgb(28 25 23 / 0.14);
+  color: #1c1917;
+  -webkit-text-fill-color: #1c1917;
+}
+
 .t-demo-input:-webkit-autofill,
 .t-demo-input:-webkit-autofill:hover,
 .t-demo-input:-webkit-autofill:focus {
@@ -1367,4 +1396,114 @@ body.t-deck-dragging * {
     animation: none !important;
     stroke-dashoffset: 0 !important;
   }
+}
+
+/* Toasts (app-toasts.tsx, user 2026-09-29): Base UI's stacked toast, in the
+ * app's menu surface. Slides up in on the modal curve, stacks with a peek,
+ * fans out on hover. */
+.app-toast {
+  --gap: 0.75rem;
+  --peek: 0.75rem;
+  --scale: calc(max(0, 1 - (var(--toast-index) * 0.1)));
+  --shrink: calc(1 - var(--scale));
+  --height: var(--toast-frontmost-height, var(--toast-height));
+  --offset-y: calc(
+    var(--toast-offset-y) * -1 + (var(--toast-index) * var(--gap) * -1) +
+      var(--toast-swipe-movement-y)
+  );
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 16px;
+  background: white;
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.16),
+    0 0 0 1px var(--app-border);
+  transform-origin: bottom center;
+  user-select: none;
+  z-index: calc(1000 - var(--toast-index));
+  height: var(--height);
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - (var(--toast-index) * var(--peek)) -
+          (var(--shrink) * var(--height))
+      )
+    )
+    scale(var(--scale));
+  transition:
+    transform 0.5s var(--modal-ease),
+    opacity 0.5s,
+    height 0.15s;
+}
+.app-toast[data-expanded] {
+  transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--offset-y));
+  height: var(--toast-height);
+}
+.app-toast[data-starting-style],
+.app-toast[data-ending-style] {
+  transform: translateY(150%);
+}
+.app-toast[data-limited] {
+  opacity: 0;
+}
+.app-toast[data-ending-style] {
+  opacity: 0;
+}
+.app-toast[data-ending-style][data-swipe-direction="right"] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%)) translateY(var(--offset-y));
+}
+.app-toast[data-ending-style][data-swipe-direction="down"] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+.app-toast::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--gap) + 1px);
+}
+.app-toast-content {
+  overflow: hidden;
+  transition: opacity 0.25s var(--modal-ease);
+}
+.app-toast-content[data-behind] {
+  opacity: 0;
+}
+.app-toast-content[data-expanded] {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    transition: opacity 0.2s;
+  }
+}
+
+/* A stroke that draws itself in (the New link tick, 2026-09-29). Give the
+ * path pathLength="1". */
+.app-draw-in {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: app-draw-in 350ms var(--modal-ease) forwards;
+}
+@keyframes app-draw-in {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-draw-in {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
+
+/* SpinnerCursor (spinner-cursor.tsx): the real pointer is hidden everywhere
+ * while the drawn Get Started spinner stands in for it. */
+html[data-spinner-cursor],
+html[data-spinner-cursor] * {
+  cursor: none !important;
 }

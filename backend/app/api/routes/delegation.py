@@ -12,7 +12,10 @@ from app.auth.delegation import (
     initiate_delegation,
     revoke_delegation,
 )
+from app.logging_config import get_logger
 from app.models.org_member import OrgMember
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/organizations/{org_id}/delegation", tags=["delegation"])
 
@@ -77,7 +80,9 @@ def _check(org_id: uuid.UUID, db: Session) -> dict:
     try:
         result = check_delegation(org_id, db)
     except DelegationCheckError as exc:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"couldn't check delegation: {exc}") from exc
+        # Google's raw error goes to the log, not to the Super Admin's screen.
+        logger.warning("delegation.check_failed", org_id=str(org_id), error=str(exc))
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Google didn't answer. Try again in a moment.") from exc
     return {"status": result.status, "missing_scopes": result.missing_scopes}
 
 

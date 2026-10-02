@@ -1,10 +1,22 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { emailError } from "@/lib/email";
+import { websiteError } from "@/lib/website";
+import { ErrorTip } from "@/components/brand/tooltip";
 import { useEffect, useRef, useState } from "react";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
+import {
+  Building,
+  Building2,
+  Landmark,
+  Store,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { CTA_CLASS } from "@/components/ui/tokens";
 import { DemoBookingSlot } from "@/components/brand/demo-booking-slot";
 import {
@@ -34,6 +46,9 @@ const DEMO_FIELDS = [
   { name: "email", label: "Work email", type: "email", autoComplete: "email" },
   { name: "website", label: "Company website", type: "text", autoComplete: "url" },
 ] as const;
+
+/** Fields with a format of their own, beyond "not empty". */
+const FORMAT_CHECKS = { email: emailError, website: websiteError } as const;
 
 /** ms an error stays up before border + message fade back (`--revert-hold`). */
 const DEMO_ERROR_HOLD_MS = 3000;
@@ -101,6 +116,13 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
 
   function clearError(name: string) {
     window.clearTimeout(timers.current[name]);
+    // The message is the tooltip's open state now, so it has to go too.
+    setMessages((m) => {
+      if (!(name in m)) return m;
+      const next = { ...m };
+      delete next[name];
+      return next;
+    });
     wraps.current[name]?.classList.remove("is-error");
     inputs.current[name]?.classList.remove("is-error");
     inputs.current[name]?.removeAttribute("aria-invalid");
@@ -151,6 +173,9 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
     for (const { name } of shown) {
       const input = inputs.current[name];
       if (!input) continue;
+      // Shared format checks, stricter than the browser's (user 2026-09-27).
+      const check = FORMAT_CHECKS[name as keyof typeof FORMAT_CHECKS];
+      if (check) input.setCustomValidity(check(input.value) ?? "");
       if (input.checkValidity()) {
         clearError(name);
         continue;
@@ -246,13 +271,15 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
     );
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
+    <form noValidate onSubmit={handleSubmit} data-grows-in-place="">
       <h2
-        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 pl-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
         Book a Demo
       </h2>
-      <div className="mt-6 grid grid-cols-2 gap-x-2 gap-y-1">
+      {/* Inset 2.5% each side, like the setup screens' content (user
+          2026-09-27). */}
+      <div className="mx-[2.5%] mt-6 grid grid-cols-2 gap-x-2 gap-y-1">
         {shown.map((f, i) => (
           <div
             key={f.name}
@@ -270,49 +297,53 @@ export function DemoForm({ initial }: { initial?: DemoFormInitial | null }) {
             >
               {f.label}
             </label>
-            <input
-              ref={(el) => {
-                inputs.current[f.name] = el;
-              }}
-              id={`demo-${f.name}`}
-              name={f.name}
-              type={f.type}
-              autoComplete={f.autoComplete}
-              inputMode={f.name === "website" ? "url" : undefined}
-              required
-              defaultValue={
-                f.name === "firstName"
-                  ? values.firstName
-                  : f.name === "lastName"
-                    ? values.lastName
-                    : f.name === "email"
-                      ? values.email
-                      : values.website
-              }
-              onInput={(e) => {
-                const v = e.currentTarget.value;
-                setValues((prev) => ({
-                  ...prev,
-                  ...(f.name === "firstName"
-                    ? { firstName: v }
-                    : f.name === "lastName"
-                      ? { lastName: v }
-                      : f.name === "email"
-                        ? { email: v }
-                        : { website: v }),
-                }));
-                if (e.currentTarget.checkValidity()) clearError(f.name);
-              }}
-              aria-describedby={`demo-${f.name}-error`}
-              className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
-            />
-            <p
-              id={`demo-${f.name}-error`}
-              aria-live="polite"
-              className="t-error-msg m-0 mt-1 min-h-[1.2rem] text-[0.75rem] leading-[1.2rem] text-[#EA4335]"
+            {/* Every field's error rides above it as the tooltip, and goes
+                when you click back in (user 2026-09-27). */}
+            <ErrorTip
+              message={messages[f.name]}
+              onDismiss={() => clearError(f.name)}
             >
-              {messages[f.name]}
-            </p>
+              <input
+                ref={(el) => {
+                  inputs.current[f.name] = el;
+                }}
+                id={`demo-${f.name}`}
+                name={f.name}
+                type={f.type}
+                autoComplete={f.autoComplete}
+                inputMode={f.name === "website" ? "url" : undefined}
+                required
+                defaultValue={
+                  f.name === "firstName"
+                    ? values.firstName
+                    : f.name === "lastName"
+                      ? values.lastName
+                      : f.name === "email"
+                        ? values.email
+                        : values.website
+                }
+                onInput={(e) => {
+                  const v = e.currentTarget.value;
+                  setValues((prev) => ({
+                    ...prev,
+                    ...(f.name === "firstName"
+                      ? { firstName: v }
+                      : f.name === "lastName"
+                        ? { lastName: v }
+                        : f.name === "email"
+                          ? { email: v }
+                          : { website: v }),
+                  }));
+                  const check =
+                    FORMAT_CHECKS[f.name as keyof typeof FORMAT_CHECKS];
+                  if (check) e.currentTarget.setCustomValidity(check(v) ?? "");
+                  if (e.currentTarget.checkValidity()) clearError(f.name);
+                }}
+                className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius)] border bg-white px-3 text-[0.95rem] text-[#1c1917] outline-none"
+              />
+            </ErrorTip>
+            {/* Keeps the gap the message under the field used to hold. */}
+            <div aria-hidden className="mt-1 min-h-[1.2rem]" />
           </div>
         ))}
       </div>
@@ -403,13 +434,17 @@ function DemoSegmentStep({
   }, [picked]);
 
   return (
-    <div>
+    <div data-grows-in-place="">
       <h2
-        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 pl-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
         Who&rsquo;s this for?
       </h2>
-      <div className={`${satoshi.className} mt-6 flex flex-col gap-3`}>
+      {/* Inset 2.5% each side, like the setup screens' content (user
+          2026-09-27); the action keeps the full width. */}
+      <div
+        className={`${satoshi.className} mx-[2.5%] mt-6 flex flex-col gap-3`}
+      >
         {DEMO_SEGMENTS.map((s) => (
           <button
             key={s.id}
@@ -448,7 +483,9 @@ function DemoSegmentStep({
         ))}
       </div>
       {picked === "other" ? (
-        <div className={`t-input-wrap ${satoshi.className} mt-3 flex flex-col`}>
+        <div
+          className={`t-input-wrap ${satoshi.className} mx-[2.5%] mt-3 flex flex-col`}
+        >
           <input
             ref={otherRef}
             type="text"
@@ -462,7 +499,7 @@ function DemoSegmentStep({
           />
         </div>
       ) : null}
-      <div className="mt-3 flex justify-end">
+      <div className="mt-8 flex justify-end">
         <button
           type="button"
           onClick={() => onContinue(picked, other)}
@@ -479,7 +516,17 @@ function DemoSegmentStep({
  *  affirmed by the user 2026-09-20. */
 const DEMO_SIZES = ["1", "2–5", "6–20", "21–50", "51–100", "100+"] as const;
 
-const DEMO_SIZE_CLASS = `flex h-11 min-w-0 cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-1 text-[0.9rem] font-bold text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
+/** An icon per range, growing from one person to a tower (user 2026-09-27). */
+const DEMO_SIZE_ICONS: Record<(typeof DEMO_SIZES)[number], LucideIcon> = {
+  "1": User,
+  "2–5": Users,
+  "6–20": Store,
+  "21–50": Building,
+  "51–100": Building2,
+  "100+": Landmark,
+};
+
+const DEMO_SIZE_CLASS = `flex h-11 min-w-0 cursor-pointer items-center justify-center gap-1.5 rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-1 text-[0.9rem] font-bold text-[#1c1917] transition-[transform,border-color] duration-150 active:scale-[0.98]`;
 
 /** After industry: how many people. Skippable like the segment step; then Cal. */
 function DemoSizeStep({
@@ -494,36 +541,45 @@ function DemoSizeStep({
   const [picked, setPicked] = useState<string | null>(initial);
 
   return (
-    <div>
+    <div data-grows-in-place="">
       <h2
-        className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+        className={`${sohne.className} m-0 pl-[5%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
       >
         How many people on your team?
       </h2>
       <div
-        className={`${satoshi.className} mt-6 grid grid-cols-3 gap-2`}
+        className={`${satoshi.className} mx-[2.5%] mt-6 grid grid-cols-3 gap-2`}
         role="group"
         aria-label="Team size"
       >
-        {DEMO_SIZES.map((size) => (
-          <button
-            key={size}
-            type="button"
-            aria-pressed={picked === size}
-            onClick={() => {
-              setPicked(size);
-              onPick(size);
-            }}
-            className={cn(
-              DEMO_SIZE_CLASS,
-              picked === size && "border-[#1c1917]",
-            )}
-          >
-            {size}
-          </button>
-        ))}
+        {DEMO_SIZES.map((size) => {
+          const Icon = DEMO_SIZE_ICONS[size];
+          return (
+            <button
+              key={size}
+              type="button"
+              aria-pressed={picked === size}
+              onClick={() => {
+                setPicked(size);
+                onPick(size);
+              }}
+              className={cn(
+                DEMO_SIZE_CLASS,
+                picked === size && "border-[#1c1917]",
+              )}
+            >
+              {/* Weighted to sit with the bold label (user 2026-09-27). */}
+              <Icon
+                aria-hidden
+                className="size-[18px] shrink-0"
+                strokeWidth={2.4}
+              />
+              {size}
+            </button>
+          );
+        })}
       </div>
-      <div className="mt-3 flex justify-end">
+      <div className="mt-8 flex justify-end">
         <button
           type="button"
           onClick={onContinue}

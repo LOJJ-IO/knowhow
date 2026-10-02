@@ -97,6 +97,20 @@ def team_changes(
         file_id = _file_id_of(entry)
         return file_teams.get(file_id) if file_id else None
 
+    def subject_of(entry: AuditLogEntry) -> str | None:
+        """Who a membership change was about, so the feed can name them
+        instead of "Someone" (user 2026-09-27)."""
+        if entry.action_type == "org_chart.membership.removed":
+            return entry.target_resource_id
+        if entry.action_type == "org_chart.membership.upserted":
+            user_id = (entry.details or {}).get("user_id")
+            return user_id if isinstance(user_id, str) else None
+        if entry.action_type == "org_chart.team.leader_assigned":
+            # The new lead, so their own toast can say so (2026-09-29).
+            leader_id = (entry.details or {}).get("new_leader_id")
+            return leader_id if isinstance(leader_id, str) else None
+        return None
+
     teams: dict[str, dict] = {}
     organization: list[dict] = []
     for entry in entries:
@@ -104,6 +118,7 @@ def team_changes(
             "id": str(entry.id),
             "action": entry.action_type,
             "actor_member_id": str(entry.actor_user_id) if entry.actor_user_id else None,
+            "subject_member_id": subject_of(entry),
             "at": entry.created_at.isoformat(),
         }
         team_id = team_of(entry)

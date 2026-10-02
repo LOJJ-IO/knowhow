@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit_entry
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
 from app.auth.pkce import build_state_token, decode_state_token, derive_code_challenge, generate_code_verifier
-from app.google.scopes import PERSONAL_OAUTH_SCOPES
+from app.google.scopes import PERSONAL_OAUTH_CONSENT_SCOPES, PERSONAL_OAUTH_SCOPES
 from app.models.oauth_credential import OAuthCredential
 from app.models.org_member import OrgMember
 from app.security.crypto import encrypt_refresh_token
@@ -21,7 +21,10 @@ class PersonalOAuthStart:
 
 
 def start_personal_oauth_consent(member: OrgMember) -> PersonalOAuthStart:
-    """Individual consent flow for personal-account members, triggered
+    """Individual consent flow. Personal-account members need it for any
+    Drive access; since ADR-0024 a domain member may also use it to connect
+    their own Drive before the Super Admin connects the company. Originally
+    triggered
     (by the org-engine module) when a member's email domain does not match
     the organization's verified Workspace domain — domain-wide delegation
     cannot reach a personal Gmail account, so each such member must grant
@@ -40,7 +43,7 @@ def start_personal_oauth_consent(member: OrgMember) -> PersonalOAuthStart:
         code_verifier, purpose=PERSONAL_OAUTH_STATE_PURPOSE, extra={"member_id": str(member.id)}
     )
     url = build_authorization_url(
-        PERSONAL_OAUTH_SCOPES,
+        PERSONAL_OAUTH_CONSENT_SCOPES,
         state=state,
         code_challenge=code_challenge,
         access_type="offline",  # required to receive a refresh token

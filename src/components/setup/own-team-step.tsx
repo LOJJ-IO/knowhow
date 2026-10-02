@@ -104,7 +104,7 @@ export function OwnTeamStep({
     <div>
       <SetupHeading>Which teams are you in?</SetupHeading>
       <SetupBody>Pick as many as apply.</SetupBody>
-      <div className="mt-6 flex flex-wrap items-center gap-1.5">
+      <div className="mx-[2.5%] mt-6 flex flex-wrap items-center gap-1.5">
         {known.map((team) => (
           <ChoicePill
             key={team.id}

@@ -3,11 +3,27 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-09-26
+updated: 2026-09-27
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-09-27 — No `openid` scope, no `id_token`
+Google only returns an `id_token` from the code exchange when the auth request included `openid`. A consent
+flow that asks for just an API scope (like `drive`) gets access/refresh tokens and nothing identifying the
+account. Any flow whose callback calls `verify_id_token(tokens["id_token"])` must request `openid` (plus
+`userinfo.email` if it reads `email`). Test mocks that hand back `{"id_token": ...}` regardless of the requested
+scopes hide this; assert on the scopes the start function requests instead.
+
+## 2026-09-27 — Google Admin's delegation page takes prefill parameters
+`https://admin.google.com/ac/owl/domainwidedelegation?overwriteClientId=true&clientIdToAdd=<id>&clientScopeToAdd=<csv>`
+opens the "Add a new client ID" dialog already filled in. Google doesn't document these parameters (its
+`google/create-service-account` script and HashiCorp's Workspace tutorial use them), so always show the values
+to copy as well. `overwriteClientId=true` replaces the client's scopes, so send the complete list every time.
+
+## 2026-09-27 — Tweening a card's height while its content swaps instantly reads as a glitch
+`LoginModal` animates height, but a new setup screen replaced the old one in the same frame, so the new content sat clipped at the old height while the centred card grew both ways (heading sliding up, rows revealed from the bottom). Sequence it instead: hide the new content, let the card resize, fade the content in near the end. Hide it by writing to the DOM from the `ResizeObserver` callback, not React state: an update scheduled from an observer callback can land a frame after paint, so one frame of the new content still flashes. Same rule for anything that animates *inside* the card (the Google result tick): start it after the card's own motion, not on top of it.
 
 ## 2026-09-26 — Alembic against `knohow` does not upgrade `knohow_test`
 `conftest` points pytest at `knohow_test` while local `alembic upgrade head` uses `DATABASE_URL` → `knohow`. A new migration can succeed on the app DB and still leave tests failing with `UndefinedColumn`. After adding a migration, run alembic once with `DATABASE_URL=…/knohow_test` (or document a dual-upgrade habit) before trusting the suite.
@@ -559,3 +575,12 @@ sidebar morphs, the profile menu's swaps and Home's play/pause. Same family as t
 pointer during a press can eat the click. Still on `active:scale-*` (not changed, not asked): setup
 choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction`'s `whileTap`.
 
+
+- **A grant Google holds can be withdrawn on Google's side without telling us (2026-09-27).** Domain-wide delegation lives in the customer's Admin console; our `approved` row is only a cache of "it worked once". Any status derived from it (tasks, connected badges) must re-verify periodically, and the demotion should go to a state the detector already watches (`pending`), so restoring access heals itself without a new flow. See [[Known-Issues]].
+
+- **A tooltip whose `open` is its own message must keep the text through the exit (2026-09-27).** `ErrorTip` opened on `Boolean(message)` and rendered `message`; clearing the error emptied the popup at the same instant the close animation began, so the box collapsed to its padding mid-fade and the arrow, re-centred on it, looked like it lagged. Hold the last non-empty message in state (set during render when a new one arrives) and render that; only `open` follows the live value.
+
+- **`--login-button-radius` only exists inside `.t-login-modal` (2026-09-27).** A component using `rounded-[var(--login-button-radius)]` outside the login modal (e.g. `CopyField` in an app dialog) gets an invalid value and square corners. Use `var(--login-button-radius,10px)` anywhere that might render outside the modal.
+
+- **Don't `autoFocus` a field inside an animated dialog (2026-09-29).** The focus ring and caret land on the first frame, while the dialog is still revealing, and the open reads as snappier than every other dialog. Focus after the reveal (`MODAL_SWAP_MS`) instead. See `new-team-dialog.tsx` / `invite-dialog.tsx`.
+- **A resizing card must not open before its content exists (2026-09-29).** The Log In card measures its body and tweens to it; opening it while a `dynamic()` chunk or a fetch was still pending sized it to an empty body, then grew it again (a visible double open). Gate the open on the data and preload the chunk (`loginReady` in `app-entry.tsx`).

@@ -99,22 +99,41 @@ export async function forgetRememberedAccounts(
   }
 }
 
+/** Waits between attempts when `/auth/me` fails for a reason that isn't "you're
+ *  signed out": a 5xx, a dropped connection, a backend still waking up. */
+const ME_RETRY_DELAYS_MS = [400, 1200];
+
+/** Who's signed in, or `null` if nobody is.
+ *
+ *  `null` means the backend answered 401/403 (or there is no backend). Any
+ *  other failure is *not* "signed out", and treating it as one bounced people
+ *  back to the get-started page right after logging in (the landing only
+ *  forwards a signed-in visitor on success; the app sends `null` to `/`). So
+ *  those are retried a couple of times before giving up. A genuine sign-out
+ *  gets its 401 straight away and never waits. */
 export async function fetchMe(): Promise<Me | null> {
   if (!BACKEND_API_URL) return null;
-  try {
-    const res = await backendFetch("/auth/me");
-    if (!res.ok) return null;
-    const me = (await res.json()) as Me;
-    return {
-      ...me,
-      is_founding_member: Boolean(me.is_founding_member),
-      is_team_lead: Boolean(me.is_team_lead),
-      needs_join_placement: Boolean(me.needs_join_placement),
-      owner_claim_available: Boolean(me.owner_claim_available),
-    };
-  } catch {
-    return null; // backend not running — the landing works without it
+  for (let attempt = 0; attempt <= ME_RETRY_DELAYS_MS.length; attempt++) {
+    if (attempt > 0)
+      await new Promise((r) => setTimeout(r, ME_RETRY_DELAYS_MS[attempt - 1]));
+    try {
+      const res = await backendFetch("/auth/me");
+      if (res.status === 401 || res.status === 403) return null;
+      if (!res.ok) continue;
+      const me = (await res.json()) as Me;
+      return {
+        ...me,
+        is_founding_member: Boolean(me.is_founding_member),
+        is_team_lead: Boolean(me.is_team_lead),
+        needs_join_placement: Boolean(me.needs_join_placement),
+        owner_claim_available: Boolean(me.owner_claim_available),
+      };
+    } catch {
+      // Backend unreachable: retry, then fall through to null (the landing
+      // works without a backend).
+    }
   }
+  return null;
 }
 
 /** End this session. The backend clears the access and refresh cookies and

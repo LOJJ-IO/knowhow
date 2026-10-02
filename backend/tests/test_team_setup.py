@@ -7,6 +7,7 @@ guard that keeps Remove an undo rather than a quiet org-chart change.
 """
 
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -311,6 +312,7 @@ def test_resolve_join_link_preview(_setup_role):
         organization_id=uuid.uuid4(),
         revoked_at=None,
         expires_at=None,
+        locked_at=None,
     )
 
     class _PreviewSession:
@@ -326,3 +328,43 @@ def test_resolve_join_link_preview(_setup_role):
     assert preview["organization_domain"] == "acme.org"
     assert preview["valid"] is True
     assert preview["title"] == "Join Acme on Knohow"
+
+
+def test_locking_keeps_the_same_link_and_unlocking_brings_it_back(_setup_role):
+    """Lock stops the link without replacing it (user 2026-09-27)."""
+    link = SimpleNamespace(id=uuid.uuid4(), locked_at=None, revoked_at=None)
+    db = _JoinLinkSession([link])
+
+    assert onboarding_service.set_join_link_locked(uuid.uuid4(), True, _actor(), db) is link
+    assert link.locked_at is not None
+    assert link.revoked_at is None
+
+    onboarding_service.set_join_link_locked(uuid.uuid4(), False, _actor(), db)
+    assert link.locked_at is None
+
+
+def test_locking_with_no_live_link_is_refused(_setup_role):
+    with pytest.raises(ValueError, match="no live join link"):
+        onboarding_service.set_join_link_locked(uuid.uuid4(), True, _actor(), _JoinLinkSession())
+
+
+def test_locked_link_preview_says_locked(_setup_role):
+    org = SimpleNamespace(name="Acme", observed_domain="acme.org", verified_domain=None)
+    link = SimpleNamespace(
+        organization_id=uuid.uuid4(),
+        revoked_at=None,
+        expires_at=None,
+        locked_at=datetime.now(timezone.utc),
+    )
+
+    class _PreviewSession:
+        def execute(self, _stmt):
+            return SimpleNamespace(scalar_one_or_none=lambda: link)
+
+        def get(self, _model, _org_id):
+            return org
+
+    preview = onboarding_service.resolve_join_link_preview("tok", _PreviewSession())
+
+    assert preview["valid"] is False
+    assert preview["title"] == "This invite link is locked"

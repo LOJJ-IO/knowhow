@@ -4,6 +4,7 @@ from app.models.delegation_grant import DelegationGrant, DelegationStatus
 from app.models.demo_lead import DemoLead
 from app.models.file_index import FileIndex
 from app.models.join_link import JoinLink
+from app.models.linked_drive_credential import LinkedDriveCredential
 from app.models.invitation import Invitation, InvitationKind
 from app.models.oauth_credential import OAuthCredential
 from app.models.org_chart import OrgChart
@@ -53,6 +54,7 @@ __all__ = [
     "Invitation",
     "InvitationKind",
     "JoinLink",
+    "LinkedDriveCredential",
     "OAuthCredential",
     "OrgChart",
     "OrgMember",

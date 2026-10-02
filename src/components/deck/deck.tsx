@@ -9,17 +9,9 @@ import {
 } from "react";
 import { animate, motion, motionValue } from "framer-motion";
 import { sohne } from "@/components/brand/logo-mark";
+import { GOOGLE_LETTERS } from "@/components/brand/google-word";
 import { satoshi } from "@/components/brand/fonts";
 import { readSplitTiming } from "@/components/landing/get-started-cta";
-
-const GOOGLE_LETTERS = [
-  { char: "G", color: "#4285F4" },
-  { char: "o", color: "#EA4335" },
-  { char: "o", color: "#FBBC05" },
-  { char: "g", color: "#4285F4" },
-  { char: "l", color: "#34A853" },
-  { char: "e", color: "#EA4335" },
-] as const;
 
 /** The card deck: the Mac-window cards, their Notes panel, the mobile cover
  *  flow and the desktop round-table ring.

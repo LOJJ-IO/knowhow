@@ -28,7 +28,7 @@ def _new_token() -> str:
 
 
 def resume_url(token: str) -> str:
-    return f"{get_settings().frontend_origin}/?demo_resume={token}"
+    return f"{get_settings().landing_origin}/?demo_resume={token}"
 
 
 def lead_to_dict(lead: DemoLead) -> dict:

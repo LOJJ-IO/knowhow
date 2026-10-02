@@ -13,6 +13,11 @@ import { NotificationBell } from "@/components/app/notification-bell";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { ProfileMenu } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
+import { useUpdates } from "@/components/app/updates";
+import { NotificationsDialog } from "@/components/app/notifications-dialog";
+import { OPEN_NOTIFICATIONS_EVENT } from "@/components/app/app-toasts";
+import { MODAL_SWAP_MS } from "@/components/app/dialog";
+import { InviteDialog } from "@/components/app/invite-dialog";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import {
   Tooltip,
@@ -49,6 +54,31 @@ export function Topbar({
 }) {
   const pathname = usePathname();
   const { chrome } = useSession();
+  const { tasks, teamUpdates, unseen, clearAll } = useUpdates();
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  // A toast's View opens Notifications (app-toasts.tsx).
+  useEffect(() => {
+    const open = () => setNotificationsOpen(true);
+    window.addEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+    return () => window.removeEventListener(OPEN_NOTIFICATIONS_EVENT, open);
+  }, []);
+  /** Notifications ↔ Invite handoff under way: steady backdrop. */
+  const [swapping, setSwapping] = useState(false);
+  const swap = (run: () => void) => {
+    setSwapping(true);
+    window.setTimeout(() => {
+      run();
+      window.setTimeout(() => setSwapping(false), MODAL_SWAP_MS);
+    }, MODAL_SWAP_MS);
+  };
+  /** Teams whose updates were unseen when Notifications opened, so the
+   *  dialog can still mark them after opening clears the cards. */
+  const [newTeamIds, setNewTeamIds] = useState<Set<string>>(new Set());
+  const [inviting, setInviting] = useState<"owner" | "super_admin" | null>(null);
+  const bellCount =
+    tasks.length +
+    teamUpdates.reduce((sum, row) => sum + row.changes.events.length, 0);
   const current = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
     (item) => item.href === pathname,
   );
@@ -130,12 +160,20 @@ export function Topbar({
 
           {/* NotificationBell is the app's own icon Button underneath, so the
               surface, hover, press and focus are the row's and need nothing
-              here. Count is mocked at 0 (`chromeFromMe`), so the badge stays
-              hidden until a real notifications source exists. */}
+              here. The count is pending tasks plus team updates you haven't
+              cleared in Notifications (user 2026-09-27), the two tab
+              badges added up. Opening it only clears Home's New chips. */}
           <Tooltip>
             <TooltipTrigger
               render={
-                <NotificationBell count={chrome.unreadNotifications} />
+                <NotificationBell
+                  count={bellCount}
+                  onClick={() => {
+                    setNewTeamIds(new Set(Object.keys(unseen)));
+                    clearAll();
+                    setNotificationsOpen(true);
+                  }}
+                />
               }
             />
             <TooltipContent side="bottom" sideOffset={8}>
@@ -157,7 +195,7 @@ export function Topbar({
             <button
               type="button"
               aria-label="Account"
-              className={`${satoshi.className} flex h-12 cursor-pointer items-center gap-2.5 rounded-full bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917] transition-[translate] duration-150 active:translate-y-px`}
+              className={`${satoshi.className} flex h-12 cursor-pointer items-center gap-2.5 rounded-full border border-[var(--app-border)] bg-white py-1.5 pr-4 pl-1.5 text-[0.9375rem] font-medium text-[#1c1917] transition-[translate] duration-150 active:translate-y-px`}
             >
               <PersonAvatar
                 identity={chrome.viewer.email}
@@ -169,6 +207,34 @@ export function Topbar({
           </ProfileMenu>
         </div>
       </header>
+      <NotificationsDialog
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        swap={swapping}
+        newTeamIds={newTeamIds}
+        onInvite={(kind) => {
+          setInviting(kind);
+          swap(() => setInviteOpen(true));
+        }}
+      />
+      {/* No overlapping dialogs (MODAL_SWAP_MS): Notifications has closed
+          itself; Invite opens after it, and closing Invite brings
+          Notifications back. Kept mounted so it animates closed. */}
+      {inviting ? (
+        <InviteDialog
+          kind={inviting}
+          open={inviteOpen}
+          swap={swapping}
+          onOpenChange={(open) => {
+            if (open) return;
+            setInviteOpen(false);
+            swap(() => {
+              setInviting(null);
+              setNotificationsOpen(true);
+            });
+          }}
+        />
+      ) : null}
     </TooltipProvider>
   );
 }

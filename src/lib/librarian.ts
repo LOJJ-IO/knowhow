@@ -1,6 +1,6 @@
 import { backendError, backendFetch } from "@/lib/backend";
 
-/** The librarian and Knohow folders (ADR-0022). Titles on candidates and
+/** The librarian and Knohow folders (ADR-0028). Titles on candidates and
  *  proposals are read live from Google by the backend; nothing here stores
  *  them. */
 

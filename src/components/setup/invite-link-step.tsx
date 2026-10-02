@@ -86,7 +86,7 @@ export function InviteLinkStep({
       <div>
         <SetupHeading>How long should the link work?</SetupHeading>
         <SetupBody>You can turn it off at any time.</SetupBody>
-        <div className="mt-6 flex flex-wrap items-center gap-1.5">
+        <div className="mx-[2.5%] mt-6 flex flex-wrap items-center gap-1.5">
           {LIFETIMES.map((option) => (
             <ChoicePill
               key={option.value}

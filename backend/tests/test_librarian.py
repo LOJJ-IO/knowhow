@@ -1,4 +1,4 @@
-"""The librarian (ADR-0022): rules, the propose → confirm chain, folders, and
+"""The librarian (ADR-0028): rules, the propose → confirm chain, folders, and
 the privacy guarantees (no names stored before confirmation, Personal leaves
 nothing behind)."""
 
@@ -101,7 +101,7 @@ def test_workspace_files_are_always_company():
     from app.librarian.rules import classify_workspace
 
     # Shared only with a personal contact, or with nobody — still Company,
-    # because a Workspace account's files are the org's (ADR-0023).
+    # because a Workspace account's files are the org's (ADR-0029).
     assert classify_workspace(_file(perms=[_perm("mum@gmail.com")]), D).suggestion == LibrarianSuggestion.COMPANY
     assert classify_workspace(_file(), D).suggestion == LibrarianSuggestion.COMPANY
     # Company reasons are still kept as context.
@@ -227,7 +227,7 @@ def test_scan_stores_ids_and_counts_only(db, drive):
     assert result.suggested == 3
 
     rows = {c.file_id: c for c in db.execute(select(LibrarianCandidate)).scalars()}
-    # Every Workspace file defaults to Company now (ADR-0023) — no more
+    # Every Workspace file defaults to Company now (ADR-0029) — no more
     # personal/unsure guesses for an account the org already owns.
     assert rows["work"].suggestion == LibrarianSuggestion.COMPANY
     assert rows["holiday"].suggestion == LibrarianSuggestion.COMPANY
@@ -258,7 +258,7 @@ def test_personal_answer_leaves_no_trace_and_is_not_asked_again(db, drive):
     service.scan_member_drive(worker, db)
     holiday = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "holiday")).scalar_one()
 
-    # A Workspace file defaults to Company (ADR-0023), so calling it personal
+    # A Workspace file defaults to Company (ADR-0029), so calling it personal
     # goes against the suggestion and is asked once more before it counts.
     assert service.decide(worker, holiday.id, "personal", False, db) == {"result": "ask_again"}
     assert service.decide(worker, holiday.id, "personal", True, db) == {"result": "personal"}
@@ -310,7 +310,7 @@ def test_proposal_waits_for_lead_then_lands_in_team_folder(db, drive):
 
 def test_confirm_routes_to_the_collaborators_team(db, monkeypatch):
     """A file a Design member owns but shares with Sales lands in the Sales
-    folder — routed by who it's shared with, not who proposed it (ADR-0023)."""
+    folder — routed by who it's shared with, not who proposed it (ADR-0029)."""
     org, lead, worker, design = _org(db)  # worker is on Design
     sales = Team(id=uuid.uuid4(), org_id=org.id, name="Sales", team_leader_id=None)
     db.add(sales)

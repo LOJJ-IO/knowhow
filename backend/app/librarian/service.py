@@ -1,4 +1,4 @@
-"""The librarian (ADR-0022): go through a member's Drive, suggest which files
+"""The librarian (ADR-0028): go through a member's Drive, suggest which files
 are company work, let the member propose, let a lead confirm, and file the
 confirmed ones into Knohow folders.
 
@@ -129,7 +129,7 @@ def scan_member_drive(member: OrgMember, db: Session) -> ScanResult:
             if file_id in indexed or _file_hash(file_id) in marked_personal:
                 already += 1
                 continue
-            # A Workspace account's files are the organization's (ADR-0023):
+            # A Workspace account's files are the organization's (ADR-0029):
             # Company by default, no company-vs-personal quiz.
             verdict = classify_workspace(f, domain)
             if verdict is None:
@@ -294,7 +294,7 @@ def _member_team_ids(org_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> li
 
 
 def _route_team(org_id: uuid.UUID, proposer_id: uuid.UUID, file_meta: dict, db: Session) -> uuid.UUID | None:
-    """Which team folder a confirmed file belongs in (ADR-0023): the team the
+    """Which team folder a confirmed file belongs in (ADR-0029): the team the
     most of its org-domain collaborators are on. Falls back to the proposer's
     own team when the file's collaborators point nowhere in particular. Emails
     are mapped to teams here and never stored."""

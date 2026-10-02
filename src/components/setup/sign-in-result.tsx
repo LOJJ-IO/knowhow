@@ -2,15 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
+import { ErrorTip } from "@/components/brand/tooltip";
 import {
   BACKEND_API_URL,
   backendError,
   backendFetch,
   startAdminProof,
 } from "@/lib/backend";
-import { SETUP_CHOICE_CLASS } from "./shell";
+import {
+  ChoiceLabel,
+  SETUP_CHOICE_CLASS,
+  SUPER_ADMIN_DEFINITION,
+  SetupAction,
+  SetupBody,
+  SetupField,
+  SetupHeading,
+  SetupTerm,
+  clearSetupFieldError,
+  shakeSetupField,
+} from "./shell";
 
 /** What Google said on the way back: `?admin_proof=`, `?signup=personal`,
  *  `?invite=wrong_account`, `?link=`. Reading the result, clearing it from
@@ -24,7 +35,27 @@ export type SignInResult =
   | "personal"
   | "invite_wrong_account"
   | "link_linked"
-  | "link_already_linked";
+  | "link_already_linked"
+  | SignInError;
+
+/** A sign-in that failed on the backend (`?signin_error=`), shown as an X
+ *  screen instead of a raw JSON page (user 2026-09-29). */
+const SIGN_IN_ERRORS = [
+  "work_account_required",
+  "wrong_domain",
+  "link_expired",
+  "link_locked",
+  "link_not_found",
+  "other_organization",
+  "no_account",
+  "state_expired",
+  "error",
+] as const;
+export type SignInError = (typeof SIGN_IN_ERRORS)[number];
+
+export function isSignInError(result: SignInResult): result is SignInError {
+  return (SIGN_IN_ERRORS as readonly string[]).includes(result);
+}
 
 export function readSignInResult(): SignInResult | null {
   const params = new URLSearchParams(window.location.search);
@@ -37,13 +68,24 @@ export function readSignInResult(): SignInResult | null {
   const link = params.get("link");
   if (link === "linked") return "link_linked";
   if (link === "already_linked") return "link_already_linked";
+  const failed = params.get("signin_error");
+  SIGN_IN_DETAIL.value = params.get("detail");
+  if (failed)
+    return (SIGN_IN_ERRORS as readonly string[]).includes(failed)
+      ? (failed as SignInError)
+      : "error";
   return null;
 }
+
+/** `?detail=` from the same redirect, kept here because the URL is cleared
+ *  as soon as the result is read. */
+const SIGN_IN_DETAIL: { value: string | null } = { value: null };
 
 /** Drops the result from the URL so a reload doesn't show it again. */
 export function clearSignInResultFromUrl() {
   const url = new URL(window.location.href);
-  for (const key of ["admin_proof", "signup", "invite", "link"]) url.searchParams.delete(key);
+  for (const key of ["admin_proof", "signup", "invite", "link", "signin_error", "detail"])
+    url.searchParams.delete(key);
   window.history.replaceState(null, "", url);
 }
 
@@ -70,11 +112,21 @@ export function signInWithAnotherAccount() {
 export function SignInResultPanel({
   result,
   onDone,
+  onContinue,
+  organizationName,
 }: {
   result: SignInResult;
+  /** The organization's name, for the verified screen's sub-line. */
+  organizationName?: string;
   /** Closes the sheet. */
   onDone: () => void;
+  /** "Google didn't confirm" mid-setup: carry on with setup (the owner
+   *  question, ADR-0023) instead of jumping into the app. */
+  onContinue?: () => void;
 }) {
+  /** The org's domain on a wrong-domain failure; read before the URL is
+   *  cleared, so it's taken once at mount. */
+  const [detail] = useState(() => SIGN_IN_DETAIL.value);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
@@ -102,28 +154,31 @@ export function SignInResultPanel({
       setDone(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      shakeSetupField(nameRef.current);
     } finally {
       setSubmitting(false);
     }
   }
 
+  /** Never disabled (setup rule): an empty name shakes the field instead. */
+  function submitWorkspaceName() {
+    if (submitting) return;
+    if (!orgName.trim()) {
+      nameRef.current?.focus();
+      shakeSetupField(nameRef.current);
+      setError("Enter a workspace name.");
+      return;
+    }
+    void createPersonalOrg();
+  }
+
   // "done" — the signed-in screen isn't designed yet (user will describe it).
   if (done) return null;
 
-  const heading = (text: string) => (
-    <h2
-      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
-    >
-      {text}
-    </h2>
-  );
-  const body = (text: string) => (
-    <p
-      className={`${sohne.className} mt-6 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
-    >
-      {text}
-    </p>
-  );
+  // The setup shell's own heading and sub-line, so these screens share its
+  // indent and spacing (user, 2026-09-27).
+  const heading = (text: React.ReactNode) => <SetupHeading>{text}</SetupHeading>;
+  const body = (text: string) => <SetupBody>{text}</SetupBody>;
   const choices = (
     buttons: { label: string; onClick: () => void }[],
   ) => (
@@ -136,7 +191,7 @@ export function SignInResultPanel({
           className={SETUP_CHOICE_CLASS}
           onClick={b.onClick}
         >
-          {b.label}
+          <ChoiceLabel>{b.label}</ChoiceLabel>
         </button>
       ))}
     </div>
@@ -144,7 +199,7 @@ export function SignInResultPanel({
   const errorLine = error ? (
     <p
       aria-live="polite"
-      className={`${satoshi.className} m-0 mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
+      className={`${satoshi.className} m-0 mx-[2.5%] mt-3 text-[0.75rem] leading-[1.2rem] text-[#EA4335]`}
     >
       {error}
     </p>
@@ -155,9 +210,18 @@ export function SignInResultPanel({
       return (
         <div>
           <ResultMark kind="check" />
-          {heading("You’re verified as a Google Workspace Super Admin")}
-          {body("Google confirmed it. Your organization’s domain is now verified.")}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          {heading(
+            <>
+              You’re verified as a{" "}
+              <SetupTerm definition={SUPER_ADMIN_DEFINITION}>
+                Google Workspace Super Admin
+              </SetupTerm>
+            </>,
+          )}
+          {body(
+            `Google confirmed you manage ${organizationName ? `${organizationName}’s` : "your company’s"} Google accounts. That lets you connect your company’s Drive to Knohow.`,
+          )}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
     case "admin_not_verified":
@@ -170,21 +234,24 @@ export function SignInResultPanel({
           {body("You can keep using Knohow. You can invite your Super Admin later.")}
           {choices([
             { label: "Invite someone else", onClick: onDone },
-            {
-              label: "Continue to the app",
-              onClick: () => {
-                window.location.assign("/home");
-              },
-            },
+            onContinue
+              ? { label: "Continue", onClick: onContinue }
+              : {
+                  label: "Continue to the app",
+                  onClick: () => {
+                    window.location.assign("/home");
+                  },
+                },
           ])}
         </div>
       );
     case "admin_error":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("We couldn’t check with Google")}
           {body("Nothing changed. Try again in a moment.")}
-          {choices([{ label: "Try again", onClick: startAdminProof }])}
+          <SetupAction label="Try again" onClick={startAdminProof} />
         </div>
       );
     case "personal":
@@ -195,28 +262,32 @@ export function SignInResultPanel({
           <div>
             {heading("What should we call your workspace?")}
             {body("This is the name you'll see when you sign in.")}
-            <input
-              ref={nameRef}
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && orgName.trim()) void createPersonalOrg();
+            <ErrorTip
+              message={error}
+              onDismiss={() => {
+                setError("");
+                clearSetupFieldError(nameRef.current);
               }}
-              placeholder="Workspace name"
-              aria-label="Workspace name"
-              className={`${satoshi.className} mt-8 h-12 w-full rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white px-4 text-[1rem] text-[#1c1917] outline-none placeholder:text-[#1c1917]/40`}
-            />
-            <div className={`${satoshi.className} mt-3 flex flex-col gap-3`}>
-              <button
-                type="button"
-                disabled={submitting || !orgName.trim()}
-                className={SETUP_CHOICE_CLASS}
-                onClick={() => void createPersonalOrg()}
-              >
-                Continue
-              </button>
-            </div>
-            {errorLine}
+              className="mx-[2.5%] mt-6"
+            >
+              <SetupField
+                inputRef={nameRef}
+                value={orgName}
+                onChange={(e) => {
+                  setOrgName(e.target.value);
+                  clearSetupFieldError(nameRef.current);
+                  setError("");
+                }}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  submitWorkspaceName();
+                }}
+                placeholder="Workspace name"
+                aria-label="Workspace name"
+              />
+            </ErrorTip>
+            <SetupAction label="Continue" onClick={submitWorkspaceName} />
           </div>
         );
       return (
@@ -243,22 +314,73 @@ export function SignInResultPanel({
           {body(
             "You can sign in with either one and land in the same place.",
           )}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
     case "link_already_linked":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("That account belongs to someone else")}
           {body(
             "It is already connected to a different person, so we left it alone.",
           )}
-          {choices([{ label: "Continue", onClick: onDone }])}
+          <SetupAction label="Continue" onClick={onDone} />
         </div>
       );
+    case "work_account_required":
+    case "wrong_domain":
+    case "link_expired":
+    case "link_locked":
+    case "link_not_found":
+    case "other_organization":
+    case "no_account":
+    case "state_expired":
+    case "error": {
+      // Sign-in failures (user 2026-09-29): the same X, one heading, one
+      // line, back to Log In.
+      const copy: Record<SignInError, [string, string]> = {
+        work_account_required: [
+          "Join with your work account",
+          "Join links only work with a company Google account. Sign in with your work email.",
+        ],
+        wrong_domain: [
+          detail ? `That isn’t a ${detail} account` : "That’s the wrong account",
+          detail
+            ? `Sign in with your ${detail} work account to join.`
+            : "Sign in with your work account to join.",
+        ],
+        link_expired: ["This link has expired", "Ask whoever sent it for a new one."],
+        link_locked: ["This link is locked", "Ask whoever sent it to unlock it."],
+        link_not_found: [
+          "This link doesn’t work",
+          "Check the link, or ask whoever sent it for a new one.",
+        ],
+        other_organization: [
+          "That account is already in use",
+          "It belongs to another organization on Knohow. Sign in with a different account.",
+        ],
+        no_account: [
+          "There’s no Knohow account for that email",
+          "Ask your team for a join link, or sign up.",
+        ],
+        state_expired: ["That sign-in took too long", "Nothing changed. Try again."],
+        error: ["We couldn’t sign you in", "Nothing changed. Try again in a moment."],
+      };
+      const [title, line] = copy[result];
+      return (
+        <div>
+          <ResultMark kind="cross" />
+          {heading(title)}
+          {body(line)}
+          <SetupAction label="Back to log in" onClick={onDone} />
+        </div>
+      );
+    }
     case "invite_wrong_account":
       return (
         <div>
+          <ResultMark kind="cross" />
           {heading("That wasn’t the invited account")}
           {body("Sign in with the email address the invite was for.")}
           {choices([
@@ -273,42 +395,48 @@ export function SignInResultPanel({
 }
 
 /** Tick or X above a Google result, drawn in with the Transitions.dev success
- *  check (`.t-success-check` in globals.css). Mounts "out", flips "in" on the
- *  next frame so the appear animation runs. */
-function ResultMark({ kind }: { kind: "check" | "cross" }) {
+ *  check (`.t-success-check` in globals.css). Mounts "out" and flips "in"
+ *  once the card has finished growing (`--resize-dur`), so the two motions
+ *  play one after the other instead of on top of each other. */
+export function ResultMark({ kind }: { kind: "check" | "cross" }) {
   const [shown, setShown] = useState(false);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(frame);
+    const timer = window.setTimeout(() => setShown(true), 320);
+    return () => window.clearTimeout(timer);
   }, []);
 
+  // Centred above the heading; a white tick (or X) drawn inside a filled
+  // circle (user, 2026-09-27). The circle rides the wrapper's fade, rotate
+  // and bob; only the <path> strokes get the draw.
   return (
-    <span
-      className="t-success-check mb-5 text-[#1c1917]"
-      data-state={shown ? "in" : "out"}
-      aria-hidden="true"
-      // Longest path in the icon, rounded up (getTotalLength).
-      style={{ "--check-path-length": kind === "check" ? 30 : 23 } as React.CSSProperties}
-    >
-      <svg
-        viewBox="0 0 48 48"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="size-10"
+    <div className="mb-8 flex justify-center">
+      <span
+        className="t-success-check text-[#1c1917]"
+        data-state={shown ? "in" : "out"}
+        aria-hidden="true"
+        // Longest path in the icon, rounded up (getTotalLength).
+        style={{ "--check-path-length": kind === "check" ? 27 : 20 } as React.CSSProperties}
       >
-        {kind === "check" ? (
-          <path d="M14 25l7 7 13-15" />
-        ) : (
-          <>
-            <path d="M16 16l16 16" />
-            <path d="M32 16L16 32" />
-          </>
-        )}
-      </svg>
-    </span>
+        <svg viewBox="0 0 48 48" fill="none" className="size-14">
+          <circle cx="24" cy="24" r="24" fill="currentColor" />
+          <g
+            stroke="#fff"
+            strokeWidth={4}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {kind === "check" ? (
+              <path d="M15 25l6 6 12-13" />
+            ) : (
+              <>
+                <path d="M17 17l14 14" />
+                <path d="M31 17L17 31" />
+              </>
+            )}
+          </g>
+        </svg>
+      </span>
+    </div>
   );
 }

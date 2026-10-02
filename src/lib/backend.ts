@@ -68,6 +68,26 @@ export async function recordSetupStep(step: string): Promise<void> {
 }
 
 /** Google's admin check. A full round trip off-site, not a fetch. */
+/** Connect this person's own Drive: Google's consent screen, then back to
+ *  the Workspace screen (ADR-0024). Not the Super Admin's company-wide
+ *  connection, which is set up in Google Admin. */
+export function startDriveConsent() {
+  if (!BACKEND_API_URL) return;
+  // External origin (the backend), not a Next.js route.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(`${BACKEND_API_URL}/auth/personal-oauth/start`);
+}
+
+/** Connect the Drive of a personal account linked to this person (ADR-0025). */
+export function startLinkedDriveConsent(email: string) {
+  if (!BACKEND_API_URL) return;
+  // External origin (the backend), not a Next.js route.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+  window.location.assign(
+    `${BACKEND_API_URL}/auth/linked-drive/start?email=${encodeURIComponent(email)}`,
+  );
+}
+
 export function startAdminProof() {
   if (!BACKEND_API_URL) return;
   // External origin (the backend), not a Next.js route.

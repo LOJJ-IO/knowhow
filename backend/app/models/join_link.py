@@ -36,5 +36,8 @@ class JoinLink(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Set when the owner kills the link. People who already joined stay in.
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set while the link is locked: it stops letting anyone in, but it is the
+    # same link, so unlocking brings it back without sending a new one out.
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = created_at_col()

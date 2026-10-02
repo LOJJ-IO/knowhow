@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 
 import { AppShell } from "@/components/app/app-shell";
+import { AppToastProvider } from "@/components/app/app-toasts";
 import { AppSessionProvider } from "@/components/app/session";
+import { UpdatesProvider } from "@/components/app/updates";
 
 export const metadata: Metadata = {
   title: "Knohow",
@@ -16,7 +18,11 @@ export const metadata: Metadata = {
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <AppSessionProvider>
-      <AppShell>{children}</AppShell>
+      <AppToastProvider>
+        <UpdatesProvider>
+          <AppShell>{children}</AppShell>
+        </UpdatesProvider>
+      </AppToastProvider>
     </AppSessionProvider>
   );
 }

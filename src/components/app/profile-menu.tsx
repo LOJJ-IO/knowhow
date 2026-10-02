@@ -14,6 +14,7 @@ import {
   MorphIcon,
   SettingsIcon,
 } from "@/components/app/nav-morph";
+import { MODAL_SWAP_MS } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { ManageAccountsDialog } from "@/components/app/manage-accounts-dialog";
 import { SettingsDialog } from "@/components/app/settings-dialog";
@@ -51,6 +52,11 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
    *  nothing needs it until someone goes looking for another account. */
   const [accounts, setAccounts] = useState<RememberedOrg[] | null>(null);
   const [open, setOpen] = useState(false);
+  /** Switch accounts is showing beside the menu. */
+  const [subOpen, setSubOpen] = useState(false);
+  /** Clicking away with both open: the menu (opened first) closes first,
+   *  then Switch accounts (user 2026-09-29). */
+  const [closingRoot, setClosingRoot] = useState(false);
 
   useEffect(() => {
     if (!open || accounts) return;
@@ -68,7 +74,26 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <Menu.Root open={open} onOpenChange={setOpen}>
+      <Menu.Root
+        open={open}
+        onOpenChange={(next, details) => {
+          if (
+            !next &&
+            subOpen &&
+            (details.reason === "outside-press" ||
+              details.reason === "focus-out")
+          ) {
+            if (closingRoot) return;
+            setClosingRoot(true);
+            window.setTimeout(() => {
+              setOpen(false);
+              setClosingRoot(false);
+            }, MODAL_SWAP_MS);
+            return;
+          }
+          setOpen(next);
+        }}
+      >
         <Menu.Trigger render={children as React.ReactElement} />
         <Menu.Portal>
           <Menu.Positioner
@@ -77,10 +102,19 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
             sideOffset={8}
             className={LAYER}
           >
-            <Menu.Popup className={cn(satoshi.className, POPUP)}>
+            <Menu.Popup
+              className={cn(satoshi.className, POPUP)}
+              // Closes into its line (the .app-modal close) while Switch
+              // accounts stays up.
+              style={
+                closingRoot
+                  ? { clipPath: "inset(calc(50% - 0.5px) 0 round 28px)" }
+                  : undefined
+              }
+            >
               <Menu.Group>
                 <Menu.GroupLabel className={LABEL}>Accounts</Menu.GroupLabel>
-                <Menu.SubmenuRoot>
+                <Menu.SubmenuRoot onOpenChange={setSubOpen}>
                   <Menu.SubmenuTrigger
                     onMouseEnter={() => setHovered("accounts")}
                     onMouseLeave={() => setHovered(null)}

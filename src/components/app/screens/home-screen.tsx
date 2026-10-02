@@ -1,15 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
+import { Badge } from "@/components/app/badge";
 import { Button } from "@/components/app/button";
 import { CaretIcon } from "@/components/app/nav-morph";
-import {
-  ManageTeamsButton,
-  ReplayUpdatesButton,
-} from "@/components/app/screens/home-actions";
+import { ManageTeamsButton } from "@/components/app/screens/home-actions";
 import { AppPage } from "@/components/app/shell";
 import { EmptyState } from "@/components/app/empty-state";
 import {
@@ -18,67 +17,32 @@ import {
   type FlowNode,
 } from "@/components/app/flow-canvas";
 import { useSession } from "@/components/app/session";
+import { useUpdates } from "@/components/app/updates";
+import { InviteDialog } from "@/components/app/invite-dialog";
+import { ResultMark } from "@/components/setup/sign-in-result";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
-import {
-  fetchOrgOverview,
-  markDashboardSeen,
-  type ChangeEvent,
-  type OrgOverview,
-  type OverviewMember,
-} from "@/lib/organization";
+import { personColor } from "@/lib/identity/composition";
+import { PALETTE } from "@/lib/identity/palette";
+import { type OverviewMember } from "@/lib/organization";
 import { LIMITED_ACCESS_MESSAGE } from "@/lib/backend";
+import { appEntryUrl } from "@/lib/origins";
 import { cn } from "@/lib/utils";
 
 /** Home (`/home`, renamed from "Dashboard" by the user 2026-09-22): the org
  *  chart and oversight in one screen.
  *
  *  The owner sits at the top and the teams spread beneath them, which is the
- *  chart. Recent changes play as pulses on the connectors when you press
- *  Recent updates — not as badges or coloured borders on the cards (user
- *  2026-09-26). Quiet cards are the correct resting state.
+ *  chart. Every connector pulses, all the time, on its own: the pulses are
+ *  the chart being alive, not a report of changes (user 2026-09-27). What
+ *  changed lives in Notifications; a team with updates you haven't seen
+ *  carries a quiet "New" beside its name until you've looked.
  *
  *  `/org-chart` and `/oversight` are gone; this replaced both.
  *
  *  Everything here is real. Changes come from the backend's audit-log feed,
- *  measured against when this person last opened Home, and a
- *  connector only pulses for a team that actually changed. Quiet is the
- *  correct state when nothing has happened. */
-
-type RecentWindow = { label: string | null; teamIds: Set<string> };
-
-const NO_RECENT: RecentWindow = { label: null, teamIds: new Set() };
-
-/** The narrowest window that holds something, and which teams changed in it. */
-function recentWindow(overview: OrgOverview | null): RecentWindow {
-  if (!overview) return NO_RECENT;
-  const now = Date.now();
-  for (const [hours, label] of RECENT_WINDOWS) {
-    const cutoff = now - hours * 3600_000;
-    const teamIds = new Set(
-      // The week-long feed, not the since-you-last-looked one: the latter is
-      // empty on every visit after the first, which is why the chart had no
-      // pulses at all (user 2026-09-22).
-      Object.entries(overview.recentChangesByTeam)
-        .filter(([, change]) =>
-          change.events.some((event) => Date.parse(event.at) >= cutoff),
-        )
-        .map(([teamId]) => teamId),
-    );
-    if (teamIds.size) return { label, teamIds };
-  }
-  return NO_RECENT;
-}
-
-/** Widening spans, in hours, with the words the button uses for them. */
-const RECENT_WINDOWS: [number, string][] = [
-  [1, "last hour"],
-  [6, "last 6 hours"],
-  [12, "last 12 hours"],
-  [24, "last day"],
-  [24 * 7, "last week"],
-  [24 * 365 * 20, "whole history"],
-];
+ *  measured against when this person last opened Home; they drive the New
+ *  chips, not the pulses. */
 
 const OWNER_NODE = "owner";
 /** Both cards run 30% bigger than the first pass (user 2026-09-22) — width,
@@ -88,17 +52,13 @@ const OWNER_W = 348;
 const TEAM_W = 302;
 
 export function HomeScreen() {
-  const { chrome, me } = useSession();
-  const [overview, setOverview] = useState<OrgOverview | null>(null);
-  const [error, setError] = useState("");
+  const { me } = useSession();
+  const { overview, error, signedOut, unseen, clearAll, clearTeam, refresh } =
+    useUpdates();
   const [expanded, setExpanded] = useState<string[]>([]);
-  /** The pulses run on their own; this stops them, and bumping `replay`
-   *  restarts every one of them from the top. */
-  const [playing, setPlaying] = useState(true);
-  const [replay, setReplay] = useState(0);
-  /** True while a replay is actually travelling, which is what the button's
-   *  green is tied to. */
-  const [running, setRunning] = useState(false);
+
+  // Leaving Home counts as having seen its updates (user 2026-09-27).
+  useEffect(() => clearAll, [clearAll]);
   /** Which team's caret the pointer is on. */
   const [caret, setCaret] = useState<string | null>(null);
 
@@ -107,47 +67,12 @@ export function HomeScreen() {
   const awaitingApproval =
     me.standing !== "approved" && !me.is_founding_member;
 
-  useEffect(() => {
-    if (awaitingApproval) return;
-    let cancelled = false;
-    fetchOrgOverview(chrome.organizationId)
-      .then((result) => {
-        if (cancelled) return;
-        setOverview(result);
-        // Stamp after this visit has its data so the next visit's "since you
-        // looked" feed starts clean.
-        void markDashboardSeen(chrome.organizationId);
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chrome.organizationId, awaitingApproval]);
-
   const owner = overview?.members.find((m) => m.id === overview.ownerMemberId);
+  const [invitingOwner, setInvitingOwner] = useState(false);
   const membersById = useMemo(
     () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
     [overview],
   );
-
-  /** What "recent" means today. The button plays the **last hour**; when
-   *  nothing happened in it, the window widens — 6 hours, 12, a day, a week —
-   *  and stops at the first span that holds something (user 2026-09-22). A
-   *  replay of an empty hour would say nothing; a replay of everything ever
-   *  would say too much.
-   *
-   *  Computed when the data arrives and again on each press, not in a memo:
-   *  it reads the clock, and a memo that reads the clock is a memo that lies
-   *  as soon as time passes.
-   */
-  const [replayWindow, setReplayWindow] = useState<RecentWindow | null>(null);
-  /** The window the chart is currently showing: the one the last press chose,
-   *  or the narrowest non-empty one for the data on screen. `useSyncExternal`
-   *  isn't needed — reading the clock during render is fine here because the
-   *  result is only ever a starting point, and a press recomputes it. */
-  const recent = replayWindow ?? recentWindow(overview);
 
   const { nodes, edges } = useMemo(() => {
     if (!overview) return { nodes: [] as FlowNode[], edges: [] as FlowEdge[] };
@@ -164,14 +89,10 @@ export function HomeScreen() {
           w: TEAM_W,
         })),
       ],
-      edges: teams.map((team) => ({
-        from: OWNER_NODE,
-        to: team.id,
-        // Only a team that changed **inside the window being played**.
-        active: recent.teamIds.has(team.id),
-      })),
+      // Every connector pulses, independent of updates (user 2026-09-27).
+      edges: teams.map((team) => ({ from: OWNER_NODE, to: team.id, active: true })),
     };
-  }, [overview, recent]);
+  }, [overview]);
 
   if (awaitingApproval)
     return (
@@ -186,15 +107,39 @@ export function HomeScreen() {
       </AppPage>
     );
 
-  if (error)
+  // Shaped like the sign-in card's failure screens (the drawn X, a plain
+  // heading, one next step), not a raw error (user 2026-09-27). Only when
+  // there's nothing to show: a failed background re-read keeps the chart.
+  if (signedOut || (error && !overview))
     return (
       <AppPage>
-        <Panel>
-          <EmptyState
-            icon="monitoring"
-            title="Couldn't load your organization"
-            description={error}
-          />
+        <Panel className="flex flex-1 items-center justify-center p-6">
+          <div className="flex max-w-[26rem] flex-col items-center text-center">
+            <ResultMark kind="cross" />
+            <h2
+              className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+            >
+              {signedOut
+                ? "You’ve been signed out"
+                : "We couldn’t load your organization"}
+            </h2>
+            <p
+              className={`${sohne.className} mt-3 text-[0.95rem] leading-[1.6] text-[#1c1917]`}
+            >
+              {signedOut
+                ? "Log in again to pick up where you left off."
+                : "Nothing changed. Try again in a moment."}
+            </p>
+            <Button
+              size="lg"
+              className="mt-8"
+              onClick={() =>
+                signedOut ? window.location.assign(appEntryUrl()) : refresh()
+              }
+            >
+              {signedOut ? "Log in again" : "Try again"}
+            </Button>
+          </div>
         </Panel>
       </AppPage>
     );
@@ -233,60 +178,76 @@ export function HomeScreen() {
           <div className="relative flex min-h-0 flex-1 flex-col">
             <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
               <ManageTeamsButton teams={overview.teams} />
-              <ReplayUpdatesButton
-                playing={playing}
-                running={running}
-                windowLabel={recent.label}
-                onToggle={() => {
-                  if (playing) {
-                    setPlaying(false);
-                    setRunning(false);
-                    return;
-                  }
-                  // Play means play it again, from the beginning.
-                  // Re-read the clock: an hour may have passed since the
-                  // screen loaded.
-                  const window_ = recentWindow(overview);
-                  setReplayWindow(window_);
-                  setPlaying(true);
-                  setReplay((n) => n + 1);
-                  setRunning(true);
-                  // One pass: each edge is staggered by 900ms and a pulse
-                  // travels for 680. When the last one lands the button
-                  // drops its green and its Pause (user 2026-09-22).
-                  window.setTimeout(
-                    () => {
-                      setRunning(false);
-                      setPlaying(false);
-                    },
-                    Math.max(window_.teamIds.size - 1, 0) * 900 + 1200,
-                  );
-                }}
-              />
             </div>
             <FlowCanvas
               nodes={nodes}
-              edges={
-                playing ? edges : edges.map((e) => ({ ...e, active: false }))
-              }
-              pulseKey={replay}
+              edges={edges}
               spread
               renderNode={(node, { selected }) => {
                 if (node.id === OWNER_NODE) {
-                  const name =
-                    owner?.displayName ?? owner?.email ?? chrome.viewer.name;
+                  // Nobody owns the org yet: an empty seat, never the
+                  // viewer's name (user 2026-09-27: a founder who said "No"
+                  // was shown at the top).
+                  const claimant = overview.pendingOwner;
+                  // Someone claimed the seat: shown in it, marked as waiting
+                  // on the founder / a Super Admin, and no Invite (user
+                  // 2026-09-27).
+                  if (!owner && claimant) {
+                    const claimantName =
+                      claimant.displayName ?? claimant.email;
+                    return (
+                      <Card selected={selected}>
+                        <div className="flex items-center gap-[13px] p-[9px]">
+                          <PersonAvatar
+                            identity={claimant.email}
+                            label={claimantName}
+                            size={52}
+                          />
+                          <span className="min-w-0 text-left">
+                            <CardTitle>{claimantName}</CardTitle>
+                            <CardMeta>Owner · awaiting confirmation</CardMeta>
+                          </span>
+                        </div>
+                      </Card>
+                    );
+                  }
+                  if (!owner)
+                    return (
+                      <Card selected={selected}>
+                        <div className="flex items-center gap-[13px] p-[9px]">
+                          <span
+                            aria-hidden
+                            className="size-[52px] shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+                          />
+                          <span className="min-w-0 flex-1 text-left">
+                            <CardTitle>No owner yet</CardTitle>
+                            <CardMeta>Owner</CardMeta>
+                          </span>
+                          {/* data-ui keeps the canvas from treating this as a drag. */}
+                          <Button
+                            data-ui
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setInvitingOwner(true)}
+                          >
+                            Invite
+                          </Button>
+                        </div>
+                      </Card>
+                    );
+                  const name = owner.displayName ?? owner.email;
                   return (
                     <Card selected={selected}>
-                      <div className="flex items-center gap-[13px] p-[13px]">
+                      <div className="flex items-center gap-[13px] p-[9px]">
                         <PersonAvatar
-                          identity={owner?.email ?? chrome.viewer.email}
+                          identity={owner.email}
                           label={name}
                           size={52}
                         />
                         <span className="min-w-0 text-left">
                           <CardTitle>{name}</CardTitle>
                           <CardMeta>
-                            {owner?.id === me.id ? "Owner · you" : "Owner"}
+                            {owner.id === me.id ? "Owner · you" : "Owner"}
                           </CardMeta>
                         </span>
                       </div>
@@ -296,22 +257,42 @@ export function HomeScreen() {
 
                 const team = overview.teams.find((t) => t.id === node.id);
                 if (!team) return null;
-                const change = overview.changesByTeam[team.id];
                 const open = expanded.includes(team.id);
 
                 return (
-                  <Card selected={selected}>
-                    <div className="flex items-center gap-[13px] p-[13px]">
+                  <Card
+                    // No black outline when a team card is clicked (user
+                    // 2026-09-29).
+                    selected={false}
+                  >
+                    {/* An inset panel, so the line under it curves up at the
+                        corners with the card (like the reference) instead of
+                        cutting straight across. Drawn as a shadow so opening
+                        doesn't shift anything by a pixel. */}
+                    <div
+                      className={cn(
+                        "flex items-center gap-[13px] rounded-[var(--card-inner-radius)] p-[9px] transition-shadow duration-200",
+                        open && "shadow-[0_0_0_1px_var(--app-border)]",
+                      )}
+                    >
                       <TeamIcon name={team.name} size={52} />
                       <span className="min-w-0 flex-1 text-left">
                         <CardTitle>
                           <span className="truncate">{team.name}</span>
+                          {unseen[team.id] ? <NewBadge /> : null}
                         </CardTitle>
-                        <CardMeta>
-                          {team.memberIds.length === 1
-                            ? "1 member"
-                            : `${team.memberIds.length} members`}
-                        </CardMeta>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <MemberStack
+                            members={team.memberIds
+                              .map((id) => membersById.get(id))
+                              .filter((m): m is OverviewMember => Boolean(m))}
+                          />
+                          <CardMeta>
+                            {team.memberIds.length === 1
+                              ? "1 member"
+                              : `${team.memberIds.length} members`}
+                          </CardMeta>
+                        </span>
                       </span>
                       {/* data-ui keeps the canvas from treating this as a drag. */}
                       <Button
@@ -326,13 +307,15 @@ export function HomeScreen() {
                             ? `Hide ${team.name} members`
                             : `Show ${team.name} members`
                         }
-                        onClick={() =>
+                        onClick={() => {
+                          // Looking inside a team counts as seeing its news.
+                          clearTeam(team.id);
                           setExpanded((current) =>
                             current.includes(team.id)
                               ? current.filter((id) => id !== team.id)
                               : [...current, team.id],
-                          )
-                        }
+                          );
+                        }}
                         className="size-9"
                       >
                         {/* Leans down under the pointer; turns over while the
@@ -358,8 +341,6 @@ export function HomeScreen() {
                           .map((id) => membersById.get(id))
                           .filter((m): m is OverviewMember => Boolean(m))}
                         leaderId={team.leaderId}
-                        events={change?.events ?? []}
-                        membersById={membersById}
                       />
                     ) : null}
                   </Card>
@@ -369,26 +350,28 @@ export function HomeScreen() {
           </div>
         )}
       </div>
+      <InviteDialog
+        kind="owner"
+        open={invitingOwner}
+        onOpenChange={setInvitingOwner}
+      />
     </AppPage>
   );
 }
 
-/** What the caret opens: who is in the team, then what changed in it. The
+/** What the caret opens: who is in the team. What changed in it lives in
+ *  Notifications only; the card just carries New (user 2026-09-27). The
  *  canvas measures node heights, so opening this re-routes the connectors on
  *  its own. */
 function TeamDetail({
   members,
   leaderId,
-  events,
-  membersById,
 }: {
   members: OverviewMember[];
   leaderId: string | null;
-  events: ChangeEvent[];
-  membersById: Map<string, OverviewMember>;
 }) {
   return (
-    <div className="border-t border-[var(--app-border)] px-[13px] py-[13px]">
+    <div className="px-[9px] pt-[13px] pb-[9px]">
       {members.length === 0 ? (
         <p
           className={`${satoshi.className} m-0 px-1 text-[0.975rem] leading-[1.5] text-[var(--app-dim)]`}
@@ -404,93 +387,36 @@ function TeamDetail({
                 label={member.displayName ?? member.email}
                 size={29}
               />
-              <span
-                className={`${satoshi.className} min-w-0 flex-1 truncate text-[1.0625rem] leading-[1.4] text-[#1c1917]`}
-              >
-                {member.displayName ?? member.email}
-              </span>
-              {member.id === leaderId ? (
+              {/* Lead sits right after the name, like New after a team's
+                  (user 2026-09-27). */}
+              <span className="flex min-w-0 flex-1 items-center gap-1.5">
                 <span
-                  className={`${satoshi.className} inline-flex shrink-0 items-center rounded-[5px] bg-[var(--app-muted)] px-1.5 py-[0.15rem] text-[0.6875rem] font-medium text-[var(--app-dim)]`}
+                  className={`${satoshi.className} min-w-0 truncate text-[1.0625rem] leading-[1.4] text-[#1c1917]`}
                 >
-                  Lead
+                  {member.displayName ?? member.email}
                 </span>
-              ) : null}
+                {member.id === leaderId ? <Badge>Lead</Badge> : null}
+                {member.isSuperAdmin ? <Badge>Super Admin</Badge> : null}
+              </span>
             </li>
           ))}
         </ul>
       )}
 
-      {events.length > 0 ? (
-        <ul className="m-0 mt-2.5 flex list-none flex-col gap-1 border-t border-[var(--app-border)] p-0 pt-2.5">
-          {events.map((event) => (
-            <li
-              key={event.id}
-              className={`${satoshi.className} flex items-baseline gap-2 text-[0.975rem] leading-[1.5]`}
-            >
-              <span className="min-w-0 flex-1 truncate text-[#1c1917]">
-                {describe(event, membersById)}
-              </span>
-              <span className="shrink-0 text-[var(--app-dim)]">
-                {relative(event.at)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
     </div>
   );
 }
 
-/** Audit action types read as machine strings. This turns the ones the app
- *  actually produces into a sentence, and falls back to a tidied version of
- *  the raw type for anything new — a feed that counts every action type must
- *  not render blanks for the ones it hasn't met yet. */
-const ACTIONS: Record<string, string> = {
-  "org_chart.team.created": "Team created",
-  "org_chart.team.edited": "Team renamed",
-  "org_chart.team.deleted": "Team deleted",
-  "org_chart.team.leader_assigned": "Lead assigned",
-  "org_chart.membership.upserted": "Someone joined",
-  "org_chart.membership.removed": "Someone left",
-  "org_chart.member_offboarded": "Member offboarded",
-  "offboard.completed": "Offboarding completed",
-  "transfer_batch.created": "Transfer planned",
-  "transfer_batch.executed": "Ownership moved",
-  "transfer_batch.reversed": "Transfer reversed",
-  "sharing.file_created_handled": "Document created",
-  "sharing.suggested_share_created": "Access suggested",
-  "sharing.suggested_share_confirmed": "Access granted",
-  "sharing.reassignment_requested": "Ownership requested",
-  "sharing.reassignment_confirmed": "Ownership reassigned",
-};
-
-function describe(
-  event: ChangeEvent,
-  membersById: Map<string, OverviewMember>,
-): string {
-  const what =
-    ACTIONS[event.action] ??
-    event.action.split(".").slice(-1)[0].replace(/_/g, " ");
-  const actor = event.actorMemberId
-    ? membersById.get(event.actorMemberId)
-    : undefined;
-  const who = actor?.displayName ?? actor?.email;
-  return who ? `${what} · ${who}` : what;
-}
-
-function relative(iso: string): string {
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
+/** "New", beside a team's name, while it has updates you haven't seen
+ *  (user 2026-09-27; the chip from 2026-09-22, removed in 4ee5629 and back).
+ *  A muted chip in the app's grey with 5px corners, measured off the user's
+ *  reference then. "Lead" beside a member's name is the same chip. */
+function NewBadge() {
+  return <Badge>New</Badge>;
 }
 
 /** A card on the canvas. Resting, or selected (you clicked it). Change
- *  highlighting lives on connector pulses via Recent updates, not on the
- *  card border (user 2026-09-26). */
+ *  news is a "New" chip beside the team's name, not the card border. */
 function Card({
   selected,
   children,
@@ -501,7 +427,9 @@ function Card({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-[14px] bg-white transition-shadow duration-200",
+        // Outer radius = inner panel radius + the 4px inset, so the two
+        // curves stay parallel.
+        "flex flex-col rounded-[calc(var(--card-inner-radius)+4px)] bg-white p-1 transition-shadow duration-200 [--card-inner-radius:12px]",
         selected
           ? "shadow-[0_0_0_1.5px_#1c1917,0_2px_10px_rgba(0,0,0,0.05)]"
           : "shadow-[0_0_0_1px_var(--app-border),0_1px_3px_rgba(0,0,0,0.04)]",
@@ -520,6 +448,61 @@ function CardTitle({ children }: { children: React.ReactNode }) {
       {children}
     </span>
   );
+}
+
+/** A team card's people, overlapped in front of its member count like Manage
+ *  teams' stack (user 2026-09-27): three at most, then a fourth circle with
+ *  only a plus. The three are picked so no two share or neighbour a colour on
+ *  the palette wheel; a person's colour is theirs everywhere, so it's who is
+ *  shown that changes, never their colour. */
+function MemberStack({ members }: { members: OverviewMember[] }) {
+  if (members.length === 0) return null;
+  const shown = distinctColours(members, 3);
+  return (
+    <span className="flex shrink-0 items-center">
+      {shown.map((member, i) => (
+        <PersonAvatar
+          key={member.id}
+          identity={member.email}
+          label={member.displayName ?? member.email}
+          size={20}
+          className={i === 0 ? "" : "-ml-1.5 ring-2 ring-white"}
+        />
+      ))}
+      {members.length > 3 ? (
+        <span
+          aria-hidden
+          className="-ml-1.5 grid size-5 shrink-0 place-items-center rounded-full bg-[var(--app-active)] text-[#1c1917] ring-2 ring-white"
+        >
+          <Plus className="size-3" strokeWidth={2.5} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/** Up to `count` members whose avatar colours are furthest apart: first
+ *  people at least two steps apart on the wheel, then merely different, then
+ *  whoever is left. */
+function distinctColours(members: OverviewMember[], count: number) {
+  const size = PALETTE.length;
+  const hue = (m: OverviewMember) =>
+    PALETTE.indexOf(personColor(m.email) as (typeof PALETTE)[number]);
+  const apart = (a: number, b: number) => {
+    const d = Math.abs(a - b) % size;
+    return Math.min(d, size - d);
+  };
+  const picked: OverviewMember[] = [];
+  for (const minGap of [2, 1, 0]) {
+    for (const member of members) {
+      if (picked.length === count) return picked;
+      if (picked.includes(member)) continue;
+      if (picked.every((p) => apart(hue(p), hue(member)) >= minGap)) {
+        picked.push(member);
+      }
+    }
+  }
+  return picked;
 }
 
 function CardMeta({ children }: { children: React.ReactNode }) {

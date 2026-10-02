@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.activity.reconciliation import reconcile_organization
 from app.activity.watch_channels import renew_expiring_channels
-from app.auth.delegation import check_delegation
+from app.auth.delegation import check_delegation, recheck_delegation
 from app.db import SessionLocal
 from app.demo.service import send_due_recovery_emails
 from app.logging_config import get_logger
@@ -104,6 +104,25 @@ def check_pending_delegations() -> None:
         db.close()
 
 
+def recheck_approved_delegations() -> None:
+    """The other direction: an approved grant can be removed on Google's
+    side (Admin console, deleted key). Demoted to pending when Google
+    refuses, so the app shows it without anyone opening Notifications."""
+    db = SessionLocal()
+    try:
+        org_ids = db.execute(
+            select(DelegationGrant.organization_id).where(DelegationGrant.status == DelegationStatus.APPROVED)
+        ).scalars().all()
+        for org_id in org_ids:
+            try:
+                if not recheck_delegation(org_id, db, throttle=False):
+                    logger.warning("jobs.delegation_lost", org_id=str(org_id))
+            except Exception:
+                logger.exception("jobs.delegation_recheck_failed", org_id=str(org_id))
+    finally:
+        db.close()
+
+
 def run_demo_recovery_emails() -> None:
     """Abandoned Book a Demo — one Resend after the configured idle window."""
     db = SessionLocal()
@@ -135,6 +154,9 @@ def create_scheduler() -> BackgroundScheduler:
     )
     scheduler.add_job(
         check_pending_delegations, "interval", minutes=5, id="delegation_detection", replace_existing=True
+    )
+    scheduler.add_job(
+        recheck_approved_delegations, "interval", minutes=5, id="delegation_recheck", replace_existing=True
     )
     scheduler.add_job(
         expire_stale_pending_state, "interval", hours=12, id="expire_stale_pending_state", replace_existing=True

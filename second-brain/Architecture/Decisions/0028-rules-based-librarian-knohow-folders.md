@@ -7,7 +7,7 @@ updated: 2026-09-27
 related: ["[[Proposal-Ready-Plan]]", "[[FEAT-drive-file-classification]]", "[[UI-Consistency-Rules]]", "[[0001-mocked-data-first-prototype]]"]
 ---
 
-# ADR-0022: Rules-based librarian, Knohow-only folders, agent-designed screens
+# ADR-0028: Rules-based librarian, Knohow-only folders, agent-designed screens
 
 ## Status
 `active` (user, 2026-09-27, to get BCW to a paid pilot fast)

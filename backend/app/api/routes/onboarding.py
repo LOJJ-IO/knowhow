@@ -11,12 +11,15 @@ from app.api.routes.auth import (  # reuse: same cookie contract as login
     set_session_cookies,
     signup_redirect,
 )
+from app.auth.delegation import recheck_delegation
 from app.auth.identity import start_link_account_for_pending_personal
 from app.auth.pkce import InvalidOAuthState
 from app.models.invitation import InvitationKind
 from app.models.org_member import OrgMember
+from app.onboarding.tasks import decide_owner_claim, pending_tasks
 from app.onboarding.service import (
     add_member,
+    claim_pending_owner,
     decode_pending_personal_signup_token,
     approve_member,
     list_invitations,
@@ -40,6 +43,7 @@ from app.onboarding.service import (
     live_join_link,
     resolve_join_link_preview,
     revoke_join_link,
+    set_join_link_locked,
     record_setup_step,
     start_signup,
 )
@@ -155,6 +159,27 @@ def revoke_join_link_route(
         return {"revoked": revoke_join_link(org_id, member, db)}
     except PermissionError as exc:
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+class JoinLinkLockRequest(BaseModel):
+    locked: bool
+
+
+@router.patch("/organizations/{org_id}/join-link")
+def lock_join_link_route(
+    org_id: uuid.UUID,
+    body: JoinLinkLockRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """Lock or unlock the live link without replacing it."""
+    try:
+        link = set_join_link_locked(org_id, body.locked, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {"locked": link.locked_at is not None, "url": join_link_url(link)}
 
 
 class SetupStepRequest(BaseModel):
@@ -418,6 +443,20 @@ class JoinPlacementRequest(BaseModel):
     claim_owner: bool = False
 
 
+@router.post("/organizations/{org_id}/owner-claim")
+def owner_claim_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    """The founder answered "Yes" to "Do you sit at the top?": a pending
+    claim, same as a joiner's, not an instant grant (ADR-0021 / 0023)."""
+    try:
+        return {"owner_claim": claim_pending_owner(org_id, member, db)}
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
 @router.post("/organizations/{org_id}/join-placement")
 def join_placement_route(
     org_id: uuid.UUID,
@@ -439,6 +478,41 @@ def join_placement_route(
         raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+
+@router.get("/organizations/{org_id}/tasks")
+def tasks_route(
+    org_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> list[dict]:
+    """What this member still has to do, for Notifications (ADR-0026)."""
+    try:
+        if member.organization_id == org_id:
+            recheck_delegation(org_id, db)
+        return pending_tasks(org_id, member, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
+class OwnerClaimDecisionRequest(BaseModel):
+    approve: bool
+
+
+@router.post("/organizations/{org_id}/owner-claim/decision")
+def owner_claim_decision_route(
+    org_id: uuid.UUID,
+    body: OwnerClaimDecisionRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    try:
+        chart = decide_owner_claim(org_id, member, body.approve, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    return {"owner_member_id": str(chart.owner_member_id) if chart.owner_member_id else None}
 
 
 @router.get("/organizations/{org_id}/team-join-requests")

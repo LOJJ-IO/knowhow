@@ -1,5 +1,7 @@
+import time
 import uuid
 from datetime import datetime, timezone
+from urllib.parse import urlencode
 
 from dataclasses import dataclass, field
 
@@ -128,11 +130,20 @@ class DelegationSetup:
 
     client_id: str
     scopes: list[str]
-    admin_console_url: str = ADMIN_CONSOLE_DELEGATION_URL
 
     @property
     def scopes_csv(self) -> str:
         return ",".join(self.scopes)
+
+    @property
+    def admin_console_url(self) -> str:
+        # Opens Admin's "Add a new client ID" dialog prefilled. Undocumented
+        # by Google (used by its own create-service-account tool), so the
+        # guide still shows both values to copy by hand.
+        query = urlencode(
+            {"overwriteClientId": "true", "clientIdToAdd": self.client_id, "clientScopeToAdd": self.scopes_csv}
+        )
+        return f"{ADMIN_CONSOLE_DELEGATION_URL}?{query}"
 
 
 def delegation_setup() -> DelegationSetup:
@@ -178,6 +189,69 @@ def _drive_call_works(subject: str) -> bool:
     except Exception as exc:
         raise DelegationCheckError(str(exc)) from exc
     return True
+
+
+def _token_refused(subject: str, scopes: list[str]) -> bool:
+    """True when Google (or our own key) says no to an impersonated token:
+    the client ID was removed in the Admin console, a scope was dropped, the
+    service account key was deleted or is missing. Transport errors raise
+    DelegationCheckError — they aren't a verdict."""
+    try:
+        info = load_service_account_info()
+        credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes).with_subject(subject)
+    except (OSError, ValueError, KeyError):
+        return True
+    try:
+        credentials.refresh(Request())
+    except RefreshError:
+        return True
+    except Exception as exc:
+        raise DelegationCheckError(str(exc)) from exc
+    return False
+
+
+_RECHECK_EVERY_SECONDS = 60
+_last_recheck: dict[uuid.UUID, float] = {}
+
+
+def recheck_delegation(org_id: uuid.UUID, db: Session, *, throttle: bool = True) -> bool:
+    """An approved grant can be undone on Google's side at any time and
+    nothing tells Knohow. Mints a token as the approving admin; if it's
+    refused, the grant goes back to pending — the company Drive task
+    reappears, and the detector re-approves it once access is restored.
+    Returns whether the grant is (still) approved. With `throttle`, at most
+    once a minute per organization per process."""
+    org = db.get(Organization, org_id)
+    grant = org.delegation_grant if org else None
+    if grant is None or grant.status != DelegationStatus.APPROVED or grant.approving_admin_email is None:
+        return False
+
+    if throttle:
+        now = time.monotonic()
+        if now - _last_recheck.get(org_id, float("-inf")) < _RECHECK_EVERY_SECONDS:
+            return True
+        _last_recheck[org_id] = now
+
+    try:
+        refused = _token_refused(grant.approving_admin_email, list(grant.granted_scopes or DOMAIN_DELEGATION_SCOPES))
+    except DelegationCheckError:
+        return True
+    if not refused:
+        return True
+
+    grant.status = DelegationStatus.PENDING
+    grant.approved_at = None
+    grant.revoked_at = datetime.now(timezone.utc)
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=None,
+        action_type="delegation.lost",
+        target_resource_id=str(grant.id),
+        details={"approving_admin_email": grant.approving_admin_email},
+        db=db,
+    )
+    return False
 
 
 def check_delegation(org_id: uuid.UUID, db: Session) -> DelegationCheck:

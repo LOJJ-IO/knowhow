@@ -70,7 +70,7 @@ async def _unexpected_errors(request: Request, call_next):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_origin],
+    allow_origins=list(dict.fromkeys([settings.frontend_origin, settings.landing_origin])),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

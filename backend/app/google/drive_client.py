@@ -105,10 +105,23 @@ def get_drive_client_for_user(user_id: uuid.UUID, db: Session | None = None) -> 
     owns_session = db is None
     session = db or SessionLocal()
     try:
-        member = _resolve_member(user_id, session)
-        if member.auth_type == AuthType.DOMAIN_DELEGATED:
-            return _domain_delegated_client(member, session)
-        return _personal_oauth_client(member, session)
+        return _client_for(_resolve_member(user_id, session), session)
     finally:
         if owns_session:
             session.close()
+
+
+def _client_for(member: OrgMember, db: Session) -> Resource:
+    """Domain members use the company connection once a Super Admin has
+    approved it. Until then, a domain member who connected their own Drive
+    (the Workspace screen's "Connect your Google Drive") is read through that
+    consent (ADR-0024). The fallback only runs one way: a personal-account
+    member is never routed to delegation, which cannot reach Gmail."""
+    if member.auth_type == AuthType.DOMAIN_DELEGATED:
+        try:
+            return _domain_delegated_client(member, db)
+        except DelegationNotApproved:
+            if member.oauth_credential is None:
+                raise
+            return _personal_oauth_client(member, db)
+    return _personal_oauth_client(member, db)

@@ -35,21 +35,22 @@ const LEGACY_STEPS = new Set([
 function initialStep(me: Me, startAt?: SetupStep): SetupStep {
   if (startAt) return startAt;
   const raw = me.setup_step;
-  if (raw === "done") return "connectWorkspace";
   if (!raw || LEGACY_STEPS.has(raw)) return "orgName";
   if (
     raw === "orgName" ||
     raw === "teams" ||
     raw === "ownTeam" ||
     raw === "inviteLink" ||
+    raw === "connectWorkspace" ||
     raw === "inviteOwner"
   )
     return raw;
   return "orgName";
 }
 
-/** Founder setup per ADR-0021: name → teams → own teams → join link →
- *  invite owner → connect Workspace. Founder is never assumed to be owner. */
+/** Founder setup per ADR-0021, in ADR-0023's order: name → teams → own teams
+ *  → join link → Google check (connect Workspace) → "Do you sit at the top?"
+ *  → invite owner. Founder is never assumed to be owner; a Yes is a claim. */
 export function OrgSetupForm({
   me,
   onDone,
@@ -102,14 +103,14 @@ export function OrgSetupForm({
 
   if (bootError)
     return (
-      <p className="m-0 text-[0.95rem] text-[#EA4335]" aria-live="polite">
+      <p className="m-0 px-[5%] text-[0.95rem] text-[#EA4335]" aria-live="polite">
         {bootError}
       </p>
     );
 
   if (!chartReady)
     return (
-      <p className="m-0 text-[0.95rem] text-[#1c1917]/70">Getting ready…</p>
+      <p className="m-0 px-[5%] text-[0.95rem] text-[#1c1917]/70">Getting ready…</p>
     );
 
   if (step === "orgName")
@@ -154,6 +155,20 @@ export function OrgSetupForm({
       <InviteLinkStep
         me={me}
         onDone={() => {
+          void recordSetupStep("connectWorkspace");
+          setStep("connectWorkspace");
+        }}
+      />
+    );
+
+  // The Google check leaves for Google and comes back through AppEntry, which
+  // resumes here or on the owner question (ADR-0023).
+  if (step === "connectWorkspace")
+    return (
+      <ConnectWorkspaceStep
+        me={me}
+        initialPhase={connectInitialPhase}
+        onDone={() => {
           void recordSetupStep("inviteOwner");
           setStep("inviteOwner");
         }}
@@ -165,20 +180,9 @@ export function OrgSetupForm({
       <InviteOwnerStep
         me={me}
         onDone={() => {
-          // Setup complete before Workspace connect — closing there must not
-          // reopen the founder flow.
           void recordSetupStep("done");
-          setStep("connectWorkspace");
+          onDone();
         }}
-      />
-    );
-
-  if (step === "connectWorkspace")
-    return (
-      <ConnectWorkspaceStep
-        me={me}
-        initialPhase={connectInitialPhase}
-        onDone={onDone}
       />
     );
 

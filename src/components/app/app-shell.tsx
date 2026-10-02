@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Sidebar } from "@/components/app/sidebar";
 import { Topbar } from "@/components/app/topbar";
@@ -21,9 +21,37 @@ import { Topbar } from "@/components/app/topbar";
 const SIDEBAR_W = 208;
 /** Collapsed. 64px: a 48px row with an 8px gutter either side. */
 const RAIL_W = 64;
+/** How long an expansion stays open before collapsing again. */
+const PEEK_MS = 4000;
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const [sidebarVisible, setSidebarVisible] = useState(true);
+  // Collapsed by default (user 2026-09-27). The topbar toggle opens and
+  // closes it for good. Clicking a nav option in the open sidebar collapses
+  // it 4s later.
+  const [sidebarVisible, setSidebarVisible] = useState(false);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelCollapse = () => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = null;
+  };
+
+  const collapseSoon = () => {
+    cancelCollapse();
+    collapseTimer.current = setTimeout(() => {
+      collapseTimer.current = null;
+      setSidebarVisible(false);
+    }, PEEK_MS);
+  };
+
+  const onSidebarClick = (event: React.MouseEvent) => {
+    // Clicking the rail no longer expands it (user 2026-09-29); only the
+    // topbar toggle does.
+    const option = (event.target as Element).closest("a[href]");
+    if (sidebarVisible && option) collapseSoon();
+  };
+
+  useEffect(() => cancelCollapse, []);
 
   return (
     <div
@@ -33,14 +61,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         transition: "grid-template-columns 180ms cubic-bezier(0.4, 0, 0.2, 1)",
       }}
     >
-      <div className="min-w-0 overflow-hidden">
+      <div className="min-w-0 overflow-hidden" onClick={onSidebarClick}>
         <Sidebar collapsed={!sidebarVisible} />
       </div>
 
       <div className="flex min-w-0 flex-col">
         <Topbar
           sidebarOpen={sidebarVisible}
-          onToggleSidebar={() => setSidebarVisible((visible) => !visible)}
+          onToggleSidebar={() => {
+            cancelCollapse();
+            setSidebarVisible((visible) => !visible);
+          }}
         />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {children}

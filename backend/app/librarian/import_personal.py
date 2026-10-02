@@ -1,5 +1,5 @@
 """Bring files from a personal Google account into the organization
-(ADR-0022, "teams migrating to their first Workspace").
+(ADR-0028, "teams migrating to their first Workspace").
 
 The person picks files in Google's own Picker, which hands the browser a
 short-lived `drive.file` token scoped to only the files they picked. The

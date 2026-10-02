@@ -95,7 +95,6 @@ export function ManageAccountsDialog({
       open={open}
       onOpenChange={onOpenChange}
       title={count > 1 ? "Forget accounts" : "Forget an account"}
-      description="Forgetting an account removes it from this browser's sign-in list. The account itself, and anything in it, is untouched."
       size="sm"
       kind="form"
       footer={
@@ -221,7 +220,7 @@ function Row({
         </span>
       </span>
       {note ? (
-        <span className="shrink-0 text-[0.8125rem] text-[var(--app-dim)]">
+        <span className="-ml-2 -mr-3 shrink-0 text-[0.8125rem] text-[var(--app-dim)]">
           {note}
         </span>
       ) : null}
