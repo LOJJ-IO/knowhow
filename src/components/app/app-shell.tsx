@@ -55,7 +55,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div
-      className="grid h-dvh overflow-hidden bg-[var(--app-ground)]"
+      // One row capped at the viewport (`minmax(0,1fr)`), and the column
+      // below allowed to shrink (`min-h-0`): without both, the column grew to
+      // the page's full height, the scroller inside had nothing to scroll, and
+      // this `overflow-hidden` clipped the bottom off every tall screen —
+      // no scroll, no bottom corners (Ronald, 2026-10-02).
+      className="grid h-dvh grid-rows-[minmax(0,1fr)] overflow-hidden bg-[var(--app-ground)]"
       style={{
         gridTemplateColumns: `${sidebarVisible ? SIDEBAR_W : RAIL_W}px minmax(0, 1fr)`,
         transition: "grid-template-columns 180ms cubic-bezier(0.4, 0, 0.2, 1)",
@@ -65,7 +70,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar collapsed={!sidebarVisible} />
       </div>
 
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-col">
         <Topbar
           sidebarOpen={sidebarVisible}
           onToggleSidebar={() => {
@@ -73,7 +78,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             setSidebarVisible((visible) => !visible);
           }}
         />
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* Doesn't scroll: each screen scrolls inside its own white card
+            (`Window`). Scrolling here too put a scrollbar in the gutter right
+            of the card, outside the chrome, in Safari (Ronald, 2026-10-02). */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {children}
         </div>
       </div>

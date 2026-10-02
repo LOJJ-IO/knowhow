@@ -151,9 +151,14 @@ export function CtaSplitLayer({
   // Same alpha as the Layer-1 pill (`bg-black/80`) — no darken on handoff.
   const liquid = settled ? "settled" : "live";
 
+  // `will-change-auto!` undoes liquid-gooey's inline `will-change: filter,
+  // transform` on its SVG (important, to beat the inline style): in WebKit
+  // that promoted layer clips to the SVG's own box (the pill), so the goo
+  // streaming out to Log In / Book a Demo was cut off at the pill's left edge
+  // and the extras just popped in at the end.
   return (
     <div
-      className="pointer-events-none absolute inset-0 [&_[data-gooey-svg]]:opacity-80 data-[liquid=settled]:[&_[data-gooey-svg]]:opacity-0"
+      className="pointer-events-none absolute inset-0 [&_[data-gooey-svg]]:opacity-80 [&_[data-gooey-svg]]:will-change-auto! data-[liquid=settled]:[&_[data-gooey-svg]]:opacity-0"
       data-liquid={liquid}
     >
       {/* Positioning goes through `style`, not a class: the group renders an

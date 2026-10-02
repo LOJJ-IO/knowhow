@@ -16,9 +16,14 @@ import { cn } from "@/lib/utils";
 
 /** The screen's one white window, as on Home. */
 export function Window({ children }: { children: ReactNode }) {
+  // The rounded card clips; the scroller sits inside it. Safari doesn't clip a
+  // scroller's own scrollbar to its border-radius, so with both on one element
+  // the bar ran past the card's rounded corners (Ronald, 2026-10-02).
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-[32px] bg-white">
-      {children}
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[32px] bg-white">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {children}
+      </div>
     </section>
   );
 }
