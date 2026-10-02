@@ -320,7 +320,7 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
         {`Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`}
       </p>
       {account.error ? (
-        <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#b42318]`}>
+        <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>
           {account.error}
         </p>
       ) : null}
@@ -430,7 +430,7 @@ function Bar({
         <p
           className={cn(
             "mt-0.5 text-[0.875rem] leading-[1.5]",
-            error ? "text-[#b42318]" : "text-[var(--app-dim)]",
+            error ? "text-[#EA4335]" : "text-[var(--app-dim)]",
           )}
         >
           {body}
@@ -521,11 +521,11 @@ function ReviewDialog({
         }
         onOpenChange(o);
       }}
-      size="lg"
+      size="sm"
       title="Sort your Drive"
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
-      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
+      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
       {items.length === 0 ? (
         <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
           Nothing to sort right now.
@@ -657,11 +657,11 @@ function ProposalsDialog({
         }
         onOpenChange(o);
       }}
-      size="lg"
+      size="sm"
       title="Confirm company work"
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
-      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
+      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
       {items.length === 0 ? (
         <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
           Nothing waiting for you.
@@ -758,7 +758,7 @@ function NewFolderDialog({
           className={INPUT_CLASS}
         />
       </label>
-      {error ? <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
+      {error ? <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
     </FormDialog>
   );
 }
@@ -959,7 +959,7 @@ function AddFilesDialog({
         }
         onOpenChange(o);
       }}
-      size="lg"
+      size="sm"
       title="Add files"
       submitLabel={picked.length ? `Add ${picked.length}` : "Add"}
       busy={busy}
@@ -980,7 +980,7 @@ function AddFilesDialog({
         }
       }}
     >
-      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#b42318]`}>{error}</p> : null}
+      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
       {!files ? (
         <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>Loading…</p>
       ) : choices.length === 0 ? (

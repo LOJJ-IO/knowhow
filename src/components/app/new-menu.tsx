@@ -65,31 +65,47 @@ export function NewMenu({ children }: { children: ReactNode }) {
     <Menu.Root>
       <Menu.Trigger render={children as React.ReactElement} />
       <Menu.Portal>
-        <Menu.Positioner side="bottom" align="end" sideOffset={8} className="isolate z-[450]">
+        <Menu.Positioner
+          side="bottom"
+          align="end"
+          sideOffset={8}
+          className="isolate z-[450]"
+        >
           <Menu.Popup
             className={cn(
               satoshi.className,
               "app-modal w-[15rem] rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none",
             )}
           >
-            <Menu.GroupLabel className="px-4 pt-3 pb-1 text-[0.8125rem] text-[var(--app-dim)]">
-              Create new
-            </Menu.GroupLabel>
-            {ITEMS.map((item) => (
-              <Menu.Item
-                key={item.kind}
-                closeOnClick={false}
-                disabled={busy !== null}
-                onClick={() => void create(item.kind)}
-                className="mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)]"
-              >
-                <Image src={item.src} alt="" width={40} height={40} className="size-5 shrink-0" />
-                <span className="text-[0.9375rem] font-medium text-[#1c1917]">{item.label}</span>
-                {busy === item.kind ? (
-                  <span className="ml-auto text-[0.8125rem] text-[var(--app-dim)]">Opening…</span>
-                ) : null}
-              </Menu.Item>
-            ))}
+            <Menu.Group>
+              <Menu.GroupLabel className="px-4 pt-3 pb-1 text-[0.8125rem] text-[var(--app-dim)]">
+                Create new
+              </Menu.GroupLabel>
+              {ITEMS.map((item) => (
+                <Menu.Item
+                  key={item.kind}
+                  disabled={busy !== null}
+                  onClick={() => void create(item.kind)}
+                  className="mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)]"
+                >
+                  <Image
+                    src={item.src}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="size-5 shrink-0"
+                  />
+                  <span className="text-[0.9375rem] font-medium text-[#1c1917]">
+                    {item.label}
+                  </span>
+                  {busy === item.kind ? (
+                    <span className="ml-auto text-[0.8125rem] text-[var(--app-dim)]">
+                      Opening…
+                    </span>
+                  ) : null}
+                </Menu.Item>
+              ))}
+            </Menu.Group>
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>
