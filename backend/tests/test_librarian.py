@@ -97,6 +97,29 @@ def test_contradiction_rule():
     assert not contradicts(LibrarianSuggestion.COMPANY, "company")
 
 
+def test_workspace_files_are_always_company():
+    from app.librarian.rules import classify_workspace
+
+    # Shared only with a personal contact, or with nobody — still Company,
+    # because a Workspace account's files are the org's (ADR-0023).
+    assert classify_workspace(_file(perms=[_perm("mum@gmail.com")]), D).suggestion == LibrarianSuggestion.COMPANY
+    assert classify_workspace(_file(), D).suggestion == LibrarianSuggestion.COMPANY
+    # Company reasons are still kept as context.
+    assert classify_workspace(_file(perms=[_perm(f"a@{D}")]), D).reasons == {"coworkers_shared": 1}
+    # Same skips as classify.
+    assert classify_workspace(_file(mime="application/vnd.google-apps.folder"), D) is None
+    assert classify_workspace(_file(driveId="sd1"), D) is None
+
+
+def test_collaborator_emails_are_org_domain_only():
+    from app.librarian.rules import org_collaborator_emails
+
+    f = _file(perms=[_perm(f"a@{D}"), _perm("mum@gmail.com")], editor_me=False, editor=f"b@{D}")
+    assert set(org_collaborator_emails(f, D)) == {f"a@{D}", f"b@{D}"}
+    # The owner permission and a `me` editor are never collaborators.
+    assert org_collaborator_emails(_file(), D) == []
+
+
 # ------------------------------------------------------------- the chain
 
 
@@ -204,9 +227,11 @@ def test_scan_stores_ids_and_counts_only(db, drive):
     assert result.suggested == 3
 
     rows = {c.file_id: c for c in db.execute(select(LibrarianCandidate)).scalars()}
+    # Every Workspace file defaults to Company now (ADR-0023) — no more
+    # personal/unsure guesses for an account the org already owns.
     assert rows["work"].suggestion == LibrarianSuggestion.COMPANY
-    assert rows["holiday"].suggestion == LibrarianSuggestion.PERSONAL
-    assert rows["draft"].suggestion == LibrarianSuggestion.UNSURE
+    assert rows["holiday"].suggestion == LibrarianSuggestion.COMPANY
+    assert rows["draft"].suggestion == LibrarianSuggestion.COMPANY
     # No names anywhere in what was stored.
     stored = repr([(c.file_id, c.reasons) for c in rows.values()])
     assert "Q3" not in stored and "Holiday" not in stored
@@ -233,7 +258,10 @@ def test_personal_answer_leaves_no_trace_and_is_not_asked_again(db, drive):
     service.scan_member_drive(worker, db)
     holiday = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "holiday")).scalar_one()
 
-    assert service.decide(worker, holiday.id, "personal", False, db) == {"result": "personal"}
+    # A Workspace file defaults to Company (ADR-0023), so calling it personal
+    # goes against the suggestion and is asked once more before it counts.
+    assert service.decide(worker, holiday.id, "personal", False, db) == {"result": "ask_again"}
+    assert service.decide(worker, holiday.id, "personal", True, db) == {"result": "personal"}
     assert db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "holiday")).first() is None
     mark = db.execute(select(LibrarianPersonalMark)).scalar_one()
     assert "holiday" not in mark.file_hash
@@ -278,6 +306,34 @@ def test_proposal_waits_for_lead_then_lands_in_team_folder(db, drive):
     listed = service.list_folders(worker, db)
     design = next(f for f in listed if f["team_id"] == str(team.id))
     assert design["file_count"] == 1 and design["preview"][0]["name"] == "Q3 plan"
+
+
+def test_confirm_routes_to_the_collaborators_team(db, monkeypatch):
+    """A file a Design member owns but shares with Sales lands in the Sales
+    folder — routed by who it's shared with, not who proposed it (ADR-0023)."""
+    org, lead, worker, design = _org(db)  # worker is on Design
+    sales = Team(id=uuid.uuid4(), org_id=org.id, name="Sales", team_leader_id=None)
+    db.add(sales)
+    db.flush()
+    seller = _member(db, org, f"seller@{D}")
+    db.add(OrgMembership(org_id=org.id, team_id=sales.id, user_id=seller.id, role=OrgRole.MEMBER))
+    db.commit()
+
+    f = {**_file("deal", perms=[_perm(f"seller@{D}")]), "name": "Deal deck"}
+    fake = _FakeDrive([f])
+    monkeypatch.setattr(service, "get_drive_client_for_user", lambda *_a, **_k: fake)
+    monkeypatch.setattr(service, "record_audit_entry", lambda **_k: None)
+
+    service.scan_member_drive(worker, db)
+    cand = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "deal")).scalar_one()
+    assert service.decide(worker, cand.id, "company", False, db) == {"result": "proposed"}
+    service.confirm(lead, cand.id, db)  # Design's lead confirms their member's file
+
+    row = db.get(FileIndex, "deal")
+    assert row.team_id == sales.id and row.owner_user_id == worker.id  # routed to Sales, not Design
+    folder = db.execute(select(KnohowFolder).where(KnohowFolder.team_id == sales.id)).scalar_one()
+    filed = set(db.execute(select(FolderFile.file_id).where(FolderFile.folder_id == folder.id)).scalars())
+    assert filed == {"deal"}
 
 
 def test_super_admin_confirms_own_proposal(db, drive):
@@ -421,3 +477,55 @@ def test_import_personal_rejects_empty_and_oversize(db, monkeypatch):
         imp.import_picked_files(worker, "", ["x"], db)
     with pytest.raises(imp.LibrarianError):
         imp.import_picked_files(worker, "tok", [f"f{i}" for i in range(imp.MAX_IMPORT + 1)], db)
+
+
+# ------------------------------------------------------- New button: create doc
+
+
+class _CreateDrive:
+    def __init__(self):
+        self.created = []
+
+    def files(self):
+        return self
+
+    def create(self, body, fields):
+        self.created.append(body)
+        return _Exec(
+            {
+                "id": f"new-{len(self.created)}",
+                "name": body["name"],
+                "mimeType": body["mimeType"],
+                "webViewLink": f"https://docs.google.com/d/new-{len(self.created)}",
+                "createdTime": "2026-09-29T10:00:00Z",
+                "modifiedTime": "2026-09-29T10:00:00Z",
+            }
+        )
+
+
+def test_create_document_makes_a_file_and_files_it(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    _o, _lead, worker, team = _org(db)
+    drive = _CreateDrive()
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: drive)
+    monkeypatch.setattr(docsvc, "record_audit_entry", lambda **k: None)
+
+    out = docsvc.create_document(worker, "sheet", db)
+
+    assert drive.created == [{"name": "Untitled spreadsheet", "mimeType": "application/vnd.google-apps.spreadsheet"}]
+    assert out["url"] == "https://docs.google.com/d/new-1" and out["name"] == "Untitled spreadsheet"
+    row = db.get(FileIndex, out["id"])
+    assert row.owner_user_id == worker.id and row.team_id == team.id
+    folder = db.execute(select(KnohowFolder).where(KnohowFolder.team_id == team.id)).scalar_one()
+    filed = set(db.execute(select(FolderFile.file_id).where(FolderFile.folder_id == folder.id)).scalars())
+    assert out["id"] in filed
+
+
+def test_create_document_rejects_unknown_kind(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    _o, _lead, worker, _team = _org(db)
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: _CreateDrive())
+    with pytest.raises(docsvc.LibrarianError):
+        docsvc.create_document(worker, "form", db)

@@ -203,6 +203,18 @@ export async function setFileInFolder(
   );
 }
 
+/** The topbar's New button: make a blank Google Doc/Sheet/Slide as the org.
+ *  Returns the new file's link so the caller can open it. */
+export async function createDocument(
+  org: string,
+  kind: "doc" | "sheet" | "slide",
+) {
+  return call<{ id: string; name: string; url: string | null }>(
+    `${base(org)}/documents`,
+    { method: "POST", body: JSON.stringify({ kind }) },
+  );
+}
+
 export async function fetchCompanyFiles(org: string) {
   const body = await call<{ files: RawFile[] }>(`${base(org)}/company-files`);
   return body.files.map(file);

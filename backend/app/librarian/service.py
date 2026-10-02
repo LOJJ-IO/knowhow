@@ -28,7 +28,12 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit_entry
 from app.config import get_settings
 from app.google.drive_client import get_drive_client_for_user
-from app.librarian.rules import DRIVE_FIELDS, classify, contradicts
+from app.librarian.rules import (
+    DRIVE_FIELDS,
+    classify_workspace,
+    contradicts,
+    org_collaborator_emails,
+)
 from app.models.file_index import FileIndex
 from app.models.librarian import (
     FolderFile,
@@ -52,6 +57,8 @@ SCAN_LIMIT = 500
 REVIEW_PAGE = 50
 
 LIVE_FIELDS = "id,name,mimeType,modifiedTime,createdTime,webViewLink"
+# LIVE_FIELDS plus the sharing metadata used to route a file to a team folder.
+CONFIRM_FIELDS = f"{LIVE_FIELDS},permissions(type,role,emailAddress,domain),lastModifyingUser(me,emailAddress)"
 
 
 class LibrarianError(ValueError):
@@ -122,7 +129,9 @@ def scan_member_drive(member: OrgMember, db: Session) -> ScanResult:
             if file_id in indexed or _file_hash(file_id) in marked_personal:
                 already += 1
                 continue
-            verdict = classify(f, domain)
+            # A Workspace account's files are the organization's (ADR-0023):
+            # Company by default, no company-vs-personal quiz.
+            verdict = classify_workspace(f, domain)
             if verdict is None:
                 continue
             existing = known.get(file_id)
@@ -284,6 +293,47 @@ def _member_team_ids(org_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> li
     ]
 
 
+def _route_team(org_id: uuid.UUID, proposer_id: uuid.UUID, file_meta: dict, db: Session) -> uuid.UUID | None:
+    """Which team folder a confirmed file belongs in (ADR-0023): the team the
+    most of its org-domain collaborators are on. Falls back to the proposer's
+    own team when the file's collaborators point nowhere in particular. Emails
+    are mapped to teams here and never stored."""
+    proposer_teams = _member_team_ids(org_id, proposer_id, db)
+    fallback = proposer_teams[0] if proposer_teams else None
+
+    org = db.get(Organization, org_id)
+    domain = _org_domain(org) if org else ""
+    # The proposer is already out of the vote: their owner permission is
+    # skipped, and they are the `me` the fetch runs as, so lastModifyingUser is
+    # skipped too. What's left is other people the file touches.
+    emails = org_collaborator_emails(file_meta, domain) if domain else []
+    if not emails:
+        return fallback
+
+    votes: dict[uuid.UUID, int] = {}
+    rows = db.execute(
+        select(OrgMembership.team_id)
+        .join(OrgMember, OrgMembership.user_id == OrgMember.id)
+        .where(
+            OrgMember.organization_id == org_id,
+            func.lower(OrgMember.email).in_(emails),
+            OrgMembership.team_id.is_not(None),
+        )
+    ).scalars()
+    for team_id in rows:
+        votes[team_id] = votes.get(team_id, 0) + 1
+    if not votes:
+        return fallback
+
+    best = max(votes.values())
+    leaders = [t for t, n in votes.items() if n == best]
+    # A tie that includes the proposer's own team resolves to it; otherwise the
+    # first winner (dict keeps insertion order for a stable pick).
+    if fallback in leaders:
+        return fallback
+    return leaders[0]
+
+
 def _can_confirm_for(actor: OrgMember, proposer_id: uuid.UUID, db: Session) -> bool:
     org_id = actor.organization_id
     if is_owner(org_id, actor, db) or is_verified_super_admin(org_id, actor):
@@ -352,14 +402,19 @@ def confirm(actor: OrgMember, candidate_id: uuid.UUID, db: Session) -> dict:
         raise PermissionError("only a lead of the proposer's team, the owner, or a verified Super Admin can confirm")
 
     org_id, file_id, proposer_id = c.org_id, c.file_id, c.member_id
-    live = _live_files(proposer_id, [file_id], db).get(file_id)
+    # One fetch: the title/type for FileIndex and the sharing metadata used to
+    # route the file to a team folder.
+    try:
+        drive = get_drive_client_for_user(proposer_id, db)
+        live = drive.files().get(fileId=file_id, fields=CONFIRM_FIELDS).execute()
+    except HttpError:
+        live = None
     if live is None:
         db.delete(c)
         db.commit()
         raise LookupError("that file is no longer in Drive")
 
-    teams = _member_team_ids(org_id, proposer_id, db)
-    team_id = teams[0] if teams else None
+    team_id = _route_team(org_id, proposer_id, live, db)
     now = datetime.now(timezone.utc)
 
     def _ts(value: str | None) -> datetime:

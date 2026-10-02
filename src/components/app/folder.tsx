@@ -85,8 +85,8 @@ export function Folder({
 
   // The folder's front card is drawn last, so the first file sits in front.
   const cards = fileNames.slice(0, 3);
-  // Empty folders have no papers to move, so they barely react (user, 2026-09-27).
-  const active = lifted && cards.length > 0;
+  // Empty folders flap too — the user is fine with that (2026-09-29).
+  const active = lifted;
   const pose = active ? "lift" : "rest";
 
   return (

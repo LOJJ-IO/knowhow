@@ -71,6 +71,22 @@ def import_personal(
     return {"imported": result.imported, "failed": result.failed}
 
 
+class NewDocumentBody(BaseModel):
+    kind: str  # "doc" | "sheet" | "slide"
+
+
+@router.post("/documents")
+def create_document(
+    org_id: uuid.UUID,
+    body: NewDocumentBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    from app.documents.service import create_document as _create
+
+    return _run(_create, member, body.kind, db)
+
+
 @router.get("/librarian/review")
 def review(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)) -> dict:
     return _run(service.review_queue, member, db)

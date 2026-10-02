@@ -8,6 +8,7 @@ import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import { Button } from "@/components/app/button";
 import { NewCreateFan } from "@/components/app/new-create-fan";
+import { NewMenu } from "@/components/app/new-menu";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { ProfileMenu } from "@/components/app/profile-menu";
@@ -142,10 +143,12 @@ export function Topbar({
             </TooltipContent>
           </Tooltip>
 
-          <Button className="h-[3.43rem] gap-[0.8575rem] pr-[1.47rem] pl-[0.8575rem] text-[1.041rem]">
-            <NewCreateFan />
-            New
-          </Button>
+          <NewMenu>
+            <Button className="h-[3.43rem] gap-[0.8575rem] pr-[1.47rem] pl-[0.8575rem] text-[1.041rem]">
+              <NewCreateFan />
+              New
+            </Button>
+          </NewMenu>
 
           {/* The person, as a chip: their orb and their first name on a white
               pill (user 2026-09-22's reference). Clicking it opens the profile
