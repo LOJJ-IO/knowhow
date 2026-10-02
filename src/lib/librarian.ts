@@ -207,7 +207,7 @@ export async function setFileInFolder(
  *  Returns the new file's link so the caller can open it. */
 export async function createDocument(
   org: string,
-  kind: "doc" | "sheet" | "slide",
+  kind: "doc" | "sheet" | "slide" | "form",
 ) {
   return call<{ id: string; name: string; url: string | null }>(
     `${base(org)}/documents`,

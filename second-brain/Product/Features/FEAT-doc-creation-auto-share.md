@@ -3,7 +3,7 @@ type: feature
 status: shipped
 tags: [area/frontend, area/backend, priority/high]
 created: 2026-09-02
-updated: 2026-09-22
+updated: 2026-10-02
 related: ["[[FEAT-doc-visibility-dashboard]]", "[[0001-mocked-data-first-prototype]]", "[[Current-Context]]"]
 ---
 
@@ -33,3 +33,5 @@ The demo needed the *solution moment* to be visible live: a team member creates 
 User: topbar **New** creates **Doc · Sheet · Slide · Upload** only. Forms and other Workspace types
 stay out. Upload is first-class (not a disabled "Other"); it files into the same team/Company folder
 path and takes the same share choice as a blank Google file. Not rebuilt in the current app shell yet.
+
+**Changed (Ronald, 2026-10-02):** Forms is now in. The New menu creates **Doc · Sheet · Slide · Form**, and the button's fan shows Forms in Upload's old spot. Upload is still planned but not built and is off the fan for now. Details in [[Current-Context]].

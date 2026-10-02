@@ -42,9 +42,9 @@ import { useHydrated } from "@/lib/use-hydrated";
  *
  *  Alerts is the [[NotificationBell]] — it rings and rolls its badge when the
  *  count climbs. The count itself is still mocked at 0 in `chromeFromMe`.
- *  New creates Doc · Sheet · Slide · Upload when built
- *  ([[FEAT-doc-creation-auto-share]]); the control already shows that set as a
- *  fanned mark in front of the label (user 2026-09-22). */
+ *  New creates a Doc, Sheet, Slide or Form ([[FEAT-doc-creation-auto-share]]),
+ *  shown as a fanned mark in front of the label (user 2026-09-22; Form took
+ *  Upload's place 2026-10-02). */
 export function Topbar({
   sidebarOpen,
   onToggleSidebar,
@@ -194,7 +194,7 @@ export function Topbar({
           </Tooltip>
 
           <NewMenu>
-            <Button className="h-[3.43rem] gap-[0.8575rem] pr-[1.47rem] pl-[0.8575rem] text-[1.041rem]">
+            <Button className="group h-[3.43rem] gap-[0.8575rem] pr-[1.47rem] pl-[0.8575rem] text-[1.041rem]">
               <NewCreateFan />
               New
             </Button>

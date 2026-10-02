@@ -34,11 +34,12 @@ export function describeFile(mime: string): { label: string; Icon: LucideIcon } 
   return { label: "File", Icon: File };
 }
 
-/** Google's own marks for its three editors (the New fan's PNGs). */
+/** Google's own marks for its editors (the New fan's PNGs). */
 const GOOGLE_MARKS: Record<string, string> = {
   "application/vnd.google-apps.document": "/create/docs.png",
   "application/vnd.google-apps.spreadsheet": "/create/sheets.png",
   "application/vnd.google-apps.presentation": "/create/slides.png",
+  "application/vnd.google-apps.form": "/create/forms.png",
 };
 
 /** A file's icon on a white tile: Google's mark for Docs, Sheets and

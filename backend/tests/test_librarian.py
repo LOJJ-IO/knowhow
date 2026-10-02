@@ -528,4 +528,18 @@ def test_create_document_rejects_unknown_kind(db, monkeypatch):
     _o, _lead, worker, _team = _org(db)
     monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: _CreateDrive())
     with pytest.raises(docsvc.LibrarianError):
-        docsvc.create_document(worker, "form", db)
+        docsvc.create_document(worker, "video", db)
+
+
+def test_create_document_makes_a_form(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    _o, _lead, worker, _team = _org(db)
+    drive = _CreateDrive()
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: drive)
+    monkeypatch.setattr(docsvc, "record_audit_entry", lambda **k: None)
+
+    out = docsvc.create_document(worker, "form", db)
+
+    assert drive.created == [{"name": "Untitled form", "mimeType": "application/vnd.google-apps.form"}]
+    assert out["name"] == "Untitled form"

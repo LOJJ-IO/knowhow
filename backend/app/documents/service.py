@@ -17,12 +17,13 @@ from app.google.drive_client import get_drive_client_for_user
 from app.librarian.service import LibrarianError, _add_to_folder, _member_team_ids, _team_folder
 from app.models.file_index import FileIndex
 
-# The three blank Google types the New button offers, with Google's own
-# default names for an untitled file.
+# The blank Google types the New button offers, with Google's own default
+# names for an untitled file. Form added 2026-10-02 (Ronald).
 KINDS = {
     "doc": ("application/vnd.google-apps.document", "Untitled document"),
     "sheet": ("application/vnd.google-apps.spreadsheet", "Untitled spreadsheet"),
     "slide": ("application/vnd.google-apps.presentation", "Untitled presentation"),
+    "form": ("application/vnd.google-apps.form", "Untitled form"),
 }
 
 CREATE_FIELDS = "id,name,mimeType,webViewLink,createdTime,modifiedTime"

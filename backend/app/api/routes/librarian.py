@@ -72,7 +72,7 @@ def import_personal(
 
 
 class NewDocumentBody(BaseModel):
-    kind: str  # "doc" | "sheet" | "slide"
+    kind: str  # "doc" | "sheet" | "slide" | "form"
 
 
 @router.post("/documents")

@@ -10,18 +10,20 @@ import { satoshi } from "@/components/brand/fonts";
 import { createDocument } from "@/lib/librarian";
 import { cn } from "@/lib/utils";
 
-/** The topbar's New button opened up: make a blank Google Doc, Sheet or Slide.
+/** The topbar's New button opened up: make a blank Google Doc, Sheet, Slide
+ *  or Form.
  *
  *  Minimal slice (user 2026-09-29) — the file is created as the org through the
- *  backend, filed in the person's team folder, and opened in a new tab. Upload
- *  and the share-with form are the fuller flow, still to come, so the fan icon
- *  on the button shows Upload but the menu doesn't offer it yet. */
-type Kind = "doc" | "sheet" | "slide";
+ *  backend, filed in the person's team folder, and opened in a new tab. Form
+ *  joined 2026-10-02 (Ronald) and took Upload's place on the button's fan;
+ *  Upload and the share-with form are the fuller flow, still to come. */
+type Kind = "doc" | "sheet" | "slide" | "form";
 
 const ITEMS: { kind: Kind; label: string; src: string }[] = [
   { kind: "doc", label: "Document", src: "/create/docs.png" },
   { kind: "sheet", label: "Spreadsheet", src: "/create/sheets.png" },
   { kind: "slide", label: "Presentation", src: "/create/slides.png" },
+  { kind: "form", label: "Form", src: "/create/forms.png" },
 ];
 
 /** Google's own "make a blank file" shortcuts, used as a failsafe (user
@@ -32,6 +34,7 @@ const NEW_FILE_URLS: Record<Kind, string> = {
   doc: "https://docs.new",
   sheet: "https://sheets.new",
   slide: "https://slides.new",
+  form: "https://forms.new",
 };
 
 export function NewMenu({ children }: { children: ReactNode }) {
@@ -86,14 +89,17 @@ export function NewMenu({ children }: { children: ReactNode }) {
                   key={item.kind}
                   disabled={busy !== null}
                   onClick={() => void create(item.kind)}
-                  className="mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)]"
+                  className="group mx-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)]"
                 >
                   <Image
                     src={item.src}
                     alt=""
                     width={40}
                     height={40}
-                    className="size-5 shrink-0"
+                    // The lifetime dropdown's calendar move (Manage teams →
+                    // "7 days"): tilt and grow with an overshoot, on hover or
+                    // keyboard highlight (Ronald, 2026-10-02).
+                    className="size-5 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-data-[highlighted]:-rotate-12 group-data-[highlighted]:scale-110 motion-reduce:transition-none"
                   />
                   <span className="text-[0.9375rem] font-medium text-[#1c1917]">
                     {item.label}

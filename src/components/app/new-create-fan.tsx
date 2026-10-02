@@ -2,12 +2,9 @@ import Image from "next/image";
 
 import { cn } from "@/lib/utils";
 
-/** Fanned Docs · Sheets · Slides · Upload cluster for the topbar New control.
- *
- *  Docs/Sheets/Slides use Google's product marks (`public/create/`). Those PNGs
- *  already carry transparent padding around the mark — so Upload is drawn the
- *  same way (inset squircle in a matching box) rather than a plate that fills
- *  the tile edge-to-edge, which was reading ~1.5× larger. */
+/** Fanned Forms · Sheets · Slides · Docs cluster for the topbar New control,
+ *  all Google's product marks (`public/create/`). Forms took Upload's place
+ *  2026-10-02 (Ronald), matching what the menu creates. */
 export function NewCreateFan({ className }: { className?: string }) {
   return (
     <span
@@ -24,18 +21,17 @@ export function NewCreateFan({ className }: { className?: string }) {
             transform: `translateY(calc(-50% + ${tile.y}px)) rotate(${tile.rotate}deg)`,
           }}
         >
-          {tile.src ? (
-            <Image
-              src={tile.src}
-              alt=""
-              width={96}
-              height={96}
-              className="size-full drop-shadow-[0_1px_2px_rgba(0,0,0,0.22)]"
-              priority
-            />
-          ) : (
-            <UploadMark />
-          )}
+          {/* The lifetime dropdown's calendar move, on top of each tile's
+              resting tilt: hover or open the New button and every mark tips
+              and grows (Ronald, 2026-10-02). */}
+          <Image
+            src={tile.src}
+            alt=""
+            width={96}
+            height={96}
+            className="size-full drop-shadow-[0_1px_2px_rgba(0,0,0,0.22)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:-rotate-12 group-hover:scale-110 group-data-[popup-open]:-rotate-12 group-data-[popup-open]:scale-110 motion-reduce:transition-none"
+            priority
+          />
         </span>
       ))}
     </span>
@@ -44,42 +40,12 @@ export function NewCreateFan({ className }: { className?: string }) {
 
 const TILES: {
   key: string;
-  src?: string;
+  src: string;
   rotate: number;
   y: number;
 }[] = [
-  { key: "upload", rotate: -14, y: 2.5 },
+  { key: "form", src: "/create/forms.png", rotate: -14, y: 2.5 },
   { key: "sheet", src: "/create/sheets.png", rotate: -3, y: -3 },
   { key: "slide", src: "/create/slides.png", rotate: 3, y: -3 },
   { key: "doc", src: "/create/docs.png", rotate: 8, y: 2.5 },
 ];
-
-/** Same footprint as the Google marks: padding around a rounded square so it
- *  doesn't look larger than Sheets/Slides next to it. */
-function UploadMark() {
-  return (
-    <svg
-      viewBox="0 0 48 48"
-      width="100%"
-      height="100%"
-      className="drop-shadow-[0_1px_2px_rgba(0,0,0,0.22)]"
-      aria-hidden
-    >
-      <rect x="4" y="4" width="40" height="40" rx="9" fill="#5f6368" />
-      <path
-        d="M24 14v14M24 14l-5 5M24 14l5 5"
-        stroke="white"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M15.5 32.5v4h17v-4"
-        stroke="white"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

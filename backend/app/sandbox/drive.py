@@ -34,6 +34,7 @@ _NEW_FILE_LINKS = {
     "application/vnd.google-apps.document": "https://docs.new",
     "application/vnd.google-apps.spreadsheet": "https://sheets.new",
     "application/vnd.google-apps.presentation": "https://slides.new",
+    "application/vnd.google-apps.form": "https://forms.new",
 }
 
 _CONTENT_BY_TITLE = {f.title: f.content for f in FILES + FORMER_FILES}
