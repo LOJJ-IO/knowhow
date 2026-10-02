@@ -59,24 +59,19 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
       >
         <span className="flex shrink-0 items-center">
           {/* Three at most: a fourth reads as a crowd rather than a stack.
-              Past three, a fourth tile holds only a plus (user 2026-09-27).
-              Search's rounded square (TeamChip: 6px at 20px), scaled to
-              28px, plus tile included (user 2026-10-02). */}
+              Past three, a fourth circle holds only a plus (user 2026-09-27). */}
           {teams.slice(0, 3).map((team, i) => (
             <TeamIcon
               key={team.name}
               name={team.name}
               size={28}
-              className={cn(
-                "rounded-[8px]",
-                i > 0 && "-ml-2 ring-2 ring-[var(--app-active)]",
-              )}
+              className={i === 0 ? "" : "-ml-2 ring-2 ring-[var(--app-active)]"}
             />
           ))}
           {teams.length > 3 ? (
             <span
               aria-hidden
-              className="-ml-2 grid size-7 shrink-0 place-items-center rounded-[8px] bg-white ring-2 ring-[var(--app-active)]"
+              className="-ml-2 grid size-7 shrink-0 place-items-center rounded-full bg-white ring-2 ring-[var(--app-active)]"
             >
               <Plus className="size-3.5" strokeWidth={2.25} />
             </span>
