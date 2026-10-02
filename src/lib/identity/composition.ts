@@ -2,6 +2,7 @@ import {
   harmony,
   isDark,
   NEUTRAL_GROUND,
+  PERSON_PALETTE,
   shade,
   tint,
 } from "@/lib/identity/palette";
@@ -162,18 +163,25 @@ export type GradientField = {
   rotation: number;
 };
 
-/** The one colour a person's fluid orb is built from. Same seed and the same
- *  first pick as `personGradient`, so swapping the avatar's renderer didn't
- *  change anyone's colour. */
+/** The one colour a person's fluid orb is built from, from their email alone:
+ *  what an avatar uses where there's no org to spread colours across (the
+ *  account picker, sign-in). Inside the app, `AvatarColorsProvider` hands out
+ *  colours per org instead. */
 export function personColor(identity: string): string {
   const rng = rngFrom(identitySeed(identity));
-  return harmony(rng, rng.int(2, 4))[0];
+  return rng.one(PERSON_PALETTE);
 }
 
-export function personGradient(identity: string): GradientField {
+/** The static field under the orb. `color` leads it, so the fallback is the
+ *  same hue as the orb it stands in for. */
+export function personGradient(
+  identity: string,
+  color = personColor(identity),
+): GradientField {
   const seed = identitySeed(identity);
   const rng = rngFrom(seed);
   const colors = harmony(rng, rng.int(2, 4));
+  colors[0] = color;
   const base = shade(colors[0], rng.float(0.12, 0.4));
   return {
     seed,

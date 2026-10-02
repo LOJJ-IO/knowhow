@@ -22,6 +22,24 @@ export const PALETTE = [
   "#D63AC9", // magenta
 ] as const;
 
+/** People's orb colours: the wheel with its look-alikes merged. Violet,
+ *  indigo and electric blue all read as one purple once the orb mixes them
+ *  with white, so a person gets only violet from that stretch — ten colours
+ *  that a row of faces can actually tell apart (user 2026-10-02). Teams keep
+ *  the full wheel. */
+export const PERSON_PALETTE = [
+  "#6D4AFF", // violet (stands in for indigo and electric blue too)
+  "#0FA8D6", // cyan
+  "#0E9C8A", // teal
+  "#16A34A", // emerald
+  "#84CC16", // lime
+  "#F5C40A", // yellow
+  "#FB8C2B", // orange
+  "#FF6B4A", // coral
+  "#FF5DA2", // pink
+  "#D63AC9", // magenta
+] as const;
+
 /** The ground a composition can sit on when it isn't sitting on a color.
  *  Matches the app's own surfaces rather than pure white. */
 export const NEUTRAL_GROUND = "#F4F2EE";

@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { useSession } from "@/components/app/session";
+import { AvatarColorsProvider } from "@/components/identity/avatar-colors";
 import {
   fetchOrgOverview,
   markDashboardSeen,
@@ -351,7 +352,14 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
         reloadTasks,
       }}
     >
-      {children}
+      {/* Avatar colours are spread across the org's teams, so they come
+          from the same overview. */}
+      <AvatarColorsProvider
+        teams={overview?.teams}
+        members={overview?.members}
+      >
+        {children}
+      </AvatarColorsProvider>
     </UpdatesContext.Provider>
   );
 }

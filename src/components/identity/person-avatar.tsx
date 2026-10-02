@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { useAvatarColor } from "@/components/identity/avatar-colors";
 import { FluidOrb } from "@/components/identity/fluid-orb";
 import { personColor, personGradient } from "@/lib/identity/composition";
 import { cn } from "@/lib/utils";
@@ -12,8 +13,9 @@ import { cn } from "@/lib/utils";
  *  People get something calmer than teams on purpose — a wall of geometric
  *  compositions with faces mixed into it reads as noise. Seeded from the
  *  person's email, so the same person is the same avatar everywhere, with no
- *  initials, letters or shapes in it. `personColor` reuses `personGradient`'s
- *  seed and first pick, so nobody's colour changed in the swap.
+ *  initials, letters or shapes in it. Inside the app the colour is the org's
+ *  pick (`AvatarColorsProvider`), so a team's faces never repeat; elsewhere
+ *  it comes from the email alone.
  *
  *  **The gradient it replaced is still underneath**, and it is not decoration:
  *  the orb needs WebGL (one shared context for the page, see `FluidOrb`).
@@ -33,7 +35,10 @@ export function PersonAvatar({
   size?: number;
   className?: string;
 }) {
-  const { seed, base, stops, blur, rotation } = personGradient(identity);
+  /** The org's pick when there is one (spread across teams), else the
+   *  email's own. */
+  const color = useAvatarColor(identity) ?? personColor(identity);
+  const { seed, base, stops, blur, rotation } = personGradient(identity, color);
   const blurId = `pa-${seed}-blur`;
   /** The gradient steps aside once the orb is live: the orb's edge fades to
    *  transparent, so a field left behind it reads as a coloured rim. */
@@ -96,7 +101,7 @@ export function PersonAvatar({
 
       <FluidOrb
         size={size}
-        color={personColor(identity)}
+        color={color}
         className="absolute inset-0"
         onPainted={setOrb}
       />
