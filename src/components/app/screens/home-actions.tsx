@@ -7,8 +7,10 @@ import { Button } from "@/components/app/button";
 import { AppDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
 import { JoiningSection } from "@/components/app/joining-section";
 import { NewTeamDialog } from "@/components/app/new-team-dialog";
+import { RemoveTeamDialog } from "@/components/app/remove-team-dialog";
 import { TeamMembersSection } from "@/components/app/team-members-section";
 import { TeamIcon } from "@/components/identity/team-icon";
+import type { OverviewTeam } from "@/lib/organization";
 import { cn } from "@/lib/utils";
 
 /** The control in the top right of Home (user 2026-09-22). Recent updates sat
@@ -39,6 +41,11 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"joining" | "teams">("joining");
   const [creating, setCreating] = useState(false);
+  /** The team behind the red minus; kept after close for the fade. */
+  const [removing, setRemoving] = useState<OverviewTeam | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  /** Bumped on each open: a fresh warning, no choice carried over. */
+  const [removeOpens, setRemoveOpens] = useState(0);
   /** A handoff between Manage teams and New team is under way: both keep
    *  the backdrop steady (no flash). */
   const [swapping, setSwapping] = useState(false);
@@ -139,9 +146,32 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
           ) : null}
         </div>
         <div role="tabpanel">
-          {tab === "joining" ? <JoiningSection /> : <TeamMembersSection />}
+          {tab === "joining" ? (
+            <JoiningSection />
+          ) : (
+            <TeamMembersSection
+              onRemoveTeam={(team) => {
+                // Same swap as New team: Manage teams closes, the warning
+                // opens, and Manage teams comes back after.
+                setRemoving(team);
+                setRemoveOpens((n) => n + 1);
+                setOpen(false);
+                swap(() => setRemoveOpen(true));
+              }}
+            />
+          )}
         </div>
       </AppDialog>
+      <RemoveTeamDialog
+        key={removeOpens}
+        team={removing}
+        open={removeOpen}
+        swap={swapping}
+        onOpenChange={(next) => {
+          setRemoveOpen(next);
+          if (!next) swap(() => setOpen(true));
+        }}
+      />
       <NewTeamDialog
         open={creating}
         swap={swapping}

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/app/badge";
 import { Button } from "@/components/app/button";
-import { FormDialog } from "@/components/app/dialog";
+import { AppDialog, FormDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
 import { FileIcon } from "@/components/app/file-meta";
 import { NAV_STROKE } from "@/components/app/icon";
@@ -216,6 +216,22 @@ function OffboardDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const heirs = data.active.filter((p) => p.id !== person.id && !p.personal);
+  /** Which dialog shows. "Who takes over" is its own picker, swapped in the
+   *  way Manage teams hands off to New team (Ronald, 2026-10-05: the native
+   *  dropdown made no sense): this one closes, the picker opens, and back. */
+  const [shown, setShown] = useState<"offboard" | "pick" | null>("offboard");
+  const [swapping, setSwapping] = useState(false);
+  const swapTo = (next: "offboard" | "pick") => {
+    setSwapping(true);
+    setShown(null);
+    window.setTimeout(() => {
+      setShown(next);
+      window.setTimeout(() => setSwapping(false), MODAL_SWAP_MS);
+    }, MODAL_SWAP_MS);
+  };
+  const heirPerson = heirs.find((p) => p.id === heir) ?? null;
+  const roleBadge = (p: ActivePerson) =>
+    p.is_owner ? <Badge>Owner</Badge> : p.leads_team_ids.length ? <Badge>Lead</Badge> : null;
 
   useEffect(() => {
     if (!heir) return;
@@ -255,8 +271,10 @@ function OffboardDialog({
   }
 
   return (
+    <>
     <FormDialog
-      open
+      open={shown === "offboard"}
+      swap={swapping}
       onOpenChange={(o) => (o ? null : onClose())}
       size="sm"
       title={`Offboard ${person.name}`}
@@ -269,22 +287,22 @@ function OffboardDialog({
       }}
     >
       <p className={`${satoshi.className} text-[0.875rem] text-[var(--app-dim)]`}>Who takes over</p>
-      <select
-        value={heir ?? ""}
-        onChange={(e) => {
-          setFiles(null);
-          setHeir(e.target.value || null);
-        }}
-        aria-label="Who takes over"
-        className={`${satoshi.className} mt-2 h-11 w-full cursor-pointer rounded-[10px] border border-[#d9d9de] bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none focus:border-[#1c1917]`}
+      <button
+        type="button"
+        onClick={() => swapTo("pick")}
+        className={`${satoshi.className} mt-2 flex h-12 w-full cursor-pointer items-center gap-3 rounded-[12px] border border-[#d9d9de] bg-white px-3 text-left text-[0.9375rem] text-[#1c1917] outline-none hover:bg-[var(--app-muted)] focus-visible:border-[#1c1917]`}
       >
-        {heirs.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-            {p.is_owner ? " (owner)" : p.leads_team_ids.length ? " (lead)" : ""}
-          </option>
-        ))}
-      </select>
+        {heirPerson ? (
+          <>
+            <PersonAvatar identity={heirPerson.email} label={heirPerson.name} size={28} />
+            <span className="min-w-0 flex-1">{heirPerson.name}</span>
+            {roleBadge(heirPerson)}
+          </>
+        ) : (
+          <span className="flex-1 text-[var(--app-dim)]">Pick someone</span>
+        )}
+        <span className="text-[0.875rem] text-[var(--app-dim)]">Change</span>
+      </button>
 
       <div className="mt-5">
         {files === null ? (
@@ -329,5 +347,49 @@ function OffboardDialog({
       ) : null}
       {error ? <p className={`${satoshi.className} mt-3 text-[0.8125rem] text-[#EA4335]`}>{error}</p> : null}
     </FormDialog>
+    <AppDialog
+      open={shown === "pick"}
+      swap={swapping}
+      onOpenChange={(o) => {
+        if (!o) swapTo("offboard");
+      }}
+      title="Who takes over"
+      size="sm"
+    >
+      {/* The New file dialog's picker rows. Picking goes straight back. */}
+      <ul className={`${satoshi.className} m-0 flex list-none flex-col p-0 py-2`}>
+        {heirs.map((p) => {
+          const on = p.id === heir;
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => {
+                  if (p.id !== heir) {
+                    setFiles(null);
+                    setHeir(p.id);
+                  }
+                  swapTo("offboard");
+                }}
+                className={`flex w-full cursor-pointer items-center gap-3 rounded-[12px] px-2 py-2 text-left text-[0.9375rem] text-[#1c1917] outline-none hover:bg-[var(--app-muted)] focus-visible:ring-2 focus-visible:ring-[#1c1917]/15 ${on ? "bg-[var(--app-muted)]" : ""}`}
+              >
+                <PersonAvatar identity={p.email} label={p.name} size={30} />
+                <span className="min-w-0 flex-1">{p.name}</span>
+                {roleBadge(p)}
+                <span
+                  aria-hidden
+                  className={`grid size-5 shrink-0 place-items-center rounded-full border ${on ? "border-[#1c1917] bg-[#1c1917] text-white" : "border-[#d9d9de]"}`}
+                >
+                  {on ? <Check size={12} strokeWidth={3} /> : null}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </AppDialog>
+    </>
   );
 }

@@ -345,6 +345,31 @@ export async function assignTeamLead(
   if (!res.ok) throw new Error(await backendError(res));
 }
 
+/** Manage teams' red minus (Ronald, 2026-10-05): removes a team. One with
+ *  people in it needs either a team to move them to or a person to take
+ *  their files as they're offboarded. Owner or Super Admin only. */
+export async function removeTeam(
+  organizationId: string,
+  teamId: string,
+  then: { moveToTeamId: string } | { offboardToUserId: string } | null,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}/remove`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        then === null
+          ? {}
+          : "moveToTeamId" in then
+            ? { move_to_team_id: then.moveToTeamId }
+            : { offboard_to_user_id: then.offboardToUserId },
+      ),
+    },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+}
+
 /** Manage teams' member menu: take someone off one team (not the org). */
 export async function removeFromTeam(
   organizationId: string,

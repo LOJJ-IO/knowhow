@@ -16,14 +16,23 @@ import {
   assignTeamLead,
   removeFromTeam,
   type OverviewMember,
+  type OverviewTeam,
 } from "@/lib/organization";
 
 /** Manage teams' Teams tab, drawn like Notifications' Teams tab (user
  *  2026-09-27): each team's icon and name, its members under it instead of
  *  updates. Hovering (or focusing) a member springs in a horizontal kebab in
  *  the circle the red minus uses there, grey instead of red; it opens Make
- *  Team Lead and, in red, Remove Member. */
-export function TeamMembersSection() {
+ *  Team Lead and, in red, Remove Member.
+ *
+ *  The owner and a Super Admin also get Notifications' red minus on each
+ *  team's row (Ronald, 2026-10-05), which asks the caller to open the
+ *  remove-team warning. */
+export function TeamMembersSection({
+  onRemoveTeam,
+}: {
+  onRemoveTeam?: (team: OverviewTeam) => void;
+}) {
   const { chrome, me } = useSession();
   const { overview, refresh } = useUpdates();
   const [error, setError] = useState("");
@@ -31,6 +40,7 @@ export function TeamMembersSection() {
   if (!overview) return null;
 
   const membersById = new Map(overview.members.map((m) => [m.id, m]));
+  const canRemoveTeams = me.is_owner || me.is_super_admin;
 
   async function act(run: () => Promise<void>) {
     setError("");
@@ -56,13 +66,29 @@ export function TeamMembersSection() {
               key={team.id}
               className="relative flex flex-col gap-1.5 [&+&]:before:absolute [&+&]:before:inset-x-0 [&+&]:before:top-[calc(-3.871rem/2)] [&+&]:before:h-px [&+&]:before:bg-[var(--app-border)] [&+&]:before:content-['']"
             >
-              <div className="flex items-center gap-2.5">
+              <div className="group flex items-center gap-2.5">
                 <TeamIcon name={team.name} size={30} />
                 <span
-                  className={`${satoshi.className} truncate text-[1.28rem] font-medium text-[#1c1917]`}
+                  className={`${satoshi.className} min-w-0 flex-1 truncate text-[1.28rem] font-medium text-[#1c1917]`}
                 >
                   {team.name}
                 </span>
+                {canRemoveTeams && onRemoveTeam ? (
+                  // Notifications' red minus, in the column the member
+                  // kebabs use, springing in on hover or focus.
+                  <span
+                    className={`${TEAM_CLEAR_WIDTH} relative flex h-5 shrink-0 items-center pl-3.5`}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`Remove ${team.name}`}
+                      onClick={() => onRemoveTeam(team)}
+                      className="absolute left-3.5 grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[#EA4335] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#d93025] focus-visible:ring-2 focus-visible:ring-[#EA4335]/40 active:scale-90 motion-reduce:scale-100"
+                    >
+                      <span className="h-[2px] w-2 rounded-full bg-white" />
+                    </button>
+                  </span>
+                ) : null}
               </div>
               {/* Home's empty-team line, in a member row's place (user
                   2026-09-27). */}

@@ -52,7 +52,9 @@ export function FileTable({
         <span className="max-[900px]:hidden">Team</span>
         <span>Owner</span>
       </div>
-      <ul>
+      {/* 4px between rows (and under the header) so selected rows read as
+          separate pills, not one grey block (Ronald, 2026-10-05). */}
+      <ul className="mt-1 flex flex-col gap-1">
         {rows.map((f) => {
           const on = selected?.has(f.id) ?? false;
           return (

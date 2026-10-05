@@ -112,8 +112,8 @@ The planned screens/views are:
   from the Help screen and Workspace's own lines; Ronald to edit. Checked in Playwright Chromium on
   local `/demo` (Super Admin view).
 - **Sharing "Owned by" lead chip (Ronald, 2026-10-04).** The owner row on each Sharing team card
-  shows Home's `Badge` "Lead" beside the person instead of a grey "(lead)". Offboarding's person
-  picker still says " (lead)" / " (owner)" in text.
+  shows Home's `Badge` "Lead" beside the person instead of a grey "(lead)". Offboarding's "Who takes over"
+  picker now uses the `Badge` too (Lead / Owner), in its own swap-in dialog (2026-10-05).
 - **Notifications' Librarian groups indented (Ronald, 2026-10-04).** Under LIBRARIAN, each tab's
   name (Workspace, Ownership, Sharing, Offboarding) sits in 16px (`pl-4`) and its rows 32px
   (`TaskRow indent` → `pl-8`), so the three levels read as a tree. `notifications-dialog.tsx`.

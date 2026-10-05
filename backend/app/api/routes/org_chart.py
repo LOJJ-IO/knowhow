@@ -103,6 +103,37 @@ def delete_team_route(
     return {"deleted": str(team_id)}
 
 
+class RemoveTeamRequest(BaseModel):
+    move_to_team_id: uuid.UUID | None = None
+    offboard_to_user_id: uuid.UUID | None = None
+
+
+@router.post("/organizations/{org_id}/teams/{team_id}/remove")
+def remove_team_route(
+    org_id: uuid.UUID,
+    team_id: uuid.UUID,
+    body: RemoveTeamRequest,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """Manage teams' red minus (Ronald, 2026-10-05): removes a team, moving
+    or offboarding the people in it first. Owner or verified Super Admin
+    only. See `app/org_chart/remove_team.py`."""
+    from app.org_chart.remove_team import remove_team
+
+    try:
+        return remove_team(
+            org_id,
+            team_id,
+            member,
+            db,
+            move_to_team_id=body.move_to_team_id,
+            offboard_to_user_id=body.offboard_to_user_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+
+
 class AssignLeaderRequest(BaseModel):
     member_id: uuid.UUID
 
