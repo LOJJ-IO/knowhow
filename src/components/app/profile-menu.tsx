@@ -100,10 +100,10 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
             side="bottom"
             align="end"
             sideOffset={8}
-            className={LAYER}
+            className={MENU_LAYER}
           >
             <Menu.Popup
-              className={cn(satoshi.className, POPUP)}
+              className={cn(satoshi.className, MENU_POPUP)}
               // Closes into its line (the .app-modal close) while Switch
               // accounts stays up.
               style={
@@ -141,9 +141,9 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
                       side="left"
                       align="start"
                       sideOffset={8}
-                      className={LAYER}
+                      className={MENU_LAYER}
                     >
-                      <Menu.Popup className={cn(satoshi.className, POPUP)}>
+                      <Menu.Popup className={cn(satoshi.className, MENU_POPUP)}>
                         <Menu.GroupLabel className={LABEL}>
                           Switch accounts
                         </Menu.GroupLabel>
@@ -265,7 +265,7 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
                 render={<Link href="/help" />}
                 onMouseEnter={() => setHovered("help")}
                 onMouseLeave={() => setHovered(null)}
-                className={ITEM}
+                className={MENU_ITEM}
               >
                 <MorphIcon href="/help" open={hovered === "help"} size={20} />
                 Help
@@ -315,11 +315,11 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
  *  on the positioner — a portalled popup whose positioner has no z-index lands
  *  in the body's default layer, where the page can paint over it (user
  *  2026-09-22: "the z index is all wrong"). */
-const POPUP =
+export const MENU_POPUP =
   "app-modal w-[20rem] rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none";
 
 /** Menus sit under dialogs (500) and tooltips (600). */
-const LAYER = "isolate z-[450]";
+export const MENU_LAYER = "isolate z-[450]";
 
 const LABEL = "px-4 pt-3 pb-1 text-[0.8125rem] text-[var(--app-dim)]";
 
@@ -436,7 +436,7 @@ function Chip({ children }: { children: ReactNode }) {
   );
 }
 
-const ITEM =
+export const MENU_ITEM =
   "mx-1 flex h-11 cursor-pointer items-center gap-3 rounded-[12px] px-3 text-[0.9375rem] text-[#44403c] no-underline outline-none select-none data-[disabled]:cursor-default data-[disabled]:opacity-60 data-[highlighted]:bg-[var(--app-muted)] data-[highlighted]:text-[#1c1917]";
 
 function Divider() {
@@ -464,7 +464,7 @@ function Item({
       onClick={onClick}
       onMouseEnter={() => onHover?.(hoverKey ?? null)}
       onMouseLeave={() => onHover?.(null)}
-      className={ITEM}
+      className={MENU_ITEM}
     >
       {icon}
       {children}

@@ -17,9 +17,10 @@ Privacy, enforced here rather than by convention:
 
 import hashlib
 import hmac
+import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from googleapiclient.errors import HttpError
 from sqlalchemy import delete, func, select
@@ -43,8 +44,9 @@ from app.models.librarian import (
     LibrarianStatus,
     LibrarianSuggestion,
 )
-from app.models.org_member import OrgMember
-from app.models.org_membership import OrgMembership
+from app.logging_config import get_logger
+from app.models.org_member import AuthType, OrgMember
+from app.models.org_membership import OrgMembership, OrgRole
 from app.models.organization import Organization
 from app.models.team import Team
 from app.sandbox import SANDBOX_DOMAIN, is_sandbox_org
@@ -56,6 +58,8 @@ from app.sharing.visibility import can_view_file
 SCAN_LIMIT = 500
 # How many titles one review screen fetches live.
 REVIEW_PAGE = 50
+
+logger = get_logger(__name__)
 
 LIVE_FIELDS = "id,name,mimeType,modifiedTime,createdTime,webViewLink"
 # LIVE_FIELDS plus the sharing metadata used to route a file to a team folder.
@@ -354,6 +358,29 @@ def _can_confirm_for(actor: OrgMember, proposer_id: uuid.UUID, db: Session) -> b
     )
 
 
+def task_counts(actor: OrgMember, db: Session) -> tuple[int, int]:
+    """(files to sort, proposals to review) for the Notifications dialog's
+    Librarian section. Counts only: no Drive call, so the bell stays cheap."""
+    to_sort = db.execute(
+        select(func.count())
+        .select_from(LibrarianCandidate)
+        .where(LibrarianCandidate.member_id == actor.id, LibrarianCandidate.status == LibrarianStatus.SUGGESTED)
+    ).scalar_one()
+    proposers = db.execute(
+        select(LibrarianCandidate.member_id).where(
+            LibrarianCandidate.org_id == actor.organization_id,
+            LibrarianCandidate.status == LibrarianStatus.PROPOSED,
+        )
+    ).scalars()
+    allowed: dict[uuid.UUID, bool] = {}
+    to_review = 0
+    for member_id in proposers:
+        if member_id not in allowed:
+            allowed[member_id] = _can_confirm_for(actor, member_id, db)
+        to_review += allowed[member_id]
+    return to_sort, to_review
+
+
 def proposals_for(actor: OrgMember, db: Session) -> dict:
     """Company proposals this person may confirm, titles read live from the
     proposer's Drive (the confirmer may not have access to the file)."""
@@ -520,10 +547,27 @@ def _visible_files(actor: OrgMember, folder_id: uuid.UUID, db: Session) -> list[
     rows = db.execute(
         select(FileIndex)
         .join(FolderFile, FolderFile.file_id == FileIndex.file_id)
-        .where(FolderFile.folder_id == folder_id, FileIndex.org_id == actor.organization_id)
+        .where(
+            FolderFile.folder_id == folder_id,
+            FileIndex.org_id == actor.organization_id,
+            FileIndex.trashed_at.is_(None),
+        )
         .order_by(FileIndex.modified_at.desc())
     ).scalars()
     return [f for f in rows if _can_see(actor, f, everything, db)]
+
+
+def file_link(f: FileIndex) -> str | None:
+    """Where a file card opens (Ronald, 2026-10-04). Real orgs: the file in
+    Google; `drive.google.com/open` resolves to the right editor for any type.
+    The sandbox's files don't exist in Google, so its cards open a blank file
+    with the same name instead (Ronald picked that over no link), a new one
+    each click."""
+    if is_sandbox_org(f.org_id):
+        from app.sandbox.drive import _new_file_link
+
+        return _new_file_link(f.file_type, f.title)
+    return f"https://drive.google.com/open?id={f.file_id}"
 
 
 def _file_view(f: FileIndex) -> dict:
@@ -531,9 +575,73 @@ def _file_view(f: FileIndex) -> dict:
         "file_id": f.file_id,
         "name": f.title,
         "mime_type": f.file_type,
+        "web_view_link": file_link(f),
         "modified_at": f.modified_at.isoformat(),
         "owner_user_id": str(f.owner_user_id) if f.owner_user_id else None,
         "team_id": str(f.team_id) if f.team_id else None,
+    }
+
+
+#: How long a file's stored name counts as fresh. Opening a folder re-reads
+#: older ones from Google, so a rename in Docs shows up when you come back
+#: (Ronald, 2026-10-04) instead of at the 6-hourly reconciliation sweep.
+REFRESH_AFTER = timedelta(seconds=15)
+
+
+def _as_utc(value: datetime) -> datetime:
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+
+
+def _refresh_from_drive(files: list[FileIndex], db: Session) -> None:
+    """Re-read name and edit time for stale rows, through each file's owner.
+    Best effort: a file or owner Google won't answer for keeps what we had."""
+    now = datetime.now(timezone.utc)
+    stale: dict[uuid.UUID, list[FileIndex]] = {}
+    for f in files:
+        if f.owner_user_id and now - _as_utc(f.last_synced_at) > REFRESH_AFTER:
+            stale.setdefault(f.owner_user_id, []).append(f)
+    if not stale:
+        return
+    for owner_id, rows in stale.items():
+        try:
+            drive = get_drive_client_for_user(owner_id, db)
+        except Exception:
+            # No usable connection for this owner (not consented, delegation
+            # not approved yet): the folder still opens with stored names.
+            logger.info("librarian.refresh_skipped", owner_id=str(owner_id))
+            continue
+        for f in rows:
+            try:
+                live = drive.files().get(fileId=f.file_id, fields="name,modifiedTime").execute()
+            except HttpError:
+                continue
+            f.title = live.get("name") or f.title
+            if live.get("modifiedTime"):
+                f.modified_at = datetime.fromisoformat(live["modifiedTime"].replace("Z", "+00:00"))
+            f.last_synced_at = now
+    db.commit()
+
+
+def _detail_view(
+    f: FileIndex, owners: dict[uuid.UUID, OrgMember], team_names: dict[uuid.UUID, str], can_manage: bool
+) -> dict:
+    """A file plus who owns it and its team, for the folder's details view
+    (the same columns as Ownership)."""
+    owner = owners.get(f.owner_user_id) if f.owner_user_id else None
+    return {
+        **_file_view(f),
+        "owner": (
+            {
+                "name": owner.display_name or owner.email.split("@")[0],
+                "email": owner.email,
+                "personal": owner.auth_type == AuthType.PERSONAL_OAUTH,
+            }
+            if owner
+            else None
+        ),
+        "team_name": team_names.get(f.team_id) if f.team_id else None,
+        "private": bool((f.sharing_state or {}).get("private")),
+        "can_manage": can_manage,
     }
 
 
@@ -544,6 +652,7 @@ def list_folders(actor: OrgMember, db: Session) -> list[dict]:
         .where(KnohowFolder.org_id == actor.organization_id)
         .order_by(KnohowFolder.team_id.is_(None), KnohowFolder.name)
     ).scalars()
+    everything = _sees_everything(actor, db)
     out = []
     for folder in folders:
         files = _visible_files(actor, folder.id, db)
@@ -552,8 +661,12 @@ def list_folders(actor: OrgMember, db: Session) -> list[dict]:
                 "id": str(folder.id),
                 "name": folder.name,
                 "team_id": str(folder.team_id) if folder.team_id else None,
+                "color": folder.color,
                 "file_count": len(files),
                 "preview": [_file_view(f) for f in files[:3]],
+                # Rename / delete in the folder's pop-over; team folders follow
+                # their team (Ronald, 2026-10-04).
+                "can_manage": folder.team_id is None and (folder.created_by == actor.id or everything),
             }
         )
     return out
@@ -564,24 +677,51 @@ def folder_detail(actor: OrgMember, folder_id: uuid.UUID, db: Session) -> dict:
     if folder is None or folder.org_id != actor.organization_id:
         raise LookupError("folder not found")
     files = _visible_files(actor, folder.id, db)
+    _refresh_from_drive(files, db)
+    # A refreshed edit time can change the order.
+    files.sort(key=lambda f: _as_utc(f.modified_at), reverse=True)
+    org_id = actor.organization_id
+    owners = {
+        m.id: m
+        for m in db.execute(select(OrgMember).where(OrgMember.organization_id == org_id)).scalars()
+    }
+    team_names = {
+        t.id: t.name for t in db.execute(select(Team).where(Team.org_id == org_id)).scalars()
+    }
     return {
         "id": str(folder.id),
         "name": folder.name,
         "team_id": str(folder.team_id) if folder.team_id else None,
-        "files": [_file_view(f) for f in files],
+        "color": folder.color,
+        "files": [_detail_view(f, owners, team_names, _can_manage_file(actor, f, db)) for f in files],
     }
 
 
-def create_folder(actor: OrgMember, name: str, db: Session) -> dict:
+_HEX_COLOR = re.compile(r"#[0-9a-f]{6}")
+
+
+def create_folder(actor: OrgMember, name: str, db: Session, color: str | None = None) -> dict:
     name = name.strip()
     if not name:
         raise LibrarianError("a folder needs a name")
     if len(name) > 255:
         raise LibrarianError("that name is too long")
-    folder = KnohowFolder(org_id=actor.organization_id, name=name, created_by=actor.id)
+    if color is not None:
+        color = color.strip().lower()
+        if not _HEX_COLOR.fullmatch(color):
+            raise LibrarianError("a colour must look like #1a2b3c")
+    folder = KnohowFolder(org_id=actor.organization_id, name=name, color=color, created_by=actor.id)
     db.add(folder)
     db.commit()
-    return {"id": str(folder.id), "name": folder.name, "team_id": None, "file_count": 0, "preview": []}
+    return {
+        "id": str(folder.id),
+        "name": folder.name,
+        "team_id": None,
+        "color": folder.color,
+        "file_count": 0,
+        "preview": [],
+        "can_manage": True,
+    }
 
 
 def delete_folder(actor: OrgMember, folder_id: uuid.UUID, db: Session) -> None:
@@ -594,8 +734,17 @@ def delete_folder(actor: OrgMember, folder_id: uuid.UUID, db: Session) -> None:
     if not (folder.created_by == actor.id or is_owner(org_id, actor, db) or is_verified_super_admin(org_id, actor)):
         raise PermissionError("only whoever made this folder, the owner, or a verified Super Admin can delete it")
     db.execute(delete(FolderFile).where(FolderFile.folder_id == folder.id))
+    name = folder.name
     db.delete(folder)
     db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="folder.deleted",
+        target_resource_id=str(folder_id),
+        details={"name": name},
+        db=db,
+    )
 
 
 def set_file_in_folder(actor: OrgMember, folder_id: uuid.UUID, file_id: str, present: bool, db: Session) -> None:
@@ -616,8 +765,167 @@ def all_company_files(actor: OrgMember, db: Session) -> list[dict]:
     """Every indexed file this person can see, for "add to folder"."""
     rows = db.execute(
         select(FileIndex)
-        .where(FileIndex.org_id == actor.organization_id)
+        .where(FileIndex.org_id == actor.organization_id, FileIndex.trashed_at.is_(None))
         .order_by(FileIndex.modified_at.desc())
     ).scalars()
     everything = _sees_everything(actor, db)
     return [_file_view(f) for f in rows if _can_see(actor, f, everything, db)]
+
+
+# ------------------------------------------- rename, trash, restore (2026-10-04)
+
+#: Google empties Drive's Trash after this long (ADR-0010).
+TRASH_DAYS = 30
+
+
+def _can_manage_file(actor: OrgMember, f: FileIndex, db: Session) -> bool:
+    """The file's owner, a lead of its team, the org owner or a verified Super
+    Admin (Ronald, 2026-10-04: the same people who can delete a folder)."""
+    if f.owner_user_id == actor.id or _sees_everything(actor, db):
+        return True
+    if f.team_id is None:
+        return False
+    return (
+        db.execute(
+            select(OrgMembership.id).where(
+                OrgMembership.org_id == actor.organization_id,
+                OrgMembership.team_id == f.team_id,
+                OrgMembership.user_id == actor.id,
+                OrgMembership.role == OrgRole.TEAM_LEADER,
+            )
+        ).first()
+        is not None
+    )
+
+
+def _managed_file(actor: OrgMember, file_id: str, db: Session) -> FileIndex:
+    f = db.get(FileIndex, file_id)
+    if f is None or f.org_id != actor.organization_id:
+        raise LookupError("file not found")
+    if not _can_manage_file(actor, f, db):
+        raise PermissionError("only the file's owner, its team's lead, the owner or a Super Admin can change it")
+    if f.owner_user_id is None:
+        raise LibrarianError("this file has no owner Knohow can act for")
+    return f
+
+
+def rename_file(actor: OrgMember, file_id: str, name: str, db: Session) -> dict:
+    name = name.strip()
+    if not name:
+        raise LibrarianError("a file needs a name")
+    if len(name) > 1024:
+        raise LibrarianError("that name is too long")
+    f = _managed_file(actor, file_id, db)
+    old = f.title
+    # Through the owner, who can always rename; the actor may only be a viewer
+    # in Drive.
+    drive = get_drive_client_for_user(f.owner_user_id, db)
+    live = drive.files().update(fileId=file_id, body={"name": name}, fields="name,modifiedTime").execute()
+    f.title = live.get("name") or name
+    if live.get("modifiedTime"):
+        f.modified_at = datetime.fromisoformat(live["modifiedTime"].replace("Z", "+00:00"))
+    f.last_synced_at = datetime.now(timezone.utc)
+    db.commit()
+    record_audit_entry(
+        org_id=actor.organization_id,
+        actor_user_id=actor.id,
+        action_type="document.renamed",
+        target_resource_id=file_id,
+        details={"from": old, "to": f.title, "team_id": str(f.team_id) if f.team_id else None},
+        db=db,
+    )
+    return _file_view(f)
+
+
+def trash_file(actor: OrgMember, file_id: str, db: Session) -> None:
+    """Into the owner's Drive Trash, never deleted (ADR-0010). The row and its
+    folders stay, hidden, so a restore puts it back where it was."""
+    f = _managed_file(actor, file_id, db)
+    if f.trashed_at is not None:
+        return
+    drive = get_drive_client_for_user(f.owner_user_id, db)
+    drive.files().update(fileId=file_id, body={"trashed": True}).execute()
+    f.trashed_at = datetime.now(timezone.utc)
+    f.trashed_by = actor.id
+    db.commit()
+    record_audit_entry(
+        org_id=actor.organization_id,
+        actor_user_id=actor.id,
+        action_type="document.trashed",
+        target_resource_id=file_id,
+        details={"title": f.title, "team_id": str(f.team_id) if f.team_id else None},
+        db=db,
+    )
+
+
+def restore_file(actor: OrgMember, file_id: str, db: Session) -> None:
+    f = _managed_file(actor, file_id, db)
+    if f.trashed_at is None:
+        return
+    drive = get_drive_client_for_user(f.owner_user_id, db)
+    drive.files().update(fileId=file_id, body={"trashed": False}).execute()
+    f.trashed_at = None
+    f.trashed_by = None
+    db.commit()
+    record_audit_entry(
+        org_id=actor.organization_id,
+        actor_user_id=actor.id,
+        action_type="document.restored",
+        target_resource_id=file_id,
+        details={"title": f.title, "team_id": str(f.team_id) if f.team_id else None},
+        db=db,
+    )
+
+
+def trash(actor: OrgMember, db: Session) -> list[dict]:
+    """Files deleted through Knohow that Google still holds and this person
+    may restore, newest first."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=TRASH_DAYS)
+    rows = db.execute(
+        select(FileIndex)
+        .where(FileIndex.org_id == actor.organization_id, FileIndex.trashed_at.is_not(None))
+        .order_by(FileIndex.trashed_at.desc())
+    ).scalars()
+    out = []
+    for f in rows:
+        trashed = _as_utc(f.trashed_at)
+        if trashed < cutoff or not _can_manage_file(actor, f, db):
+            continue
+        by = db.get(OrgMember, f.trashed_by) if f.trashed_by else None
+        out.append(
+            {
+                **_file_view(f),
+                "trashed_at": trashed.isoformat(),
+                "gone_at": (trashed + timedelta(days=TRASH_DAYS)).isoformat(),
+                "trashed_by": (by.display_name or by.email.split("@")[0]) if by else None,
+            }
+        )
+    return out
+
+
+def rename_folder(actor: OrgMember, folder_id: uuid.UUID, name: str, db: Session) -> dict:
+    folder = db.get(KnohowFolder, folder_id)
+    if folder is None or folder.org_id != actor.organization_id:
+        raise LookupError("folder not found")
+    if folder.team_id is not None:
+        raise LibrarianError("a team's folder takes the team's name")
+    name = name.strip()
+    if not name:
+        raise LibrarianError("a folder needs a name")
+    if len(name) > 255:
+        raise LibrarianError("that name is too long")
+    org_id = actor.organization_id
+    if not (folder.created_by == actor.id or is_owner(org_id, actor, db) or is_verified_super_admin(org_id, actor)):
+        raise PermissionError("only whoever made this folder, the owner, or a verified Super Admin can rename it")
+    old = folder.name
+    folder.name = name
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="folder.renamed",
+        target_resource_id=str(folder.id),
+        details={"from": old, "to": name},
+        db=db,
+    )
+    return {"id": str(folder.id), "name": folder.name}

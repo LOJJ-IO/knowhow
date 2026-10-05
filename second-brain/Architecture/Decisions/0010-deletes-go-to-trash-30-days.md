@@ -25,7 +25,7 @@ Knohow never permanently deletes a Google file. A delete moves it to the owning 
 
 ## Consequences
 - Knohow must never call `files.delete` or `files.emptyTrash`. As of 2026-09-18 `backend/` calls neither (its only Drive `delete` is `permissions().delete` in `app/google/ownership.py`, which removes an access grant during an ownership transfer, not a file).
-- Restoring within 30 days must be possible; for org-created files the Trash is the automation account's, so Knohow (via delegation) is the one that restores — the UI will need a way to ask for it. Not designed.
+- Restoring within 30 days must be possible; for org-created files the Trash is the automation account's, so Knohow (via delegation) is the one that restores — the UI will need a way to ask for it. Designed 2026-10-04: Settings → Trash, see [[0033-rename-delete-from-knohow-trash-and-logs]].
 - Removing someone's *access* (unsharing) is not a delete and isn't covered.
 - Relies on Google's 30-day Trash; if Google changes that period, this ADR needs revisiting.
 

@@ -41,3 +41,10 @@ class FileIndex(Base):
     sharing_state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     last_synced_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    # Deleted through Knohow: in the owner's Drive Trash (ADR-0010), kept
+    # here so Settings' Trash can restore it within Google's 30 days.
+    trashed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    trashed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
+    )

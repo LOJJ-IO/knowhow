@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-10-02
+updated: 2026-10-04
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -595,3 +595,19 @@ choices, `CTA_CLASS`, `ChoicePill`, account picker, demo form, `SetupShareAction
 - **Many WebGL views on one page: share one context, copy into 2D canvases (2026-10-02).** Browsers cap live WebGL contexts (~16) and silently lose the oldest. Render every instance with one offscreen context (viewport at the bottom-left, since GL's origin is there) and `drawImage(glCanvas, 0, h - px, px, px, …)` into each element's own 2D canvas in the same task, before the buffer is presented, so no `preserveDrawingBuffer` is needed. — [[Known-Issues]]
 - **Hash a timestamp only after normalising its zone (2026-10-01).** A database returns timestamps in the session's TimeZone, so `isoformat()` of the read value can differ from the written one. Anything hashed or signed must use `astimezone(timezone.utc)` first.
 - **`will-change` on an SVG that paints outside its box gets clipped in WebKit (2026-10-02).** A promoted layer is sized to the element, so `overflow: visible` content (liquid-gooey's goo reaching beyond the pill) is cut off in Safari only. Check motion that overflows its box in Playwright WebKit, not just Chromium; override a library's inline style with Tailwind's `!`. — [[Known-Issues]]
+- **A scanline (genie) redraw of a see-through element must paint each screen row exactly once (2026-10-02).** Drawing 1px rows that overlap by a fraction doubles the alpha of a `bg-black/80` pill into dark stripes; rows that drift apart leave light ones. Snap rows to whole pixels, stretch each to where the next begins, and skip pixel rows already painted (`notification-center.tsx`). Check motion from a Playwright video (`recordVideo` + ffmpeg frames), not screenshots, which are too slow to catch a 0.5s effect.
+- **Design for one person's attention, not for completeness (2026-10-02, Ronald).** Before laying out a list, decide where the eye goes first, what this decision actually needs, and how it groups. Anything identical on every row (a guess, a reason chip) is said once as a group heading; one primary action per surface, quiet controls for the exceptions. Ronald's words on the old Sort window: "too much going on… you're overwhelming the user."
+
+- **`docs.new` can't name a file; `docs.google.com/document/create?title=…` can** (Ronald, 2026-10-04). The same `create?title=` works for `spreadsheets` and `presentation`, and is used for `forms` too. Use the `create` form wherever Knohow opens a blank Google file in the browser's own account (the sandbox and the New fallback). The sandbox Drive never calls Google, so a name typed in Knohow only reaches Google through that link.
+
+- **`FileIndex.title` goes stale (Ronald, 2026-10-04).** It is written once when a file is created/confirmed and only refreshed by the 6-hourly reconciliation sweep (`activity/reconciliation.py`). Any screen that must show a rename promptly has to re-read from Drive; `folder_detail` does this with a 15s staleness window (`_refresh_from_drive` in `librarian/service.py`). Reuse that helper rather than adding another per-screen fetch.
+
+- **A model column added before its migration runs breaks every screen that reads that table (Ronald, 2026-10-04).** `uvicorn --reload` loads the new model right away. Until `alembic upgrade head` runs, every query on that table returns a 500. Seen when `FileIndex.trashed_at` (migration `0024`) arrived: Workspace showed "Couldn't load your folders" and the Librarian popup never appeared. Run the migration in the same step you add the column.
+
+- **Never truncate the thing the row is about (Ronald, 2026-10-04).** If a row can't fit its primary label (a file name) at full length, change the layout (stack it, give the name its own line) instead of letting it ellipsis while secondary info (avatars, "With …", buttons) keeps its width. Seen on Sharing's "Waiting for you" dialog.
+
+## Rolling digit columns: offset from the resting digit, not from 0 (Ronald, 2026-10-04)
+A digit roller that places tile `n` at `n × step` and slides the column by `-value × step` rests at a large offset for big values. Different columns then land on different sub-pixels and the digits look crooked ("29" in the bell badge). Place tiles at `(n - value) × step` and slide by `(value - p) × step`, so every column rests at exactly 0. framer-motion's `useTransform(fn)` re-reads the closure on every render, so using `value` inside it is safe.
+
+## Base UI Toast.Description is a <p> (Ronald, 2026-10-04)
+Putting `PersonAvatar` (its `FluidOrb` is a `<div>`) in a toast description throws "<div> cannot be a descendant of <p>" and a hydration error. Pass `render={<div />}` to `Toast.Description` when it holds anything richer than text.

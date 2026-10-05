@@ -7,7 +7,16 @@ import { Button } from "@/components/app/button";
 import { AppDialog } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
+import { FileIcon } from "@/components/app/file-meta";
 import { backendError, backendFetch } from "@/lib/backend";
+import { actionLabel, relativeTime } from "@/lib/change-text";
+import {
+  fetchLog,
+  fetchTrash,
+  restoreFile,
+  type LogEntry,
+  type TrashedFile,
+} from "@/lib/librarian";
 import { fetchOrgOverview, type OrgOverview } from "@/lib/organization";
 
 type TeamJoinRequest = {
@@ -37,6 +46,12 @@ export function SettingsDialog({
   const [saved, setSaved] = useState(false);
   const [requests, setRequests] = useState<TeamJoinRequest[]>([]);
   const [deciding, setDeciding] = useState<string | null>(null);
+  /** Files deleted through Knohow you may restore (Ronald, 2026-10-04). */
+  const [trash, setTrash] = useState<TrashedFile[] | null>(null);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  /** The org's history; the owner and Super Admins only. */
+  const [log, setLog] = useState<LogEntry[] | null>(null);
+  const seesLog = me.is_owner || me.is_super_admin;
 
   // The backend lets any approved member rename; the owner seat can still be
   // an unconfirmed claim, so the founder and Super Admins can too.
@@ -64,10 +79,38 @@ export function SettingsDialog({
         setRequests((await res.json()) as TeamJoinRequest[]);
       })
       .catch(() => {});
+    fetchTrash(chrome.organizationId)
+      .then((rows) => {
+        if (!cancelled) setTrash(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setTrash([]);
+      });
+    if (seesLog)
+      fetchLog(chrome.organizationId)
+        .then((rows) => {
+          if (!cancelled) setLog(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setLog([]);
+        });
     return () => {
       cancelled = true;
     };
-  }, [open, chrome.organizationId]);
+  }, [open, chrome.organizationId, seesLog]);
+
+  async function restore(file: TrashedFile) {
+    setRestoring(file.fileId);
+    setError("");
+    try {
+      await restoreFile(chrome.organizationId, file.fileId);
+      setTrash((cur) => (cur ?? []).filter((f) => f.fileId !== file.fileId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRestoring(null);
+    }
+  }
 
   const dirty =
     overview !== null && name.trim() !== "" && name.trim() !== overview.name;
@@ -217,6 +260,71 @@ export function SettingsDialog({
             </ul>
           </section>
         ) : null}
+
+        <section className="flex flex-col gap-2">
+          <SettingsHeading>Trash</SettingsHeading>
+          {trash === null ? (
+            <p className="m-0 text-[0.875rem] text-[var(--app-dim)]">Loading…</p>
+          ) : trash.length === 0 ? (
+            <p className="m-0 text-[0.875rem] text-[var(--app-dim)]">
+              Nothing in Trash. Files deleted in Knohow stay here for 30 days.
+            </p>
+          ) : (
+            <ul className="m-0 flex max-h-[16rem] list-none flex-col gap-3 overflow-y-auto p-0">
+              {trash.map((f) => (
+                <li key={f.fileId} className="flex items-center gap-3">
+                  <FileIcon mimeType={f.mimeType} size={28} />
+                  <div className="min-w-0 flex-1">
+                    <p className="m-0 truncate text-[0.875rem] text-[#1c1917]" title={f.name}>
+                      {f.name}
+                    </p>
+                    <p className="m-0 text-[0.8125rem] text-[var(--app-dim)]">
+                      {f.trashedBy ? `Deleted by ${f.trashedBy} · ` : ""}
+                      {daysLeft(f.goneAt)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    disabled={restoring === f.fileId}
+                    onClick={() => void restore(f)}
+                  >
+                    {restoring === f.fileId ? "Restoring…" : "Restore"}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {seesLog ? (
+          <section className="flex flex-col gap-2">
+            <SettingsHeading>Logs</SettingsHeading>
+            {log === null ? (
+              <p className="m-0 text-[0.875rem] text-[var(--app-dim)]">Loading…</p>
+            ) : log.length === 0 ? (
+              <p className="m-0 text-[0.875rem] text-[var(--app-dim)]">Nothing yet.</p>
+            ) : (
+              <ul className="m-0 flex max-h-[18rem] list-none flex-col gap-3 overflow-y-auto p-0">
+                {log.map((e) => (
+                  <li key={e.id} className="flex items-baseline justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="m-0 truncate text-[0.875rem] text-[#1c1917]">
+                        {actionLabel(e.action)}
+                        {e.subject ? ` · ${e.subject}` : ""}
+                      </p>
+                      {e.actor ? (
+                        <p className="m-0 text-[0.8125rem] text-[var(--app-dim)]">{e.actor}</p>
+                      ) : null}
+                    </div>
+                    <span className="shrink-0 text-[0.8125rem] text-[var(--app-dim)] tabular-nums">
+                      {relativeTime(e.at)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ) : null}
       </div>
     </AppDialog>
   );
@@ -229,4 +337,11 @@ function SettingsHeading({ children }: { children: React.ReactNode }) {
       {children}
     </h3>
   );
+}
+
+/** "Gone in 12 days": when Google empties it for good (ADR-0010). */
+function daysLeft(goneAt: string) {
+  const days = Math.ceil((new Date(goneAt).getTime() - Date.now()) / 86_400_000);
+  if (days <= 1) return "Gone tomorrow";
+  return `Gone in ${days} days`;
 }

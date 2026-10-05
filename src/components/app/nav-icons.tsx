@@ -13,6 +13,5 @@ export const NAV_ICONS: Record<string, AppIconName> = {
   "/ownership": "shield",
   "/sharing": "link",
   "/offboarding": "user",
-  "/search": "search",
   "/help": "circle-help",
 };

@@ -100,7 +100,10 @@ def test_screens_read_through_the_sandbox(client):
     assert len(sharing["teams"]) == 6 and sharing["suggestions"]
     off = client.get(f"/organizations/{ORG}/offboarding").json()
     assert off["active"] and off["history"]
-    assert [t["kind"] for t in client.get(f"/organizations/{ORG}/tasks").json()] == ["join_request", "join_request"]
+    kinds = [t["kind"] for t in client.get(f"/organizations/{ORG}/tasks").json()]
+    assert kinds[:4] == ["join_request", "join_request", "librarian_sort", "librarian_review"]
+    # The Ownership / Sharing / Offboarding prompts, now bell tasks.
+    assert {"ownership_review", "ownership_stuck", "share_suggestions", "offboarded"} <= set(kinds)
     results = client.get("/search?q=pricing").json()["results"]
     assert results and any(r["company"] and r["team_id"] for r in results)
 

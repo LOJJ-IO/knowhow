@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
@@ -12,6 +11,7 @@ import { NewMenu } from "@/components/app/new-menu";
 import { NotificationBell } from "@/components/app/notification-bell";
 import { PanelToggle } from "@/components/app/panel-toggle";
 import { ProfileMenu } from "@/components/app/profile-menu";
+import { useTitleAside } from "@/components/app/title-aside";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { NotificationsDialog } from "@/components/app/notifications-dialog";
@@ -25,7 +25,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/brand/tooltip";
-import { APP_HOME, APP_NAV, APP_SEARCH, APP_UTILITY } from "@/lib/app-nav";
+import { SearchDialog } from "@/components/app/search-dialog";
+import { APP_HOME, APP_NAV, APP_UTILITY } from "@/lib/app-nav";
 import {
   firstName,
   GREETING_IDLE_MS,
@@ -53,19 +54,24 @@ export function Topbar({
   onToggleSidebar: () => void;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
   const { chrome } = useSession();
-  // ⌘K / Ctrl+K opens Search from anywhere in the app, as the pill says.
+  // Search is the field itself, no screen (Ronald 2026-10-04): type, Enter,
+  // and the results open in SearchDialog. ⌘K / Ctrl+K focuses the field from
+  // anywhere in the app, as the pill says.
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [searchText, setSearchText] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        router.push(APP_SEARCH.href);
+        searchInput.current?.focus();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, []);
   const { tasks, teamUpdates, unseen, clearAll } = useUpdates();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -91,7 +97,7 @@ export function Topbar({
   const bellCount =
     tasks.length +
     teamUpdates.reduce((sum, row) => sum + row.changes.events.length, 0);
-  const current = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
+  const current = [...APP_NAV, ...APP_UTILITY].find(
     (item) => item.href === pathname,
   );
   // Home greets the person instead of naming the screen (user 2026-09-22).
@@ -143,6 +149,7 @@ export function Topbar({
     };
   }, [hydrated, name]);
 
+  const titleAside = useTitleAside();
   const title =
     pathname === APP_HOME && hydrated ? greeting : (current?.label ?? "");
 
@@ -157,18 +164,36 @@ export function Topbar({
         >
           {title}
         </h1>
+        {/* A screen's own extra beside its name (Workspace's `?`). Pulled
+            back toward the title, since the header's gap is for the toggle. */}
+        {titleAside ? <div className="-ml-3 flex items-center">{titleAside}</div> : null}
 
         <div className="ml-auto flex shrink-0 items-center gap-2.5">
-          <Link
-            href={APP_SEARCH.href}
-            aria-current={pathname === APP_SEARCH.href ? "page" : undefined}
-            className={`${satoshi.className} flex h-10 w-[15rem] items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 text-[0.9375rem] text-[var(--app-dim)] transition-[border-color,translate] duration-150 hover:border-[#d9d9de] active:translate-y-px`}
+          <form
+            role="search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = searchText.trim();
+              if (!q) return;
+              setSearchQuery(q);
+              setSearchOpen(true);
+              searchInput.current?.blur();
+            }}
+            className={`${satoshi.className} flex h-10 w-[15rem] items-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 text-[0.9375rem] transition-[border-color] duration-150 focus-within:border-[#1c1917] hover:border-[#d9d9de] focus-within:hover:border-[#1c1917]`}
           >
-            <span className="truncate">Search</span>
+            <input
+              ref={searchInput}
+              type="search"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search"
+              aria-label="Search"
+              className="min-w-0 flex-1 bg-transparent text-[#1c1917] outline-none placeholder:text-[var(--app-dim)] [&::-webkit-search-cancel-button]:hidden"
+            />
             <kbd className="ml-auto shrink-0 font-sans text-[0.8125rem] text-[var(--app-dim)]">
               ⌘K
             </kbd>
-          </Link>
+          </form>
 
           {/* NotificationBell is the app's own icon Button underneath, so the
               surface, hover, press and focus are the row's and need nothing
@@ -219,6 +244,11 @@ export function Topbar({
           </ProfileMenu>
         </div>
       </header>
+      <SearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        query={searchQuery}
+      />
       <NotificationsDialog
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}

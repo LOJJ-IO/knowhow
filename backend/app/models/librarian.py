@@ -75,6 +75,8 @@ class KnohowFolder(Base):
         UUID(as_uuid=True), ForeignKey("teams.id"), nullable=True, unique=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "#rrggbb" picked when the folder was made; null draws the default blue.
+    color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
     )

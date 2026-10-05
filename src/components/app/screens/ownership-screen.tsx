@@ -1,27 +1,30 @@
 "use client";
 
-import { ArrowRight, Lock, ShieldCheck, TriangleAlert, Undo2 } from "lucide-react";
+import { ArrowRight, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/app/badge";
 import { Button } from "@/components/app/button";
 import { AppDialog, FormDialog } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
-import { describeFile, editedAgo, FileIcon } from "@/components/app/file-meta";
+import { editedAgo, FileIcon } from "@/components/app/file-meta";
+import { FileTable } from "@/components/app/file-table";
 import { NAV_STROKE } from "@/components/app/icon";
 import {
-  Bar,
   PersonChip,
   SectionHeading,
   SkeletonRows,
   Tabs,
-  TeamChip,
+  useUrlRequest,
   Window,
   message,
   plural,
 } from "@/components/app/screen-kit";
 import { useSession } from "@/components/app/session";
+import { LIBRARIAN_GROUPS, LibrarianPopup } from "@/components/app/notification-center";
 import { AppPage } from "@/components/app/shell";
+import { useUpdates } from "@/components/app/updates";
+import { TitleAside, TitleHelp } from "@/components/app/title-aside";
 import { satoshi } from "@/components/brand/fonts";
 import {
   confirmTransfer,
@@ -41,6 +44,7 @@ const ago = (iso: string | null) => editedAgo(iso).replace(/^Edited /, "");
  *  for a yes, recent moves (undoable), and files Google won't let move. */
 export function OwnershipScreen() {
   const { chrome } = useSession();
+  const { reloadTasks } = useUpdates();
   const org = chrome.organizationId;
   const [data, setData] = useState<Ownership | null>(null);
   const [error, setError] = useState("");
@@ -55,16 +59,35 @@ export function OwnershipScreen() {
     try {
       setData(await fetchOwnership(org));
       setError("");
+      // The bell's Ownership rows count the same moves.
+      reloadTasks();
     } catch (e) {
       setError(message(e));
     }
-  }, [org]);
+  }, [org, reloadTasks]);
 
   useEffect(() => {
     // Loads on open; state is set only after the fetch resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
+
+  // Notifications' Librarian rows: ?review=<batch> or ?stuck=1.
+  const [reviewParam, clearReview] = useUrlRequest("review");
+  const [stuckParam, clearStuck] = useUrlRequest("stuck");
+  useEffect(() => {
+    if (!data) return;
+    if (reviewParam) {
+      const batch = data.batches.find((b) => b.id === reviewParam && b.status === "planned");
+      // Opening the dialog the URL asked for, once data is in.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (batch) setReviewBatch(batch);
+      clearReview();
+    } else if (stuckParam) {
+      setStuckOpen(true);
+      clearStuck();
+    }
+  }, [data, reviewParam, stuckParam, clearReview, clearStuck]);
 
   const people = useMemo(() => peopleById(data?.people ?? []), [data]);
   const teamName = useMemo(
@@ -78,7 +101,6 @@ export function OwnershipScreen() {
       ),
     [data, team],
   );
-  const planned = (data?.batches ?? []).filter((b) => b.status === "planned");
   const recent = (data?.batches ?? []).filter((b) => b.status !== "planned").slice(0, 6);
 
   if (error)
@@ -123,50 +145,29 @@ export function OwnershipScreen() {
 
   return (
     <AppPage>
+      <LibrarianPopup
+        kinds={LIBRARIAN_GROUPS[1].kinds}
+        onAction={(task) => {
+          if (task.kind === "ownership_stuck") setStuckOpen(true);
+          else {
+            const batch = data?.batches.find((b) => b.id === task.id);
+            if (batch) setReviewBatch(batch);
+          }
+        }}
+      />
+      <TitleAside>
+        <TitleHelp label="About Ownership">
+          <p>
+            {`${chrome.name} owns these files, so the work stays when someone leaves.`}
+          </p>
+        </TitleHelp>
+      </TitleAside>
       <Window>
         <div className="p-8">
-          <Bar
-            icon={<ShieldCheck size={20} strokeWidth={NAV_STROKE} />}
-            title="Owned by the company"
-            body={
-              data
-                ? `${plural(data.files.length, "company file", "company files")} across ${plural(data.teams.length, "team", "teams")}. When someone moves on, their work stays with ${chrome.name}.`
-                : "Looking up who owns what…"
-            }
-          />
-
-          {planned.map((b) => (
-            <Bar
-              key={b.id}
-              className="mt-3"
-              icon={<ArrowRight size={20} strokeWidth={NAV_STROKE} />}
-              title="Waiting for you"
-              body={`${b.reason}: ${plural(b.items.length, "file", "files")} to ${people.get(b.items[0]?.to_id ?? "")?.name ?? "a new owner"}.`}
-              footnote={
-                b.created_by
-                  ? `Planned by ${people.get(b.created_by)?.name ?? "someone"} ${ago(b.created_at)}.`
-                  : undefined
-              }
-            >
-              <Button onClick={() => setReviewBatch(b)}>Review</Button>
-            </Bar>
-          ))}
-
-          {data?.unresolved.length ? (
-            <Bar
-              className="mt-3"
-              icon={<TriangleAlert size={20} strokeWidth={NAV_STROKE} />}
-              title="Can't move on its own"
-              body={`${plural(data.unresolved.length, "file is", "files are")} owned by a personal Google account. Google doesn't let ownership move from one into your Workspace.`}
-            >
-              <Button variant="secondary" onClick={() => setStuckOpen(true)}>
-                See {data.unresolved.length === 1 ? "it" : "them"}
-              </Button>
-            </Bar>
-          ) : null}
-
+          {/* "Owned by the company" is the title's `?`; the moves waiting and
+              the files that can't move are in Notifications under Librarian
+              (Ronald 2026-10-04). */}
           <SectionHeading
-            className="mt-10"
             title="Files"
             action={
               data?.can_manage ? (
@@ -194,76 +195,19 @@ export function OwnershipScreen() {
               description="Files show up once your librarian files them or someone makes one in Knohow."
             />
           ) : (
-            <div className="mt-5">
-              <div
-                className={`${satoshi.className} grid grid-cols-[2rem_minmax(0,1fr)_11rem_12rem] items-center gap-4 border-b border-[var(--app-border)] px-3 pb-2 text-[0.8125rem] text-[var(--app-dim)] max-[900px]:grid-cols-[2rem_minmax(0,1fr)_12rem]`}
-              >
-                <span />
-                <span>Name</span>
-                <span className="max-[900px]:hidden">Team</span>
-                <span>Owner</span>
-              </div>
-              <ul>
-                {files.map((f) => {
-                  const owner = f.owner_id ? people.get(f.owner_id) : undefined;
-                  const on = selected.has(f.file_id);
-                  return (
-                    <li
-                      key={f.file_id}
-                      className={cn(
-                        "grid grid-cols-[2rem_minmax(0,1fr)_11rem_12rem] items-center gap-4 rounded-[14px] px-3 py-2.5 max-[900px]:grid-cols-[2rem_minmax(0,1fr)_12rem]",
-                        on ? "bg-[var(--app-active)]" : "hover:bg-[var(--app-muted)]",
-                      )}
-                    >
-                      {data.can_manage ? (
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${f.title}`}
-                          checked={on}
-                          onChange={() => toggle(f.file_id)}
-                          className="size-4 cursor-pointer accent-[#1c1917]"
-                        />
-                      ) : (
-                        <span />
-                      )}
-                      <span className="flex min-w-0 items-center gap-3">
-                        <FileIcon mimeType={f.mime_type} size={36} />
-                        <span className={`${satoshi.className} min-w-0`}>
-                          <span className="flex items-center gap-2">
-                            <span className="truncate text-[0.9375rem] text-[#1c1917]" title={f.title}>
-                              {f.title}
-                            </span>
-                            {f.private ? (
-                              <Badge>
-                                <Lock size={10} strokeWidth={2.2} className="mr-1" />
-                                Private
-                              </Badge>
-                            ) : null}
-                          </span>
-                          <span className="block text-[0.8125rem] text-[var(--app-dim)]">
-                            {describeFile(f.mime_type).label}
-                            {f.modified_at ? ` · ${editedAgo(f.modified_at)}` : ""}
-                          </span>
-                        </span>
-                      </span>
-                      <span className="min-w-0 max-[900px]:hidden">
-                        {f.team_id ? (
-                          <TeamChip name={teamName.get(f.team_id) ?? "Team"} />
-                        ) : (
-                          <span className={`${satoshi.className} text-[0.875rem] text-[var(--app-dim)]`}>
-                            Company-wide
-                          </span>
-                        )}
-                      </span>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <PersonChip person={owner} />
-                        {owner?.personal ? <Badge>Personal</Badge> : null}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <FileTable
+              rows={files.map((f) => ({
+                id: f.file_id,
+                title: f.title,
+                mimeType: f.mime_type,
+                modifiedAt: f.modified_at,
+                private: f.private,
+                teamName: f.team_id ? (teamName.get(f.team_id) ?? "Team") : null,
+                owner: f.owner_id ? people.get(f.owner_id) : undefined,
+              }))}
+              selected={selected}
+              onToggle={data.can_manage ? toggle : undefined}
+            />
           )}
 
           {recent.length ? (
@@ -544,23 +488,24 @@ function StuckDialog({
       title="Can't move on its own"
       footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
     >
-      <p className={`${satoshi.className} text-[0.875rem] leading-[1.5] text-[var(--app-dim)]`}>
-        Ask the owner to share each file with its new owner as an editor, or make a copy in your
-        Workspace. Mark it handled once it has moved.
-      </p>
-      <ul className="mt-4 flex flex-col gap-2">
+      {/* No description: the rows say it (Ronald 2026-10-04). */}
+      <ul className="flex flex-col gap-2">
         {data.unresolved.map((u) => (
           <li key={u.id} className="flex items-center gap-3 rounded-[14px] bg-[var(--app-muted)] p-3">
             <FileIcon mimeType={files.get(u.file_id)?.mime_type ?? ""} size={36} />
             <span className={`${satoshi.className} min-w-0 flex-1`}>
               <span className="block truncate text-[0.9375rem] text-[#1c1917]">{u.title}</span>
+              {/* Says what to do, so the dialog needs no description
+                  (Ronald 2026-10-04: "unclear still"). */}
               <span className="block text-[0.8125rem] text-[var(--app-dim)]">
-                {people.get(u.owner_id ?? "")?.email ?? "Personal account"}
-                {u.recipient_id ? ` → ${people.get(u.recipient_id)?.name ?? ""}` : ""}
+                Ask {people.get(u.owner_id ?? "")?.email ?? "its owner"} to share it
+                {u.recipient_id && people.get(u.recipient_id)?.name
+                  ? ` with ${people.get(u.recipient_id)?.name}`
+                  : ""}
               </span>
             </span>
             <Button variant="ghost" size="sm" disabled={busy === u.id} onClick={() => void handled(u.id)}>
-              {busy === u.id ? "Saving…" : "Handled"}
+              {busy === u.id ? "Saving…" : "Done"}
             </Button>
           </li>
         ))}

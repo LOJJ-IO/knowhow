@@ -21,7 +21,44 @@ export type Task =
   | { kind: "company_drive"; id: string }
   | { kind: "own_drive"; id: string }
   /** A linked personal account whose Drive isn't connected (ADR-0025). */
-  | { kind: "linked_drive"; id: string; email: string };
+  | { kind: "linked_drive"; id: string; email: string }
+  /** The librarian's own section (Ronald 2026-10-04): your files it wants
+   *  sorted, and teammates' proposals you can confirm. Counts only. */
+  | { kind: "librarian_sort"; id: string; count: number }
+  | { kind: "librarian_review"; id: string; count: number }
+  /** Ownership, Sharing and Offboarding prompts, also under Librarian
+   *  (Ronald 2026-10-04). */
+  | {
+      kind: "ownership_review";
+      id: string;
+      reason: string;
+      count: number;
+      toName: string | null;
+    }
+  | { kind: "ownership_stuck"; id: string; count: number }
+  | { kind: "share_suggestions"; id: string; count: number }
+  /** A report, not a to-do: cleared in the dialog. `id` is the audit entry. */
+  | {
+      kind: "offboarded";
+      id: string;
+      at: string | null;
+      personName: string | null;
+      byName: string | null;
+      toName: string | null;
+      filesMoved: number;
+      needsAttention: number;
+    };
+
+const LIBRARIAN_KINDS = new Set<Task["kind"]>([
+  "librarian_sort",
+  "librarian_review",
+  "ownership_review",
+  "ownership_stuck",
+  "share_suggestions",
+  "offboarded",
+]);
+
+export const isLibrarianTask = (t: Task) => LIBRARIAN_KINDS.has(t.kind);
 
 type RawPerson = { id: string; email: string; display_name: string | null } | null;
 
@@ -50,6 +87,32 @@ export async function fetchTasks(organizationId: string): Promise<Task[]> {
       return { kind: t.kind, id: t.id, person: person(t.person as RawPerson) };
     if (t.kind === "linked_drive")
       return { kind: t.kind, id: t.id, email: t.email as string };
+    if (
+      t.kind === "librarian_sort" ||
+      t.kind === "librarian_review" ||
+      t.kind === "ownership_stuck" ||
+      t.kind === "share_suggestions"
+    )
+      return { kind: t.kind, id: t.id, count: t.count as number };
+    if (t.kind === "ownership_review")
+      return {
+        kind: t.kind,
+        id: t.id,
+        reason: t.reason as string,
+        count: t.count as number,
+        toName: (t.to_name as string | null) ?? null,
+      };
+    if (t.kind === "offboarded")
+      return {
+        kind: t.kind,
+        id: t.id,
+        at: (t.at as string | null) ?? null,
+        personName: (t.person_name as string | null) ?? null,
+        byName: (t.by_name as string | null) ?? null,
+        toName: (t.to_name as string | null) ?? null,
+        filesMoved: t.files_moved as number,
+        needsAttention: t.needs_attention as number,
+      };
     return { kind: t.kind, id: t.id } as Task;
   });
 }

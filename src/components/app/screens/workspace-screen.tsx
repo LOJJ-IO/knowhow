@@ -1,7 +1,8 @@
 "use client";
 
+import { Toast } from "@base-ui/react/toast";
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Library, Plus, X } from "lucide-react";
+import { LayoutGrid, Library, List, Plus } from "lucide-react";
 
 import { Button } from "@/components/app/button";
 import {
@@ -10,12 +11,17 @@ import {
   FormDialog,
 } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
-import { FileTile } from "@/components/app/file-meta";
-import { Folder } from "@/components/app/folder";
+import { describeFile, editedAgo, FileCard, FileIcon, FileTile } from "@/components/app/file-meta";
+import { FileTable } from "@/components/app/file-table";
+import { ItemMenu, type MenuAnchor, menuAnchor, RenameDialog } from "@/components/app/item-menu";
+import { DEFAULT_FOLDER_COLOR, Folder, FOLDER_COLORS } from "@/components/app/folder";
 import { NAV_STROKE } from "@/components/app/icon";
 import { useSession } from "@/components/app/session";
-import { Bar, Breadcrumb, Window } from "@/components/app/screen-kit";
+import { useUpdates } from "@/components/app/updates";
+import { LIBRARIAN_GROUPS, LibrarianPopup } from "@/components/app/notification-center";
+import { Bar, Breadcrumb, Tabs, useUrlRequest, Window } from "@/components/app/screen-kit";
 import { AppPage } from "@/components/app/shell";
+import { TitleAside, TitleHelp } from "@/components/app/title-aside";
 import { satoshi } from "@/components/brand/fonts";
 import { sohne } from "@/components/brand/logo-mark";
 import {
@@ -34,8 +40,11 @@ import {
   fetchProposals,
   fetchReview,
   reasonLines,
+  renameFile,
+  renameFolder,
   scanDrive,
   setFileInFolder,
+  trashFile,
   type Candidate,
   type FolderFileItem,
   type FolderSummary,
@@ -58,6 +67,7 @@ const plural = (n: number, one: string, many: string) =>
  *  land in Knohow folders. Drive itself is never reorganised. */
 export function WorkspaceScreen() {
   const { chrome } = useSession();
+  const { reloadTasks } = useUpdates();
   const org = chrome.organizationId;
 
   const [folders, setFolders] = useState<FolderSummary[] | null>(null);
@@ -79,9 +89,32 @@ export function WorkspaceScreen() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [proposalsOpen, setProposalsOpen] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
+
+  // A click on a folder opens it; a right click shows Rename / Delete
+  // (Ronald, 2026-10-04).
+  const [folderMenu, setFolderMenu] = useState<{ folder: FolderSummary; anchor: MenuAnchor } | null>(null);
+  const [renaming, setRenaming] = useState<FolderSummary | null>(null);
+  const [deleting, setDeleting] = useState<FolderSummary | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  function openFolder(f: FolderSummary) {
+    setFolderMenu(null);
+    setOpenFolderId(f.id);
+  }
+
+  // Notifications' Librarian rows land here as ?librarian=sort|review and
+  // open the matching dialog; the param is dropped so a reload doesn't.
+  const [librarianParam, clearLibrarianParam] = useUrlRequest("librarian");
+  useEffect(() => {
+    if (librarianParam !== "sort" && librarianParam !== "review") return;
+    // Opening a dialog the URL asked for, once per arrival.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (librarianParam === "sort") setReviewOpen(true);
+    else setProposalsOpen(true);
+    clearLibrarianParam();
+  }, [librarianParam, clearLibrarianParam]);
   /** Personal accounts linked to you (ADR-0025), shown only to you. */
   const [linked, setLinked] = useState<LinkedDrivePreview[]>([]);
-
   useEffect(() => {
     let cancelled = false;
     fetchLinkedDrivePreviews(org)
@@ -114,12 +147,16 @@ export function WorkspaceScreen() {
     ]);
     if (r.status === "fulfilled") setReview(r.value);
     if (p.status === "fulfilled") setProposals(p.value);
-  }, [org]);
+    // The bell's Librarian rows count the same things.
+    reloadTasks();
+  }, [org, reloadTasks]);
 
   useEffect(() => {
     // Initial load; both helpers set state only after their fetch resolves.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshFolders();
+    // What's waiting pops up as the librarian's pills (LibrarianPopup) and
+    // stays in Notifications under Librarian (Ronald 2026-10-04).
     void refreshLibrarian();
   }, [refreshFolders, refreshLibrarian]);
 
@@ -144,9 +181,27 @@ export function WorkspaceScreen() {
     }
   }
 
+  const toSort = review?.total ?? 0;
+  const waiting = review?.awaitingConfirmation ?? 0;
+  const toConfirm = proposals?.total ?? 0;
+
+  // The title's `?` (Ronald, 2026-10-04): what Workspace is, then a line for
+  // your role and one for where your librarian is. Drafted from the Help
+  // screen and this screen's own lines; Ronald to edit.
+  const help = (
+    <TitleAside>
+      <TitleHelp label="About Workspace">
+        {/* One line, the crucial bit only (Ronald, 2026-10-04); what's
+            waiting is the Librarian's pills. */}
+        <p>Your librarian sorts your files into company folders. Your Drive is never changed.</p>
+      </TitleHelp>
+    </TitleAside>
+  );
+
   if (openFolderId)
     return (
       <AppPage>
+        {help}
         <Window>
           <FolderView
             org={org}
@@ -160,61 +215,67 @@ export function WorkspaceScreen() {
       </AppPage>
     );
 
-  const toSort = review?.total ?? 0;
-  const waiting = review?.awaitingConfirmation ?? 0;
-  const toConfirm = proposals?.total ?? 0;
+  /** "Your librarian" as a bar on the page when nothing is waiting. */
+  function librarianBars() {
+    return (
+      <>
+        <Bar
+          icon={<Library size={20} strokeWidth={NAV_STROKE} />}
+          title="Your librarian"
+          body={
+            librarianError ||
+            scanNote ||
+            (toSort
+              ? `${plural(toSort, "file is", "files are")} waiting for you to sort.`
+              : "Go through your Drive and pick out company work. Files you mark personal stay yours, and Knohow keeps nothing about them.")
+          }
+          error={Boolean(librarianError)}
+          footnote={
+            waiting
+              ? `${plural(waiting, "file is", "files are")} waiting for a lead to confirm.`
+              : undefined
+          }
+        >
+          {toSort ? (
+            <>
+              <Button variant="secondary" onClick={() => void sortDrive()} disabled={scanning}>
+                {scanning ? "Looking…" : "Look again"}
+              </Button>
+              <Button onClick={() => setReviewOpen(true)}>Sort {toSort}</Button>
+            </>
+          ) : (
+            <Button onClick={() => void sortDrive()} disabled={scanning}>
+              {scanning ? "Looking through your Drive…" : "Sort my Drive"}
+            </Button>
+          )}
+        </Bar>
+
+        {toConfirm ? (
+          <Bar
+            className="mt-3"
+            icon={<Library size={20} strokeWidth={NAV_STROKE} />}
+            title="Waiting for you"
+            body={`${plural(toConfirm, "file was", "files were")} put forward as company work.`}
+          >
+            <Button onClick={() => setProposalsOpen(true)}>Review</Button>
+          </Bar>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <AppPage>
+      {help}
       <Window>
         <div className="p-8">
-          <Breadcrumb trail={[{ label: "Folders" }]} />
-          {/* The librarian. */}
-          <Bar
-            className="mt-4"
-            icon={<Library size={20} strokeWidth={NAV_STROKE} />}
-            title="Your librarian"
-            body={
-              librarianError ||
-              scanNote ||
-              (toSort
-                ? `${plural(toSort, "file is", "files are")} waiting for you to sort.`
-                : "Go through your Drive and pick out company work. Files you mark personal stay yours, and Knohow keeps nothing about them.")
-            }
-            error={Boolean(librarianError)}
-            footnote={
-              waiting
-                ? `${plural(waiting, "file is", "files are")} waiting for a lead to confirm.`
-                : undefined
-            }
-          >
-            {toSort ? (
-              <>
-                <Button variant="secondary" onClick={() => void sortDrive()} disabled={scanning}>
-                  {scanning ? "Looking…" : "Look again"}
-                </Button>
-                <Button onClick={() => setReviewOpen(true)}>Sort {toSort}</Button>
-              </>
-            ) : (
-              <Button onClick={() => void sortDrive()} disabled={scanning}>
-                {scanning ? "Looking through your Drive…" : "Sort my Drive"}
-              </Button>
-            )}
-          </Bar>
-
-          {toConfirm ? (
-            <Bar
-              className="mt-3"
-              icon={<Library size={20} strokeWidth={NAV_STROKE} />}
-              title="Waiting for you"
-              body={`${plural(toConfirm, "file was", "files were")} put forward as company work.`}
-            >
-              <Button onClick={() => setProposalsOpen(true)}>Review</Button>
-            </Bar>
-          ) : null}
+          {/* Anything waiting lives in Notifications under Librarian
+              (Ronald 2026-10-04). With nothing waiting, the bar stays so
+              you can still start a sort. */}
+          {review && proposals && !toSort && !toConfirm ? librarianBars() : null}
 
           {/* Folders. */}
-          <div className="mt-10 flex items-center justify-between gap-4">
+          <div className="mt-10 flex items-center justify-between gap-4 first:mt-0">
             <h2
               className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
             >
@@ -248,9 +309,14 @@ export function WorkspaceScreen() {
               {folders.map((f) => (
                 <div key={f.id} className="flex flex-col items-center gap-3">
                   <Folder
-                    label={`Open ${f.name}`}
+                    label={f.name}
                     fileNames={f.preview.map((p) => p.name)}
-                    onOpen={() => setOpenFolderId(f.id)}
+                    color={f.color}
+                    onOpen={() => openFolder(f)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setFolderMenu({ folder: f, anchor: menuAnchor(e) });
+                    }}
                   />
                   <div className={`${satoshi.className} text-center`}>
                     <div className="text-[0.9375rem] text-[#1c1917]">{f.name}</div>
@@ -273,6 +339,12 @@ export function WorkspaceScreen() {
           ))}
       </Window>
 
+      <LibrarianPopup
+        kinds={LIBRARIAN_GROUPS[0].kinds}
+        onAction={(task) =>
+          task.kind === "librarian_sort" ? setReviewOpen(true) : setProposalsOpen(true)
+        }
+      />
       <ReviewDialog
         org={org}
         open={reviewOpen}
@@ -292,6 +364,51 @@ export function WorkspaceScreen() {
         onChanged={() => {
           void refreshLibrarian();
           void refreshFolders();
+        }}
+      />
+      <ItemMenu
+        anchor={folderMenu?.anchor ?? null}
+        canManage={folderMenu?.folder.canManage ?? false}
+        onOpenChange={(o) => {
+          if (!o) setFolderMenu(null);
+        }}
+        onRename={() => setRenaming(folderMenu!.folder)}
+        onDelete={() => setDeleting(folderMenu!.folder)}
+      />
+      {renaming ? (
+        <RenameDialog
+          key={renaming.id}
+          title="Rename folder"
+          name={renaming.name}
+          maxLength={255}
+          onClose={() => setRenaming(null)}
+          onRename={async (name) => {
+            await renameFolder(org, renaming.id, name);
+            await refreshFolders();
+          }}
+        />
+      ) : null}
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleting(null);
+        }}
+        title={`Delete ${deleting?.name ?? "this folder"}?`}
+        confirmLabel="Delete folder"
+        destructive
+        busy={deleteBusy}
+        onConfirm={async () => {
+          if (!deleting) return;
+          setDeleteBusy(true);
+          try {
+            await deleteFolder(org, deleting.id);
+            setDeleting(null);
+            await refreshFolders();
+          } catch (e) {
+            setLoadError(message(e));
+          } finally {
+            setDeleteBusy(false);
+          }
         }}
       />
       <NewFolderDialog
@@ -326,10 +443,10 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
         </p>
       ) : null}
       {account.files.length ? (
-        <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+        <ul className="mt-6 grid grid-cols-[repeat(auto-fill,8rem)] justify-center gap-x-8 gap-y-3">
           {account.files.map((file) => (
             <li key={file.id} className="min-w-0">
-              <FileTile
+              <FileCard
                 name={file.name}
                 mimeType={file.mimeType}
                 modifiedAt={file.modifiedAt}
@@ -344,9 +461,22 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
 
 
 
+/** The type filter inside a folder, in this order, only for types present. */
+const KIND_ORDER = ["Doc", "Sheet", "Slides", "Form", "PDF", "Image", "Video", "Folder", "File"];
+const KIND_PLURAL: Record<string, string> = {
+  Doc: "Docs",
+  Sheet: "Sheets",
+  Form: "Forms",
+  PDF: "PDFs",
+  Image: "Images",
+  Video: "Videos",
+  Folder: "Folders",
+  File: "Other",
+};
+
 function FolderGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] justify-items-center gap-x-4 gap-y-10 pb-4">
+    <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] justify-items-start gap-x-4 gap-y-10 pb-4">
       {children}
     </div>
   );
@@ -385,142 +515,198 @@ function ReviewDialog({
   total: number;
   onChanged: () => void;
 }) {
-  const [done, setDone] = useState<Record<string, string>>({});
-  const [askAgain, setAskAgain] = useState<Record<string, "company" | "personal">>({});
-  const [busy, setBusy] = useState<string | null>(null);
+  /** Where each file is going: starts as the librarian's guess; "Not sure"
+   *  files have none until you pick. */
+  const [choice, setChoice] = useState<Record<string, Label>>({});
+  /** Files the backend wants a second yes on (your answer goes against what
+   *  it saw), with the answer you gave. */
+  const [checks, setChecks] = useState<Record<string, Label>>({});
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  async function answer(c: Candidate, label: "company" | "personal", again = false) {
-    setBusy(c.id);
+  const where = (c: Candidate): Label | undefined =>
+    choice[c.id] ?? (c.suggestion === "unsure" ? undefined : c.suggestion);
+  const move = (c: Candidate, to: Label) => setChoice((m) => ({ ...m, [c.id]: to }));
+
+  async function saveAll() {
+    setSaving(true);
+    setError("");
+    const again: Record<string, Label> = {};
+    try {
+      await Promise.all(
+        items.map(async (c) => {
+          const label = where(c);
+          if (!label) return;
+          if ((await decide(org, c.id, label, false)) === "ask_again") again[c.id] = label;
+        }),
+      );
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setSaving(false);
+      onChanged();
+    }
+    if (Object.keys(again).length) setChecks(again);
+    else close();
+  }
+
+  async function confirm(c: Candidate, label: Label, again: boolean) {
+    setSaving(true);
     setError("");
     try {
-      const result = await decide(org, c.id, label, again);
-      if (result === "ask_again") {
-        setAskAgain((a) => ({ ...a, [c.id]: label }));
-        return;
-      }
-      setAskAgain((a) => without(a, c.id));
-      setDone((d) => ({
-        ...d,
-        [c.id]:
-          result === "personal"
-            ? "Kept as yours. Knohow won't keep anything about it."
-            : result === "confirmed"
-              ? "Added to your company files."
-              : "Sent to your lead to confirm.",
-      }));
+      await decide(org, c.id, label, again);
+      setChecks((m) => without(m, c.id));
       onChanged();
     } catch (e) {
       setError(message(e));
     } finally {
-      setBusy(null);
+      setSaving(false);
     }
   }
 
-  const left = items.filter((c) => !done[c.id]).length;
+  function close() {
+    setChoice({});
+    setChecks({});
+    setError("");
+    onOpenChange(false);
+  }
+
+  const checking = items.filter((c) => checks[c.id]);
+  const groups: { title: string; files: Candidate[]; other?: Label }[] = checking.length
+    ? []
+    : [
+        { title: SUGGESTION_TEXT.company, files: items.filter((c) => where(c) === "company"), other: "personal" },
+        { title: SUGGESTION_TEXT.personal, files: items.filter((c) => where(c) === "personal"), other: "company" },
+        { title: SUGGESTION_TEXT.unsure, files: items.filter((c) => !where(c)) },
+      ];
 
   return (
     <AppDialog
       open={open}
-      onOpenChange={(o) => {
-        if (!o) {
-          setDone({});
-          setAskAgain({});
-          setError("");
-        }
-        onOpenChange(o);
-      }}
+      onOpenChange={(o) => (o ? onOpenChange(true) : close())}
       size="sm"
       title="Sort your Drive"
-      footer={<Button onClick={() => onOpenChange(false)}>Done</Button>}
+      footer={
+        checking.length ? (
+          <Button onClick={close}>Done</Button>
+        ) : items.length ? (
+          <Button onClick={() => void saveAll()} disabled={saving}>
+            {saving ? "Sorting…" : "Looks right"}
+          </Button>
+        ) : (
+          <Button onClick={close}>Done</Button>
+        )
+      }
     >
       {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
       {items.length === 0 ? (
         <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
           Nothing to sort right now.
         </p>
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {items.map((c) => {
-            const reasons = reasonLines(c.reasons);
-            const again = askAgain[c.id];
+      ) : checking.length ? (
+        // A second yes, only for the files that need it.
+        <SortGroup title="Check these again">
+          {checking.map((c) => {
+            const label = checks[c.id];
             return (
-              <li key={c.id}>
-                <FileTile name={c.name} mimeType={c.mimeType} modifiedAt={c.modifiedAt}>
-                  {c.webViewLink ? (
-                    <a
-                      href={c.webViewLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Open ${c.name} in Google Drive`}
-                      className="flex size-8 shrink-0 items-center justify-center rounded-full text-[var(--app-dim)] outline-none hover:bg-white hover:text-[#1c1917] focus-visible:outline-2 focus-visible:outline-[#1c1917]"
-                    >
-                      <ExternalLink size={16} strokeWidth={NAV_STROKE} />
-                    </a>
-                  ) : null}
-                </FileTile>
-                <div className="flex flex-wrap items-center gap-2 px-1 pt-2">
-                  <Chip>{SUGGESTION_TEXT[c.suggestion]}</Chip>
-                  {reasons.map((r) => (
-                    <Chip key={r}>{r}</Chip>
-                  ))}
-                  <div className="ml-auto flex items-center gap-2">
-                    {done[c.id] ? (
-                      <span className={`${satoshi.className} text-[0.875rem] text-[var(--app-dim)]`}>
-                        {done[c.id]}
-                      </span>
-                    ) : again ? (
-                      <>
-                        <span className={`${satoshi.className} text-[0.875rem] text-[#1c1917]`}>
-                          {again === "personal"
-                            ? "This looks like company work. Keep it as yours?"
-                            : "This looks personal. Send it as company work?"}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy === c.id}
-                          onClick={() => setAskAgain((a) => without(a, c.id))}
-                        >
-                          Go back
-                        </Button>
-                        <Button size="sm" disabled={busy === c.id} onClick={() => void answer(c, again, true)}>
-                          Yes
-                        </Button>
-                      </>
+              <SortRow key={c.id} file={c}>
+                <span className={`${satoshi.className} text-[0.8125rem] text-[#1c1917]`}>
+                  {label === "personal" ? "Keep it as yours?" : "Send it as company work?"}
+                </span>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void confirm(c, label === "personal" ? "company" : "personal", false)}
+                >
+                  No
+                </Button>
+                <Button size="xs" disabled={saving} onClick={() => void confirm(c, label, true)}>
+                  Yes
+                </Button>
+              </SortRow>
+            );
+          })}
+        </SortGroup>
+      ) : (
+        <div className="flex flex-col gap-6">
+          {groups
+            .filter((g) => g.files.length)
+            .map((g) => (
+              <SortGroup key={g.title} title={g.title}>
+                {g.files.map((c) => (
+                  <SortRow key={c.id} file={c}>
+                    {g.other ? (
+                      <Button size="xs" variant="outline" disabled={saving} onClick={() => move(c, g.other!)}>
+                        {g.other === "personal" ? "Personal" : "Company"}
+                      </Button>
                     ) : (
                       <>
-                        <Button
-                          size="sm"
-                          variant={c.suggestion === "personal" ? "default" : "outline"}
-                          disabled={busy === c.id}
-                          onClick={() => void answer(c, "personal")}
-                        >
+                        <Button size="xs" variant="outline" disabled={saving} onClick={() => move(c, "personal")}>
                           Personal
                         </Button>
-                        <Button
-                          size="sm"
-                          variant={c.suggestion === "company" ? "default" : "outline"}
-                          disabled={busy === c.id}
-                          onClick={() => void answer(c, "company")}
-                        >
+                        <Button size="xs" variant="outline" disabled={saving} onClick={() => move(c, "company")}>
                           Company
                         </Button>
                       </>
                     )}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                  </SortRow>
+                ))}
+              </SortGroup>
+            ))}
+        </div>
       )}
-      {total > items.length && left === 0 ? (
-        <p className={`${satoshi.className} mt-4 text-center text-[0.875rem] text-[var(--app-dim)]`}>
-          {plural(total - items.length, "more file", "more files")} after these. Close and open again to keep going.
+      {total > items.length && !checking.length ? (
+        <p className={`${satoshi.className} mt-6 text-center text-[0.8125rem] text-[var(--app-dim)]`}>
+          {plural(total - items.length, "more file", "more files")} after these.
         </p>
       ) : null}
     </AppDialog>
+  );
+}
+
+type Label = "company" | "personal";
+
+/** The librarian's guess, said once, over the files it covers (Ronald
+ *  2026-10-02: the old per-file chips repeated it on every row). */
+function SortGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className={`${satoshi.className} mb-1 px-1 text-[0.8125rem] font-medium text-[var(--app-dim)]`}>
+        {title}
+      </h3>
+      <ul className="flex flex-col">{children}</ul>
+    </section>
+  );
+}
+
+/** One file as a quiet line: small icon, name (opens it in Drive), when it
+ *  was edited, and the row's one control. */
+function SortRow({ file, children }: { file: Candidate; children: React.ReactNode }) {
+  const edited = editedAgo(file.modifiedAt);
+  return (
+    <li className="flex items-center gap-3 rounded-[14px] px-1 py-2">
+      <FileIcon mimeType={file.mimeType} size={32} />
+      <span className={`${satoshi.className} min-w-0 flex-1`}>
+        {file.webViewLink ? (
+          <a
+            href={file.webViewLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={file.name}
+            className="block truncate text-[0.9375rem] text-[#1c1917] underline-offset-2 hover:underline"
+          >
+            {file.name}
+          </a>
+        ) : (
+          <span title={file.name} className="block truncate text-[0.9375rem] text-[#1c1917]">
+            {file.name}
+          </span>
+        )}
+        {edited ? <span className="block text-[0.8125rem] text-[var(--app-dim)]">{edited}</span> : null}
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5">{children}</span>
+    </li>
   );
 }
 
@@ -623,17 +809,25 @@ function NewFolderDialog({
   onCreated: () => void;
 }) {
   const [name, setName] = useState("");
+  const [color, setColor] = useState<string>(DEFAULT_FOLDER_COLOR);
+  // The custom circle's colour, once one has been picked.
+  const [custom, setCustom] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  function reset() {
+    setName("");
+    setColor(DEFAULT_FOLDER_COLOR);
+    setCustom(null);
+    setError("");
+  }
 
   return (
     <FormDialog
       open={open}
+      size="sm"
       onOpenChange={(o) => {
-        if (!o) {
-          setName("");
-          setError("");
-        }
+        if (!o) reset();
         onOpenChange(o);
       }}
       title="New folder"
@@ -645,9 +839,9 @@ function NewFolderDialog({
         setBusy(true);
         setError("");
         try {
-          await createFolder(org, name);
+          await createFolder(org, name, color);
           onCreated();
-          setName("");
+          reset();
           onOpenChange(false);
         } catch (err) {
           setError(message(err));
@@ -656,6 +850,16 @@ function NewFolderDialog({
         }
       }}
     >
+      {/* Live preview: the folder as it will sit on the grid, name under it. */}
+      <div className="flex flex-col items-center gap-3 pt-2 pb-6">
+        <Folder label={name} color={color} decorative />
+        <div
+          className={`${satoshi.className} min-h-[1.375rem] max-w-full truncate text-center text-[0.9375rem] text-[#1c1917]`}
+        >
+          {name.trim()}
+        </div>
+      </div>
+
       <label className={`${satoshi.className} flex flex-col gap-1.5`}>
         <span className="text-[0.875rem] text-[#1c1917]">Name</span>
         <input
@@ -667,10 +871,63 @@ function NewFolderDialog({
           className={INPUT_CLASS}
         />
       </label>
+
+      <div className={`${satoshi.className} mt-5 flex flex-col gap-2`}>
+        <span id="new-folder-colour" className="text-[0.875rem] text-[#1c1917]">
+          Colour
+        </span>
+        <div role="radiogroup" aria-labelledby="new-folder-colour" className="flex items-center gap-3">
+          {FOLDER_COLORS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              role="radio"
+              aria-checked={color === c.value}
+              aria-label={c.name}
+              onClick={() => setColor(c.value)}
+              className={cn(SWATCH_CLASS, color === c.value && SWATCH_SELECTED)}
+              style={{ backgroundColor: c.value }}
+            />
+          ))}
+          {/* Custom: the circle opens the system colour picker; once a
+              colour is picked it fills the circle. */}
+          <label
+            className={cn(
+              SWATCH_CLASS,
+              "relative overflow-visible has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#1c1917]",
+              custom !== null && color === custom && SWATCH_SELECTED,
+            )}
+            style={{
+              background:
+                custom ??
+                "conic-gradient(#ff5e5e, #ffb84d, #f5e663, #4cc38a, #50b1fd, #8b7bff, #ff5ec4, #ff5e5e)",
+            }}
+            onClick={() => {
+              if (custom) setColor(custom);
+            }}
+          >
+            <input
+              type="color"
+              aria-label="Custom colour"
+              value={custom ?? color}
+              onChange={(e) => {
+                setCustom(e.target.value);
+                setColor(e.target.value);
+              }}
+              className="absolute inset-0 size-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      </div>
       {error ? <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
     </FormDialog>
   );
 }
+
+const SWATCH_CLASS =
+  "size-7 shrink-0 cursor-pointer rounded-full shadow-[inset_0_0_0_1px_rgba(0,0,0,0.08)] outline-none transition-shadow focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1c1917]";
+/** Picked: a ring with a white gap, so it reads on any colour. */
+const SWATCH_SELECTED = "shadow-[0_0_0_2px_#fff,0_0_0_4px_#1c1917]";
 
 function FolderView({
   org,
@@ -691,7 +948,42 @@ function FolderView({
   const [addOpen, setAddOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [removing, setRemoving] = useState<string | null>(null);
+  const [kind, setKind] = useState("all");
+  /** Grid of cards, or details: Ownership's columns (Ronald, 2026-10-04). */
+  const [view, setView] = useState<"grid" | "details">("grid");
+  /** A right click on a file: Rename / Delete / Move / Remove (Ronald,
+   *  2026-10-04). */
+  const [fileMenu, setFileMenu] = useState<{ file: FolderFileItem; anchor: MenuAnchor } | null>(null);
+  const [moving, setMoving] = useState<FolderFileItem | null>(null);
+  const [renaming, setRenaming] = useState<FolderFileItem | null>(null);
+  const toasts = Toast.useToastManager();
+  /** A rename or delete that failed; the folder itself is still fine. */
+  const [actionError, setActionError] = useState("");
+
+  async function trash(f: FolderFileItem) {
+    setActionError("");
+    try {
+      await trashFile(org, f.fileId);
+      toasts.add({
+        type: "success",
+        title: "Moved to Trash",
+        description: `${f.name} can be restored from Settings for 30 days.`,
+      });
+      await load();
+    } catch (e) {
+      setActionError(message(e));
+    }
+  }
+
+  async function removeFromFolder(f: FolderFileItem) {
+    setActionError("");
+    try {
+      await setFileInFolder(org, folderId, f.fileId, false);
+      await load();
+    } catch (e) {
+      setActionError(message(e));
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -707,17 +999,23 @@ function FolderView({
     void load();
   }, [load]);
 
-  async function remove(fileId: string) {
-    setRemoving(fileId);
-    try {
-      await setFileInFolder(org, folderId, fileId, false);
-      await load();
-    } catch (e) {
-      setError(message(e));
-    } finally {
-      setRemoving(null);
-    }
-  }
+  // Coming back from Docs (a renamed file, say): load again, and the backend
+  // re-reads names from Google.
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    document.addEventListener("visibilitychange", again);
+    window.addEventListener("focus", again);
+    return () => {
+      document.removeEventListener("visibilitychange", again);
+      window.removeEventListener("focus", again);
+    };
+  }, [load]);
+
+  const files = folder?.files ?? [];
+  const kinds = KIND_ORDER.filter((k) => files.some((f) => describeFile(f.mimeType).label === k));
+  const shown = kind === "all" ? files : files.filter((f) => describeFile(f.mimeType).label === kind);
 
   return (
     <div className="p-8">
@@ -740,6 +1038,26 @@ function FolderView({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <div role="group" aria-label="View" className="flex items-center gap-1">
+            <Button
+              variant={view === "grid" ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-label="Grid view"
+              aria-pressed={view === "grid"}
+              onClick={() => setView("grid")}
+            >
+              <LayoutGrid size={16} strokeWidth={NAV_STROKE} />
+            </Button>
+            <Button
+              variant={view === "details" ? "secondary" : "ghost"}
+              size="icon-sm"
+              aria-label="Details view"
+              aria-pressed={view === "details"}
+              onClick={() => setView("details")}
+            >
+              <List size={16} strokeWidth={NAV_STROKE} />
+            </Button>
+          </div>
           {folder && !folder.teamId ? (
             <Button variant="ghost" size="sm" onClick={() => setDeleteOpen(true)}>
               Delete folder
@@ -752,12 +1070,19 @@ function FolderView({
         </div>
       </div>
 
+      {actionError ? (
+        <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>{actionError}</p>
+      ) : null}
       {error ? (
         <EmptyState icon="folder_open" title="Couldn't load this folder" description={error} />
       ) : !folder ? (
-        <div className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+        <div className="mt-6 grid grid-cols-[repeat(auto-fill,8rem)] justify-center gap-x-8 gap-y-3">
           {Array.from({ length: 6 }, (_, i) => (
-            <div key={i} className="h-[4.75rem] rounded-[20px] bg-[var(--app-muted)]" />
+            <div key={i} className="flex flex-col gap-2">
+              <div className="size-18 rounded-[12px] bg-[var(--app-muted)]" />
+              <div className="h-4 w-3/4 rounded-[6px] bg-[var(--app-muted)]" />
+              <div className="h-3 w-1/2 rounded-[6px] bg-[var(--app-muted)]" />
+            </div>
           ))}
         </div>
       ) : folder.files.length === 0 ? (
@@ -767,26 +1092,107 @@ function FolderView({
           description="Files land here when a lead confirms them, or add company files yourself."
         />
       ) : (
-        <ul className="mt-6 grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
-          {folder.files.map((f) => (
-            <li key={f.fileId}>
-              <FileTile name={f.name} mimeType={f.mimeType} modifiedAt={f.modifiedAt}>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Remove ${f.name} from this folder`}
-                  disabled={removing === f.fileId}
-                  onClick={() => void remove(f.fileId)}
-                  className="-mt-1 -mr-1 hover:bg-white"
-                >
-                  <X size={16} strokeWidth={NAV_STROKE} />
-                </Button>
-              </FileTile>
-            </li>
-          ))}
-        </ul>
+        <>
+          {kinds.length > 1 ? (
+            <Tabs
+              className="mt-6"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: "all", label: "All", count: files.length },
+                ...kinds.map((k) => ({
+                  value: k,
+                  label: KIND_PLURAL[k] ?? k,
+                  count: files.filter((f) => describeFile(f.mimeType).label === k).length,
+                })),
+              ]}
+            />
+          ) : null}
+          {view === "details" ? (
+            <FileTable
+              onRowMenu={(id, anchor) => {
+                const file = shown.find((f) => f.fileId === id);
+                if (file) setFileMenu({ file, anchor });
+              }}
+              onRowOpen={(id) => {
+                const link = shown.find((f) => f.fileId === id)?.webViewLink;
+                if (link) window.open(link, "_blank", "noopener,noreferrer");
+              }}
+              rows={shown.map((f) => ({
+                id: f.fileId,
+                title: f.name,
+                mimeType: f.mimeType,
+                modifiedAt: f.modifiedAt,
+                private: f.private,
+                teamName: f.teamName ?? null,
+                owner: f.owner,
+              }))}
+            />
+          ) : (
+            <ul className="mt-6 grid grid-cols-[repeat(auto-fill,8rem)] justify-center gap-x-8 gap-y-3">
+              {shown.map((f) => (
+                <li key={f.fileId}>
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    // Enter / Space opens the menu under the card; a pointer
+                    // right-clicks for it.
+                    onClick={(e) => {
+                      if (e.detail === 0) setFileMenu({ file: f, anchor: e.currentTarget });
+                      // A mouse click opens the file in Google (Ronald,
+                      // 2026-10-04); in the sandbox, a blank file with the
+                      // same name, a new one each click.
+                      else if (f.webViewLink) window.open(f.webViewLink, "_blank", "noopener,noreferrer");
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setFileMenu({ file: f, anchor: menuAnchor(e) });
+                    }}
+                    className="block w-full min-w-0 cursor-pointer rounded-[10px] text-left outline-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1c1917]"
+                  >
+                    <FileCard name={f.name} mimeType={f.mimeType} modifiedAt={f.modifiedAt} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
 
+      <ItemMenu
+        anchor={fileMenu?.anchor ?? null}
+        canManage={fileMenu?.file.canManage ?? false}
+        onOpenChange={(o) => {
+          if (!o) setFileMenu(null);
+        }}
+        onRename={() => setRenaming(fileMenu!.file)}
+        onDelete={() => void trash(fileMenu!.file)}
+        onMove={() => setMoving(fileMenu!.file)}
+        onRemove={() => void removeFromFolder(fileMenu!.file)}
+      />
+      {moving ? (
+        <MoveFileDialog
+          key={moving.fileId}
+          org={org}
+          fromFolderId={folderId}
+          file={moving}
+          onClose={() => setMoving(null)}
+          onMoved={() => void load()}
+        />
+      ) : null}
+      {renaming ? (
+        <RenameDialog
+          key={renaming.fileId}
+          title="Rename file"
+          name={renaming.name}
+          maxLength={1024}
+          onClose={() => setRenaming(null)}
+          onRename={async (name) => {
+            await renameFile(org, renaming.fileId, name);
+            await load();
+          }}
+        />
+      ) : null}
       {folder ? (
         <AddFilesDialog
           org={org}
@@ -938,6 +1344,102 @@ function AddFilesDialog({
               </li>
             );
           })}
+        </ul>
+      )}
+    </FormDialog>
+  );
+}
+
+/** Move to folder, from a file's right-click menu: pick another folder; the
+ *  file goes there and leaves this one. */
+function MoveFileDialog({
+  org,
+  fromFolderId,
+  file,
+  onClose,
+  onMoved,
+}: {
+  org: string;
+  fromFolderId: string;
+  file: FolderFileItem;
+  onClose: () => void;
+  onMoved: () => void;
+}) {
+  const [folders, setFolders] = useState<FolderSummary[] | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFolders(org)
+      .then((all) => {
+        if (!cancelled) setFolders(all.filter((f) => f.id !== fromFolderId));
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(message(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [org, fromFolderId]);
+
+  return (
+    <FormDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      size="sm"
+      title={`Move ${file.name}`}
+      submitLabel="Move"
+      busy={busy}
+      disabled={!picked}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!picked) return;
+        setBusy(true);
+        setError("");
+        try {
+          await setFileInFolder(org, picked, file.fileId, true);
+          await setFileInFolder(org, fromFolderId, file.fileId, false);
+          onMoved();
+          onClose();
+        } catch (err) {
+          setError(message(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {error ? <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
+      {!folders ? (
+        <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>Loading…</p>
+      ) : folders.length === 0 ? (
+        <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
+          {"There's no other folder to move it to."}
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {folders.map((f) => (
+            <li key={f.id}>
+              <label
+                className={cn(
+                  `${satoshi.className} flex cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 text-[0.9375rem] text-[#1c1917]`,
+                  picked === f.id ? "bg-[var(--app-active)]" : "hover:bg-[var(--app-muted)]",
+                )}
+              >
+                <input
+                  type="radio"
+                  name="move-to"
+                  checked={picked === f.id}
+                  onChange={() => setPicked(f.id)}
+                  className="size-4 accent-[#1c1917]"
+                />
+                {f.name}
+              </label>
+            </li>
+          ))}
         </ul>
       )}
     </FormDialog>

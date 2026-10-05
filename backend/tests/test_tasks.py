@@ -169,3 +169,24 @@ def test_founder_claim_before_admin_proof_is_confirmed_on_proof(db):
     assert confirm_founder_admin_owner_claim(org.id, founder, db) is True
     db.refresh(chart)
     assert chart.owner_member_id == founder.id and chart.pending_owner_member_id is None
+
+
+def test_librarian_counts_are_tasks(db):
+    from app.models.librarian import LibrarianCandidate, LibrarianStatus, LibrarianSuggestion
+
+    org, founder, other, chart = _org(db)
+    chart.owner_member_id = founder.id
+    for i, status in enumerate([LibrarianStatus.SUGGESTED, LibrarianStatus.SUGGESTED, LibrarianStatus.PROPOSED]):
+        db.add(
+            LibrarianCandidate(
+                org_id=org.id, member_id=other.id, file_id=f"f{i}",
+                suggestion=LibrarianSuggestion.COMPANY, status=status,
+            )
+        )
+    db.commit()
+    mine = {t["kind"]: t for t in pending_tasks(org.id, other, db)}
+    assert mine["librarian_sort"]["count"] == 2
+    assert "librarian_review" not in mine  # nobody confirms their own proposal
+    owners = {t["kind"]: t for t in pending_tasks(org.id, founder, db)}
+    assert owners["librarian_review"]["count"] == 1
+    assert "librarian_sort" not in owners

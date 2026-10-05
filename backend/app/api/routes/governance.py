@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from googleapiclient.errors import HttpError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -24,9 +25,10 @@ from app.models.org_member import AuthType, OrgMember
 from app.models.org_membership import OrgMembership, OrgRole
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
-from app.models.transfer_batch import TransferBatch
+from app.models.transfer_batch import TransferBatch, TransferBatchStatus
 from app.models.unresolved_ownership import UnresolvedOwnership
 from app.onboarding.service import is_owner, is_verified_super_admin
+from app.sharing.service import SHARE_ROLES
 from app.sharing.visibility import can_view_file
 
 router = APIRouter(prefix="/organizations/{org_id}", tags=["governance"])
@@ -49,6 +51,8 @@ def _people(org_id: uuid.UUID, db: Session) -> list[dict]:
             "email": m.email,
             "personal": m.auth_type == AuthType.PERSONAL_OAUTH,
             "team_ids": teams_of.get(m.id, []),
+            # For badges (Ronald 2026-10-04: say who's a Super Admin).
+            "super_admin": m.super_admin_verified_at is not None,
         }
         for m in members
     ]
@@ -90,6 +94,84 @@ def _file_view(f: FileIndex) -> dict:
     }
 
 
+# ---------------------------------------------- tasks for Notifications
+
+
+def governance_tasks(member: OrgMember, db: Session) -> list[dict]:
+    """The Ownership and Sharing screens' prompts as Pending tasks under the
+    Notifications dialog's Librarian header (Ronald, 2026-10-04). No Drive
+    calls: the bell reads this often."""
+    org_id = member.organization_id
+    tasks: list[dict] = []
+    if _manages_org(member, db) or _led_team_ids(member, db):
+        planned = db.execute(
+            select(TransferBatch)
+            .where(TransferBatch.org_id == org_id, TransferBatch.status == TransferBatchStatus.PLANNED)
+            .order_by(TransferBatch.created_at.desc())
+        ).scalars().all()
+        for b in planned:
+            to = db.get(OrgMember, b.items[0].proposed_owner_member_id) if b.items else None
+            tasks.append(
+                {
+                    "kind": "ownership_review",
+                    "id": str(b.id),
+                    "reason": b.reason,
+                    "count": len(b.items),
+                    "to_name": (to.display_name or to.email.split("@")[0]) if to else None,
+                }
+            )
+        stuck = db.execute(
+            select(func.count())
+            .select_from(UnresolvedOwnership)
+            .where(UnresolvedOwnership.org_id == org_id, UnresolvedOwnership.resolved_at.is_(None))
+        ).scalar_one()
+        if stuck:
+            tasks.append({"kind": "ownership_stuck", "id": f"stuck-{org_id}", "count": stuck})
+    shares = db.execute(
+        select(func.count())
+        .select_from(SuggestedShare)
+        .where(
+            SuggestedShare.org_id == org_id,
+            SuggestedShare.creator_user_id == member.id,
+            SuggestedShare.status == SuggestedShareStatus.PENDING,
+        )
+    ).scalar_one()
+    if shares:
+        tasks.append({"kind": "share_suggestions", "id": f"share-{member.id}", "count": shares})
+
+    # Who already left: a report, cleared per person in the dialog (Ronald
+    # picked clearable rows, 2026-10-04). The id is the audit entry's.
+    history = db.execute(
+        select(AuditLogEntry)
+        .where(AuditLogEntry.org_id == org_id, AuditLogEntry.action_type == "offboard.completed")
+        .order_by(AuditLogEntry.created_at.desc())
+        .limit(20)
+    ).scalars().all()
+
+    def name(member_id) -> str | None:
+        try:
+            m = db.get(OrgMember, uuid.UUID(str(member_id))) if member_id else None
+        except ValueError:
+            m = None
+        return (m.display_name or m.email.split("@")[0]) if m else None
+
+    for e in history:
+        details = e.details or {}
+        tasks.append(
+            {
+                "kind": "offboarded",
+                "id": str(e.id),
+                "at": _iso(e.created_at),
+                "person_name": name(e.target_resource_id),
+                "by_name": name(e.actor_user_id),
+                "to_name": name(details.get("transfer_to_user_id")),
+                "files_moved": details.get("files_affected", 0) - details.get("unresolved_count", 0),
+                "needs_attention": details.get("unresolved_count", 0),
+            }
+        )
+    return tasks
+
+
 # ------------------------------------------------------------- ownership
 
 
@@ -100,7 +182,8 @@ def ownership(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMembe
     files = db.execute(
         select(FileIndex).where(FileIndex.org_id == org_id).order_by(FileIndex.modified_at.desc())
     ).scalars().all()
-    visible = [f for f in files if can_view_file(member.id, f, org_id, db)]
+    # Trashed through Knohow: in Settings' Trash, not here.
+    visible = [f for f in files if f.trashed_at is None and can_view_file(member.id, f, org_id, db)]
     titles = {f.file_id: f.title for f in files}
 
     batches = db.execute(
@@ -183,7 +266,78 @@ def resolve_unresolved(
 
 
 def _ownership_target(team: Team, owner_id: uuid.UUID | None) -> uuid.UUID | None:
-    return team.team_leader_id or owner_id
+    return team.owner_override_id or team.team_leader_id or owner_id
+
+
+def _rule_view(t: Team) -> dict:
+    return {
+        "top_leaders": t.share_top_leaders,
+        "extra_member_ids": list(t.share_extra_member_ids or []),
+        "extra_team_ids": list(t.share_extra_team_ids or []),
+        "excluded_member_ids": list(t.share_excluded_member_ids or []),
+        "role": t.share_role,
+        "owner_override_id": str(t.owner_override_id) if t.owner_override_id else None,
+    }
+
+
+class SharingRuleBody(BaseModel):
+    top_leaders: bool
+    extra_member_ids: list[uuid.UUID] = []
+    extra_team_ids: list[uuid.UUID] = []
+    excluded_member_ids: list[uuid.UUID] = []
+    role: str = "writer"
+    owner_override_id: uuid.UUID | None = None
+
+
+@router.put("/teams/{team_id}/sharing-rule")
+def save_sharing_rule(
+    org_id: uuid.UUID,
+    team_id: uuid.UUID,
+    body: SharingRuleBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """A team's sharing rule (Ronald, 2026-10-04): who new files go to, at
+    what access, and who owns them. Owner, Super Admin or the team's lead."""
+    team = db.get(Team, team_id)
+    if team is None or team.org_id != org_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "team not found")
+    if not (_manages_org(member, db) or team_id in _led_team_ids(member, db)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "only the owner, a Super Admin or this team's lead can change its rule")
+    if body.role not in SHARE_ROLES:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "access must be writer, commenter or reader")
+    org_members = {m.id: m for m in db.execute(select(OrgMember).where(OrgMember.organization_id == org_id)).scalars()}
+    org_teams = {t.id for t in _teams(org_id, db)}
+    people = set(body.extra_member_ids) | set(body.excluded_member_ids)
+    if not people <= org_members.keys() or not set(body.extra_team_ids) <= org_teams:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "someone or some team isn't in this organization")
+    if body.owner_override_id is not None:
+        owner = org_members.get(body.owner_override_id)
+        if owner is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "that owner isn't in this organization")
+        if owner.auth_type != AuthType.DOMAIN_DELEGATED:
+            # Google won't move ownership into a personal account.
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "a personal Google account can't own company files")
+
+    team.share_top_leaders = body.top_leaders
+    team.share_extra_member_ids = sorted({str(i) for i in body.extra_member_ids})
+    team.share_extra_team_ids = sorted({str(i) for i in body.extra_team_ids if i != team_id})
+    team.share_excluded_member_ids = sorted({str(i) for i in body.excluded_member_ids})
+    team.share_role = body.role
+    # Picking the lead again means "follow the lead", so it tracks a new lead.
+    team.owner_override_id = (
+        body.owner_override_id if body.owner_override_id and body.owner_override_id != team.team_leader_id else None
+    )
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=member.id,
+        action_type="sharing.rule_changed",
+        target_resource_id=str(team.id),
+        details=_rule_view(team),
+        db=db,
+    )
+    return _rule_view(team)
 
 
 @router.get("/sharing")
@@ -243,6 +397,7 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
     return {
         "people": _people(org_id, db),
         "top_leader_ids": [str(m) for m in top_leaders],
+        "owner_id": str(owner_id) if owner_id else None,
         "teams": [
             {
                 "id": str(t.id),
@@ -253,6 +408,7 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
                 "auto_own": t.auto_own_enabled,
                 "owner_target_id": str(target) if (target := _ownership_target(t, owner_id)) else None,
                 "can_edit": manages or t.id in led,
+                "rule": _rule_view(t),
             }
             for t in _teams(org_id, db)
         ],

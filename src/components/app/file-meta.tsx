@@ -40,6 +40,7 @@ const GOOGLE_MARKS: Record<string, string> = {
   "application/vnd.google-apps.spreadsheet": "/create/sheets.png",
   "application/vnd.google-apps.presentation": "/create/slides.png",
   "application/vnd.google-apps.form": "/create/forms.png",
+  "application/pdf": "/create/pdf.png",
 };
 
 /** A file's icon on a white tile: Google's mark for Docs, Sheets and
@@ -79,6 +80,85 @@ export function editedAgo(iso: string | null | undefined): string {
     if (Math.abs(seconds) >= size)
       return `Edited ${RELATIVE.format(Math.round(seconds / size), unit)}`;
   return "Edited just now";
+}
+
+/** Where each Google mark's drawing sits inside its 96px PNG, so every mark
+ *  can be drawn at the same visible height (the PNGs pad them differently). */
+const MARK_BOX: Record<string, { x: number; y: number; w: number; h: number }> = {
+  "/create/docs.png": { x: 16, y: 4, w: 64, h: 88 },
+  "/create/sheets.png": { x: 4, y: 16, w: 88, h: 64 },
+  "/create/slides.png": { x: 6, y: 7, w: 84, h: 82 },
+  "/create/forms.png": { x: 10, y: 10, w: 76, h: 76 },
+  "/create/pdf.png": { x: 0, y: 0, w: 96, h: 96 },
+};
+
+// About the height of the name + "Doc · Edited …" block below it (Ronald
+// 2026-10-04: icon and label in similar proportions).
+const CARD_ICON = 72;
+
+/** One file in a grid: its icon (every one the same height, no tile), then
+ *  the name, then "Doc · Edited …", stacked, with no card behind it (Ronald
+ *  2026-09-27, heights evened 2026-10-04). */
+export function FileCard({
+  name,
+  mimeType,
+  modifiedAt,
+}: {
+  name: string;
+  mimeType: string;
+  modifiedAt?: string | null;
+}) {
+  const mark = GOOGLE_MARKS[mimeType];
+  const box = mark ? MARK_BOX[mark] : undefined;
+  const { label, Icon } = describeFile(mimeType);
+  const edited = editedAgo(modifiedAt);
+  const scale = box ? CARD_ICON / box.h : 1;
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-2">
+      {mark && box ? (
+        <span
+          className="relative block shrink-0 overflow-hidden"
+          style={{ width: Math.round(box.w * scale), height: CARD_ICON }}
+        >
+          <Image
+            src={mark}
+            alt=""
+            width={96}
+            height={96}
+            className="absolute max-w-none"
+            style={{
+              width: 96 * scale,
+              height: 96 * scale,
+              left: -box.x * scale,
+              top: -box.y * scale,
+            }}
+          />
+        </span>
+      ) : (
+        // Lucide draws in the middle 20 of its 24 grid; size it so the
+        // drawing matches the marks' height.
+        <span className="flex shrink-0 items-center" style={{ height: CARD_ICON }}>
+          <Icon
+            size={Math.round((CARD_ICON * 24) / 20)}
+            strokeWidth={NAV_STROKE}
+            className="-mx-[3px] text-[#57534e]"
+          />
+        </span>
+      )}
+      <span className={`${satoshi.className} min-w-0 max-w-full`}>
+        <span
+          title={name}
+          className="line-clamp-2 text-[0.9375rem] leading-[1.35] text-[#1c1917]"
+        >
+          {name}
+        </span>
+        <span className="mt-1 block text-[0.8125rem] text-[var(--app-dim)]">
+          {label}
+          {edited ? ` · ${edited}` : ""}
+        </span>
+      </span>
+    </div>
+  );
 }
 
 /** One file as the app draws it: white icon tile, name, "Doc · Edited …".

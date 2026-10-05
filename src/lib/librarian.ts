@@ -23,14 +23,28 @@ export type FolderFileItem = {
   name: string;
   mimeType: string;
   modifiedAt: string;
+  /** Opens the file in Google; in the sandbox, a blank file with the same
+   *  name (Ronald, 2026-10-04). Null when there's nothing to open. */
+  webViewLink: string | null;
+  /** Only on a folder's own files (`fetchFolder`), for the details view. */
+  owner?: { name: string; email: string; personal: boolean } | null;
+  teamName?: string | null;
+  private?: boolean;
+  /** You may rename / delete it (its owner, its team's lead, the owner, a
+   *  Super Admin). */
+  canManage?: boolean;
 };
 
 export type FolderSummary = {
   id: string;
   name: string;
   teamId: string | null;
+  /** "#rrggbb", or null for the default blue. */
+  color: string | null;
   fileCount: number;
   preview: FolderFileItem[];
+  /** Rename / delete; never for a team's folder. */
+  canManage: boolean;
 };
 
 type RawCandidate = {
@@ -50,14 +64,21 @@ type RawFile = {
   name: string;
   mime_type: string;
   modified_at: string;
+  web_view_link?: string | null;
+  owner?: { name: string; email: string; personal: boolean } | null;
+  team_name?: string | null;
+  private?: boolean;
+  can_manage?: boolean;
 };
 
 type RawFolder = {
   id: string;
   name: string;
   team_id: string | null;
+  color: string | null;
   file_count: number;
   preview: RawFile[];
+  can_manage: boolean;
 };
 
 const candidate = (c: RawCandidate): Candidate => ({
@@ -77,14 +98,21 @@ const file = (f: RawFile): FolderFileItem => ({
   name: f.name,
   mimeType: f.mime_type,
   modifiedAt: f.modified_at,
+  webViewLink: f.web_view_link ?? null,
+  owner: f.owner,
+  teamName: f.team_name,
+  private: f.private,
+  canManage: f.can_manage,
 });
 
 const folder = (f: RawFolder): FolderSummary => ({
   id: f.id,
   name: f.name,
   teamId: f.team_id,
+  color: f.color,
   fileCount: f.file_count,
   preview: f.preview.map(file),
+  canManage: f.can_manage,
 });
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -178,11 +206,11 @@ export async function fetchFolder(org: string, folderId: string) {
   };
 }
 
-export async function createFolder(org: string, name: string) {
+export async function createFolder(org: string, name: string, color: string) {
   return folder(
     await call<RawFolder>(`${base(org)}/folders`, {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, color }),
     }),
   );
 }
@@ -208,10 +236,15 @@ export async function setFileInFolder(
 export async function createDocument(
   org: string,
   kind: "doc" | "sheet" | "slide" | "form",
+  name?: string,
+  teamIds?: string[],
 ) {
-  return call<{ id: string; name: string; url: string | null }>(
+  return call<{ id: string; name: string; url: string | null; team_ids: string[] }>(
     `${base(org)}/documents`,
-    { method: "POST", body: JSON.stringify({ kind }) },
+    {
+      method: "POST",
+      body: JSON.stringify({ kind, name: name || null, team_ids: teamIds ?? null }),
+    },
   );
 }
 
@@ -236,4 +269,65 @@ export function reasonLines(reasons: Record<string, number>): string[] {
       `Shared only with ${n(reasons.personal_contacts_shared, "personal account", "personal accounts")}`,
     );
   return lines;
+}
+
+export async function renameFolder(org: string, folderId: string, name: string) {
+  await call(`${base(org)}/folders/${folderId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Renames the file in Google Drive itself. */
+export async function renameFile(org: string, fileId: string, name: string) {
+  await call(`${base(org)}/company-files/${encodeURIComponent(fileId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+/** Into the owner's Drive Trash (ADR-0010); Settings' Trash restores it. */
+export async function trashFile(org: string, fileId: string) {
+  await call(`${base(org)}/company-files/${encodeURIComponent(fileId)}/trash`, {
+    method: "POST",
+  });
+}
+
+export async function restoreFile(org: string, fileId: string) {
+  await call(`${base(org)}/company-files/${encodeURIComponent(fileId)}/restore`, {
+    method: "POST",
+  });
+}
+
+export type TrashedFile = FolderFileItem & {
+  trashedAt: string;
+  /** When Google empties it for good. */
+  goneAt: string;
+  trashedBy: string | null;
+};
+
+export async function fetchTrash(org: string): Promise<TrashedFile[]> {
+  const body = await call<{
+    files: (RawFile & { trashed_at: string; gone_at: string; trashed_by: string | null })[];
+  }>(`${base(org)}/trash`);
+  return body.files.map((f) => ({
+    ...file(f),
+    trashedAt: f.trashed_at,
+    goneAt: f.gone_at,
+    trashedBy: f.trashed_by,
+  }));
+}
+
+export type LogEntry = {
+  id: string;
+  action: string;
+  actor: string | null;
+  subject: string | null;
+  at: string;
+};
+
+/** Settings' Logs: the org's audit log, newest first. Owner / Super Admin
+ *  only; anyone else gets a 403. */
+export async function fetchLog(org: string): Promise<LogEntry[]> {
+  return (await call<{ entries: LogEntry[] }>(`${base(org)}/audit/log`)).entries;
 }

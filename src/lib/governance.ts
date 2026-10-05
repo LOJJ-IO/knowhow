@@ -10,6 +10,8 @@ export type Person = {
   /** A personal Google account (e.g. a contractor's Gmail). */
   personal: boolean;
   team_ids: string[];
+  /** Confirmed by Google as a Workspace Super Admin. */
+  super_admin?: boolean;
 };
 
 export type TeamRef = { id: string; name: string };
@@ -71,6 +73,19 @@ export type SharingTeam = {
   auto_own: boolean;
   owner_target_id: string | null;
   can_edit: boolean;
+  rule: SharingRule;
+};
+
+/** A team's customisable sharing rule (Ronald 2026-10-04). */
+export type ShareRole = "writer" | "commenter" | "reader";
+export type SharingRule = {
+  top_leaders: boolean;
+  extra_member_ids: string[];
+  extra_team_ids: string[];
+  excluded_member_ids: string[];
+  role: ShareRole;
+  /** Null: the team's lead owns its files. */
+  owner_override_id: string | null;
 };
 
 export type Suggestion = {
@@ -87,6 +102,8 @@ export type Suggestion = {
 export type Sharing = {
   people: Person[];
   top_leader_ids: string[];
+  /** The company owner, for the Owner badge. */
+  owner_id: string | null;
   teams: SharingTeam[];
   suggestions: Suggestion[];
 };
@@ -170,6 +187,12 @@ export const setAutoOwn = (orgId: string, teamId: string, on: boolean) =>
   call(`${org(orgId)}/teams/${teamId}`, {
     method: "PATCH",
     body: JSON.stringify({ auto_own_enabled: on }),
+  });
+
+export const saveSharingRule = (orgId: string, teamId: string, rule: SharingRule) =>
+  call<SharingRule>(`${org(orgId)}/teams/${teamId}/sharing-rule`, {
+    method: "PUT",
+    body: JSON.stringify(rule),
   });
 
 export const decideSuggestion = (fileId: string, share: boolean) =>

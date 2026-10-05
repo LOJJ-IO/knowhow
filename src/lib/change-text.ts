@@ -31,7 +31,18 @@ const ACTIONS: Record<string, string> = {
   "librarian.confirmed_company": "Filed as company work",
   "librarian.imported_personal": "Files brought in",
   "ownership.unresolved_cleared": "Moved by hand",
+  "document.renamed": "File renamed",
+  "document.trashed": "File moved to Trash",
+  "document.restored": "File restored",
+  "folder.renamed": "Folder renamed",
+  "folder.deleted": "Folder deleted",
 };
+
+/** An audit action as words: the sentence above, or the tidied raw type. */
+export function actionLabel(action: string): string {
+  const raw = action.split(".").slice(-1)[0].replace(/_/g, " ");
+  return ACTIONS[action] ?? raw.charAt(0).toUpperCase() + raw.slice(1);
+}
 
 /** Joins and leaves name the person they were about instead of "Someone"
  *  (user 2026-09-27): "Ada Lovelace left". */
@@ -40,27 +51,47 @@ const SUBJECT_VERBS: Record<string, string> = {
   "org_chart.membership.removed": "left",
 };
 
+/** A created file says its type, the same words as the New menu (Ronald
+ *  2026-10-04). Older entries without a kind stay "Document created". */
+const CREATED_KINDS: Record<string, string> = {
+  doc: "Document created",
+  sheet: "Spreadsheet created",
+  slide: "Presentation created",
+  form: "Form created",
+};
+
+/** A change split for the dot line: what happened, and who did it when
+ *  that's worth saying ("Ada left · Ada" says it twice, so the actor is
+ *  only named when it was someone else). */
+export function changeParts(
+  event: ChangeEvent,
+  membersById: Map<string, OverviewMember>,
+): { what: string; actor: OverviewMember | null } {
+  const member = (id: string | null) => (id ? membersById.get(id) : undefined);
+  const subjectMember = SUBJECT_VERBS[event.action]
+    ? member(event.subjectMemberId)
+    : undefined;
+  const subject = subjectMember?.displayName ?? subjectMember?.email;
+  const created =
+    event.action === "document.created" && event.kind
+      ? CREATED_KINDS[event.kind]
+      : undefined;
+  const what = subject
+    ? `${subject} ${SUBJECT_VERBS[event.action]}`
+    : (created ?? actionLabel(event.action));
+  const actor = member(event.actorMemberId) ?? null;
+  if (subject && event.actorMemberId === event.subjectMemberId)
+    return { what, actor: null };
+  return { what, actor };
+}
+
 export function describeChange(
   event: ChangeEvent,
   membersById: Map<string, OverviewMember>,
 ): string {
-  const nameOf = (id: string | null) => {
-    const member = id ? membersById.get(id) : undefined;
-    return member?.displayName ?? member?.email;
-  };
-  const raw = event.action.split(".").slice(-1)[0].replace(/_/g, " ");
-  const subject = SUBJECT_VERBS[event.action]
-    ? nameOf(event.subjectMemberId)
-    : undefined;
-  const what = subject
-    ? `${subject} ${SUBJECT_VERBS[event.action]}`
-    : (ACTIONS[event.action] ?? raw.charAt(0).toUpperCase() + raw.slice(1));
-  const who = nameOf(event.actorMemberId);
-  // "Ada left · Ada" says it twice; only name the actor when it was
-  // someone else.
-  if (!who || (subject && event.actorMemberId === event.subjectMemberId))
-    return what;
-  return `${what} · ${who}`;
+  const { what, actor } = changeParts(event, membersById);
+  const who = actor?.displayName ?? actor?.email;
+  return who ? `${what} · ${who}` : what;
 }
 
 export function relativeTime(iso: string): string {

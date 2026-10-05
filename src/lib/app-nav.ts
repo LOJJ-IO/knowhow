@@ -52,15 +52,6 @@ export const APP_NAV: AppNavItem[] = [
   },
 ];
 
-/** Search is reached from the search field at the top of the sidebar, not from
- *  the section list, so it is kept out of `APP_NAV`. */
-export const APP_SEARCH: AppNavItem = {
-  label: "Search",
-  href: "/search",
-  section: "Organization",
-  purpose: "Find any document in the organization.",
-};
-
 /** The rows at the foot of the sidebar. Kept out of `APP_NAV` because they
  *  aren't features of the product — they sit under the sections, quieter, the
  *  way Elera's do (user 2026-09-21).
@@ -80,7 +71,7 @@ export const APP_UTILITY: AppNavItem[] = [
 export const APP_SECTIONS: AppSection[] = ["Organization", "Access", "People"];
 
 export function navItemFor(href: string): AppNavItem {
-  const item = [...APP_NAV, APP_SEARCH, ...APP_UTILITY].find(
+  const item = [...APP_NAV, ...APP_UTILITY].find(
     (i) => i.href === href,
   );
   if (!item) throw new Error(`No nav entry for ${href}`);

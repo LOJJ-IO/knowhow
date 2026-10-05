@@ -64,6 +64,12 @@ class Settings(BaseSettings):
     # Lower locally for testing, e.g. DEMO_RECOVERY_IDLE_SECONDS=60.
     demo_recovery_idle_seconds: int = 20 * 60
 
+    # --- Sales demo (sandbox org) ---
+    # The deployed `app/sandbox/create-named-file.gs` web app's /exec URL. Set,
+    # the demo's New opens every type already named; unset, only Docs is
+    # named (Google's blank-file links take no name for the others).
+    sandbox_create_url: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

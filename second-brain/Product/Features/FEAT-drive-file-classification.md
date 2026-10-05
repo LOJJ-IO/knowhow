@@ -3,7 +3,7 @@ type: feature
 status: draft
 tags: [area/product, area/backend, ml, privacy]
 created: 2026-09-16
-updated: 2026-09-16
+updated: 2026-10-02
 related: ["[[0005-layered-file-classification-no-llm-first]]", "[[FEAT-workspace-onboarding-flow]]", "[[Product-Vision]]"]
 ---
 
@@ -41,7 +41,7 @@ Tested by negation; everything else in this note must agree with these.
 
 1. **Categories: Company, Personal, External.** Every file is exactly one. External = owned by someone outside the org (e.g. a client's file shared with Sarah) — not Acme's to claim, not Sarah's to mark Personal.
 2. **Labels are decisions, not ground truth.** Knowhow never knows the truth, only labels. Rules are stated over labels (`Label(Personal)`, `Confirmed(Company)`).
-3. **Unconfirmed files cannot enter `FileIndex`:** `¬Confirmed(Company) → ¬InFileIndex`. Hence `InFileIndex → Confirmed(Company)`, and `Label(Personal) → ¬InFileIndex`.
+3. *(2026-10-02, Ronald: for Workspace-account files this changes per [[0032-librarian-files-on-its-own-and-reports]], not yet built; the Privacy Policy must change first.)* **Unconfirmed files cannot enter `FileIndex`:** `¬Confirmed(Company) → ¬InFileIndex`. Hence `InFileIndex → Confirmed(Company)`, and `Label(Personal) → ¬InFileIndex`.
 4. **Strong evidence can recommend, never confirm:** `S_C → Recommend(Company)`, `S_C ↛ Company` (same for `S_P`).
 5. **Shared Drive ownership is a structural exception:** `InOrgSharedDrive → Company` — owned by the organization in Google itself; skips evidence and confirmation.
 6. **Confirmer ≠ proposer:** `Confirms(x, f) → x ≠ Proposer(f)`, except an explicit one-person-company / owner exception.

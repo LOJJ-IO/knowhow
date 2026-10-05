@@ -11,6 +11,12 @@ Kinds, in the order they're returned:
   own_drive       the caller's own Drive isn't reachable
   linked_drive    a personal account linked to the caller (ADR-0025) whose
                   Drive isn't connected; one per address, only to the caller
+  librarian_sort    the caller's own files the librarian suggested, unanswered
+  librarian_review  teammates' company proposals the caller may confirm
+  ownership_review  a planned ownership move (owner / Super Admin / lead)
+  ownership_stuck   files Google won't let move (owner / Super Admin / lead)
+  share_suggestions the caller's own files waiting on a share decision
+  offboarded        someone was offboarded (a report; the dialog clears it)
 """
 
 import uuid
@@ -21,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.audit.service import record_audit_entry
 from app.auth.linked_drive import unconnected_linked_emails
+from app.librarian.service import task_counts as librarian_task_counts
 from app.models.delegation_grant import DelegationStatus
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
@@ -101,6 +108,17 @@ def pending_tasks(org_id: uuid.UUID, member: OrgMember, db: Session) -> list[dic
 
     for email in unconnected_linked_emails(member, db):
         tasks.append({"kind": "linked_drive", "id": email, "email": email})
+
+    # The librarian's own section in Notifications (Ronald, 2026-10-04).
+    to_sort, to_review = librarian_task_counts(member, db)
+    if to_sort:
+        tasks.append({"kind": "librarian_sort", "id": f"sort-{member.id}", "count": to_sort})
+    if to_review:
+        tasks.append({"kind": "librarian_review", "id": f"review-{member.id}", "count": to_review})
+
+    from app.api.routes.governance import governance_tasks
+
+    tasks.extend(governance_tasks(member, db))
 
     return tasks
 

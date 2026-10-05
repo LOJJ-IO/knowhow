@@ -10,12 +10,14 @@ process. Nothing here ever calls Google."""
 
 import json
 import uuid
+from urllib.parse import urlencode
 from datetime import datetime, timedelta, timezone
 
 import httplib2
 from googleapiclient.errors import HttpError
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.db import SessionLocal
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
@@ -26,16 +28,38 @@ from app.sandbox.data import ALL_DRIVE_FILES, FILES, FORMER, FORMER_FILES, JOINE
 # Process-local state since the last seed (`reset_state` clears it).
 _CREATED: dict[str, dict] = {}
 _TRASHED: set[str] = set()
+_RENAMED: dict[str, str] = {}
 _OWNER_OVERRIDES: dict[str, str] = {}
 # When the fixture files' clock starts; set by the seed.
 _SEEDED_AT: list[datetime] = [datetime.now(timezone.utc)]
 
+# Google's "make a blank file" links. The `create?title=` forms name the new
+# file, so a sandbox doc called "Monday" opens as "Monday" (Ronald,
+# 2026-10-04); docs.new and friends always open "Untitled".
 _NEW_FILE_LINKS = {
-    "application/vnd.google-apps.document": "https://docs.new",
-    "application/vnd.google-apps.spreadsheet": "https://sheets.new",
-    "application/vnd.google-apps.presentation": "https://slides.new",
-    "application/vnd.google-apps.form": "https://forms.new",
+    "application/vnd.google-apps.document": "https://docs.google.com/document/create",
+    "application/vnd.google-apps.spreadsheet": "https://docs.google.com/spreadsheets/create",
+    "application/vnd.google-apps.presentation": "https://docs.google.com/presentation/create",
+    "application/vnd.google-apps.form": "https://docs.google.com/forms/create",
 }
+
+
+# What `create-named-file.gs` calls each type.
+_SCRIPT_KINDS = {
+    "application/vnd.google-apps.spreadsheet": "sheet",
+    "application/vnd.google-apps.presentation": "slide",
+    "application/vnd.google-apps.form": "form",
+}
+
+
+def _new_file_link(mime: str, name: str) -> str | None:
+    # Only Docs' link takes a name. Sheets, Slides and Forms go through the
+    # demo's Apps Script, which makes the file named (Ronald, 2026-10-04).
+    script = get_settings().sandbox_create_url
+    if script and mime in _SCRIPT_KINDS:
+        return f"{script}?{urlencode({'kind': _SCRIPT_KINDS[mime], 'title': name})}"
+    base = _NEW_FILE_LINKS.get(mime)
+    return f"{base}?{urlencode({'title': name})}" if base else None
 
 _CONTENT_BY_TITLE = {f.title: f.content for f in FILES + FORMER_FILES}
 _EMAIL_BY_KEY = {p.key: p.email for p in PEOPLE + FORMER + [j for j, _ in JOINERS]}
@@ -45,6 +69,7 @@ _NAME_BY_EMAIL = {p.email: p.name for p in PEOPLE + FORMER + [j for j, _ in JOIN
 def reset_state(seeded_at: datetime) -> None:
     _CREATED.clear()
     _TRASHED.clear()
+    _RENAMED.clear()
     _OWNER_OVERRIDES.clear()
     _SEEDED_AT[0] = seeded_at
 
@@ -145,7 +170,11 @@ class SandboxDrive:
             if file_id not in out:
                 out[file_id] = created
 
-        return {k: v for k, v in out.items() if k not in _TRASHED}
+        return {
+            k: {**v, "name": _RENAMED[k]} if k in _RENAMED else v
+            for k, v in out.items()
+            if k not in _TRASHED
+        }
 
     def _describe(
         self,
@@ -237,15 +266,16 @@ class SandboxDrive:
             now = datetime.now(timezone.utc)
             mime = body.get("mimeType", "application/vnd.google-apps.document")
             file_id = f"acme-new-{uuid.uuid4().hex[:16]}"
+            name = body.get("name", "Untitled")
             f = self._describe(
                 file_id,
-                body.get("name", "Untitled"),
+                name,
                 mime,
                 self.email,
                 set(),
                 created=now,
                 modified=now,
-                link=_NEW_FILE_LINKS.get(mime),
+                link=_new_file_link(mime, name),
             )
             _CREATED[file_id] = f
             return self._public(f)
@@ -263,12 +293,19 @@ class SandboxDrive:
 
     def update(self, fileId: str, body: dict | None = None, **_kwargs):
         def run():
-            if (body or {}).get("trashed"):
+            body_ = body or {}
+            if body_.get("trashed"):
                 _TRASHED.add(fileId)
                 return {"id": fileId, "trashed": True}
+            if body_.get("trashed") is False:
+                _TRASHED.discard(fileId)
             f = self._catalogue().get(fileId)
             if f is None:
                 raise _not_found(fileId)
+            if "name" in body_:
+                # Renames live with the demo's other in-memory changes.
+                _RENAMED[fileId] = body_["name"]
+                f = self._catalogue()[fileId]
             return self._public(f)
 
         return _Call(run)

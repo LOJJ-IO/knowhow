@@ -245,10 +245,26 @@ export function HomeScreen() {
                           size={52}
                         />
                         <span className="min-w-0 text-left">
-                          <CardTitle>{name}</CardTitle>
-                          <CardMeta>
-                            {owner.id === me.id ? "Owner · you" : "Owner"}
-                          </CardMeta>
+                          <CardTitle>
+                            {name}
+                            {/* "· You" beside the name, not the badges
+                                (Ronald 2026-10-04). */}
+                            {owner.id === me.id ? (
+                              <span
+                                className={`${satoshi.className} text-[0.975rem] tracking-normal text-[var(--app-dim)]`}
+                              >
+                                · You
+                              </span>
+                            ) : null}
+                          </CardTitle>
+                          {/* Owner and Super Admin as badges (Ronald
+                              2026-10-04), never bare "Admin". */}
+                          <span className="mt-1 flex items-center gap-1.5">
+                            <Badge>Owner</Badge>
+                            {owner.isSuperAdmin ? (
+                              <Badge>Super Admin</Badge>
+                            ) : null}
+                          </span>
                         </span>
                       </div>
                     </Card>

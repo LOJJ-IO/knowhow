@@ -201,7 +201,10 @@ function BellIcon({
 // this only moves the way the count moved, so the digits roll the right way
 function DigitColumn({ value, reduced }: { value: number; reduced: boolean }) {
   const position = useSpring(value, COLUMN_SPRING);
-  const y = useTransform(position, (p) => `${-p * TILE_STEP}em`);
+  // measured from the digit it should rest on, so every column rests at
+  // exactly 0: offsets like -29 × 1.3em rounded to a different sub-pixel
+  // than the tens column, and "29" sat crooked (Ronald 2026-10-04)
+  const y = useTransform(position, (p) => `${(value - p) * TILE_STEP}em`);
   // the spring can rest a hair off the digit, which peeks the next one in
   useEffect(
     () => position.on("animationComplete", () => position.jump(value)),
@@ -237,7 +240,7 @@ function DigitColumn({ value, reduced }: { value: number; reduced: boolean }) {
             <span
               key={tile}
               className="absolute inset-x-0 flex justify-center"
-              style={{ top: `${tile * TILE_STEP}em`, height: "1em" }}
+              style={{ top: `${(tile - value) * TILE_STEP}em`, height: "1em" }}
             >
               {digitOf(tile)}
             </span>

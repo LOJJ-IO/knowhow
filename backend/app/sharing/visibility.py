@@ -33,17 +33,43 @@ def _descendant_team_ids(root_team_id: uuid.UUID, org_id: uuid.UUID, db: Session
 
 
 def resolve_auto_share_recipients(org_id: uuid.UUID, team_id: uuid.UUID, db: Session) -> set[uuid.UUID]:
-    """AUTO-SHARE recipients for a newly created file: the creator's team,
-    and Top Leaders per the role hierarchy."""
-    team_members = db.execute(
-        select(OrgMembership.user_id).where(OrgMembership.org_id == org_id, OrgMembership.team_id == team_id)
-    ).scalars().all()
-    top_leaders = db.execute(
-        select(OrgMembership.user_id).where(
-            OrgMembership.org_id == org_id, OrgMembership.role == OrgRole.TOP_LEADER
+    """AUTO-SHARE recipients for a newly created file, per the team's
+    sharing rule (app/models/team.py): the creator's team minus anyone left
+    out, plus extra people and teams, plus Top Leaders unless the team
+    turned that off."""
+    team = db.get(Team, team_id)
+
+    def members_of(tid: uuid.UUID) -> set[uuid.UUID]:
+        return set(
+            db.execute(
+                select(OrgMembership.user_id).where(OrgMembership.org_id == org_id, OrgMembership.team_id == tid)
+            ).scalars()
         )
-    ).scalars().all()
-    return set(team_members) | set(top_leaders)
+
+    def ids(raw: list | None) -> set[uuid.UUID]:
+        out: set[uuid.UUID] = set()
+        for value in raw or []:
+            try:
+                out.add(uuid.UUID(str(value)))
+            except ValueError:
+                continue
+        return out
+
+    recipients = members_of(team_id)
+    if team is not None:
+        recipients -= ids(team.share_excluded_member_ids)
+        recipients |= ids(team.share_extra_member_ids)
+        for extra_team in ids(team.share_extra_team_ids):
+            recipients |= members_of(extra_team)
+    if team is None or team.share_top_leaders:
+        recipients |= set(
+            db.execute(
+                select(OrgMembership.user_id).where(
+                    OrgMembership.org_id == org_id, OrgMembership.role == OrgRole.TOP_LEADER
+                )
+            ).scalars()
+        )
+    return recipients
 
 
 def visible_team_ids_for_member(member_id: uuid.UUID, org_id: uuid.UUID, db: Session) -> set[uuid.UUID] | None:
@@ -103,6 +129,11 @@ def can_view_file(member_id: uuid.UUID, file: FileIndex, org_id: uuid.UUID, db: 
         if is_org_wide_visibility:
             return True
         if file.team_id is not None and file.team_id in visible_team_ids:
+            return True
+        # A new file can be put in several teams at once (New dialog, Ronald
+        # 2026-10-04); the teams after the first are listed here.
+        extra = file.sharing_state.get("extra_team_ids", []) if file.sharing_state else []
+        if any(t in {str(v) for v in visible_team_ids} for t in extra):
             return True
 
     # Explicit per-member grants recorded in sharing_state (e.g. a confirmed

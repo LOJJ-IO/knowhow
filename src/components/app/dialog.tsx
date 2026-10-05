@@ -37,11 +37,13 @@ import { cn } from "@/lib/utils";
  *  the tooltip). No Sage code, tokens or dependencies crossed over (CLAUDE.md
  *  invariant 5). */
 
-export type DialogSize = "sm" | "lg" | "xl";
+export type DialogSize = "sm" | "md" | "lg" | "xl";
 export type DialogKind = "form" | "confirm";
 
 const SIZE: Record<DialogSize, string> = {
   sm: "max-w-md",
+  // Notifications, once Librarian became a third tab (Ronald, 2026-10-04).
+  md: "max-w-lg",
   lg: "max-w-2xl",
   xl: "max-w-5xl",
 };
@@ -68,7 +70,8 @@ export function AppDialog({
   title: string;
   size?: DialogSize;
   kind?: DialogKind;
-  footer: ReactNode;
+  /** Left out: no footer bar (Search's results have no action). */
+  footer?: ReactNode;
   /** Part of a dialog swap right now: the backdrop holds steady. */
   swap?: boolean;
   /** When given, header/body/footer are wrapped in a form. */
@@ -88,9 +91,11 @@ export function AppDialog({
         </DialogPrimitive.Title>
       </header>
       <DialogBody kind={kind}>{children}</DialogBody>
-      <footer className="flex shrink-0 justify-end gap-2 border-t border-[var(--app-border)] px-6 py-4">
-        {footer}
-      </footer>
+      {footer ? (
+        <footer className="flex shrink-0 justify-end gap-2 border-t border-[var(--app-border)] px-6 py-4">
+          {footer}
+        </footer>
+      ) : null}
     </>
   );
 
@@ -105,13 +110,14 @@ export function AppDialog({
             `app-modal` animates `transform`, and a scale and a translate on
             one element fight over the same property. The wrapper ignores the
             pointer so the backdrop still receives an outside click. */}
-        <div className="pointer-events-none fixed inset-0 z-[500] flex items-center justify-center p-4">
+        <div className="app-dialog-shadow pointer-events-none fixed inset-0 z-[500] flex items-center justify-center p-4">
           <DialogPrimitive.Popup
             className={cn(
-              "app-modal pointer-events-auto relative flex max-h-[min(42rem,calc(100dvh-4rem))] w-full flex-col overflow-hidden rounded-[28px] bg-white shadow-[0_24px_60px_rgba(0,0,0,0.18)] outline-none",
+              "app-modal app-dialog pointer-events-auto relative flex max-h-[min(42rem,calc(100dvh-4rem))] w-full flex-col overflow-hidden rounded-[28px] bg-white outline-none",
               SIZE[size],
             )}
           >
+            <RevealAfterPaint />
             <DialogPrimitive.Close
               aria-label="Close"
               // Chrome, so: ghost, icon-sized.
@@ -150,6 +156,29 @@ export function AppDialog({
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
+}
+
+/** Holds the dialog closed until its first frame has painted, then lets the
+ *  reveal run (Ronald, 2026-10-04, "flash on open" in Chrome). Mounting a
+ *  dialog can take one 100ms+ frame; the transition's clock started before
+ *  it, so the first frame anyone saw was already half open and the dialog
+ *  popped in. Writes `data-revealed` on the popup directly, so the dialog
+ *  doesn't re-render for it; the popup unmounts on close, so every open
+ *  starts unset. */
+function RevealAfterPaint() {
+  const ref = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const popup = ref.current?.parentElement;
+    if (!popup) return;
+    // The second frame callback runs once the first frame is on screen.
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        popup.dataset.revealed = "";
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <span ref={ref} hidden />;
 }
 
 /** The body, which **tweens its height** when its content changes size (a

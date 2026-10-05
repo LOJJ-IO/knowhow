@@ -1,7 +1,8 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback, type ReactNode } from "react";
 
 import { Button } from "@/components/app/button";
 import { NAV_STROKE } from "@/components/app/icon";
@@ -20,7 +21,10 @@ export function Window({ children }: { children: ReactNode }) {
   // scroller's own scrollbar to its border-radius, so with both on one element
   // the bar ran past the card's rounded corners (Ronald, 2026-10-02).
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[32px] bg-white">
+    <section
+      data-app-window
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[32px] bg-white"
+    >
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {children}
       </div>
@@ -285,3 +289,18 @@ export const plural = (n: number, one: string, many: string) =>
   `${n} ${n === 1 ? one : many}`;
 
 export const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+/** A Notifications row lands on a screen as `?key=value` (Ronald
+ *  2026-10-04: the screens' prompts moved into the bell). The screen opens
+ *  the matching dialog, then calls `clear` so a reload doesn't reopen it.
+ *  The page needs a Suspense boundary for `useSearchParams`. */
+export function useUrlRequest(key: string): [string | null, () => void] {
+  const value = useSearchParams().get(key);
+  const router = useRouter();
+  const pathname = usePathname();
+  const clear = useCallback(
+    () => router.replace(pathname, { scroll: false }),
+    [router, pathname],
+  );
+  return [value, clear];
+}

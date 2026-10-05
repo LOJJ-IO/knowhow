@@ -16,7 +16,6 @@ const APP_PATHS = [
   "/help",
   "/offboarding",
   "/ownership",
-  "/search",
   "/sharing",
   "/workspace",
 ];

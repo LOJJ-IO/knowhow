@@ -34,6 +34,15 @@ def _grant_access(drive, file_id: str, email: str, role: str = "writer") -> None
         pass
 
 
+def share_role_for(team_id: uuid.UUID | None, db: Session) -> str:
+    """Drive role a team's rule shares new files at (default editor)."""
+    team = db.get(Team, team_id) if team_id else None
+    return team.share_role if team is not None and team.share_role in SHARE_ROLES else "writer"
+
+
+SHARE_ROLES = ("writer", "commenter", "reader")
+
+
 def _auto_own_target(org_id: uuid.UUID, team_id: uuid.UUID | None, db: Session) -> OrgMember | None:
     """The institutional ownership target for a team's files: that team's
     leader if one is assigned and is a domain member, else the org's
@@ -43,10 +52,13 @@ def _auto_own_target(org_id: uuid.UUID, team_id: uuid.UUID | None, db: Session) 
     platform limitation (see handle_file_created)."""
     if team_id is not None:
         team = db.get(Team, team_id)
-        if team is not None and team.team_leader_id is not None:
-            leader = db.get(OrgMember, team.team_leader_id)
-            if leader is not None and leader.auth_type == AuthType.DOMAIN_DELEGATED:
-                return leader
+        # The team's own pick first (Sharing's rule editor), then its lead.
+        for candidate_id in (team.owner_override_id, team.team_leader_id) if team is not None else ():
+            if candidate_id is None:
+                continue
+            candidate = db.get(OrgMember, candidate_id)
+            if candidate is not None and candidate.auth_type == AuthType.DOMAIN_DELEGATED:
+                return candidate
 
     org_chart = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one_or_none()
     if org_chart is not None and org_chart.owner_member_id is not None:
@@ -132,11 +144,12 @@ def handle_file_created(
         recipient_ids = resolve_auto_share_recipients(org_id, team_id, db) - {creator_user_id}
         if recipient_ids:
             drive = get_drive_client_for_user(creator_user_id, db=db)
+            role = share_role_for(team_id, db)
             recipient_emails = []
             for member_id in recipient_ids:
                 recipient = db.get(OrgMember, member_id)
                 if recipient is not None:
-                    _grant_access(drive, file_id, recipient.email)
+                    _grant_access(drive, file_id, recipient.email, role=role)
                     recipient_emails.append(recipient.email)
             file_row.sharing_state = {
                 **file_row.sharing_state,
@@ -229,10 +242,11 @@ def confirm_suggested_share(suggested_share_id: uuid.UUID, org_id: uuid.UUID, ac
         raise ValueError(f"suggested share {suggested_share_id} is already {suggestion.status.value}")
 
     drive = get_drive_client_for_user(suggestion.creator_user_id, db=db)
+    role = share_role_for(member_team(org_id, suggestion.creator_user_id, db), db)
     for member_id_str in suggestion.proposed_recipients:
         recipient = db.get(OrgMember, uuid.UUID(member_id_str))
         if recipient is not None:
-            _grant_access(drive, suggestion.file_id, recipient.email)
+            _grant_access(drive, suggestion.file_id, recipient.email, role=role)
 
     suggestion.status = SuggestedShareStatus.CONFIRMED
     suggestion.resolved_at = datetime.now(timezone.utc)

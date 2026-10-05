@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,27 +10,36 @@ import {
   useState,
 } from "react";
 import { motion } from "framer-motion";
-import { Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ListChecks, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/app/button";
 import { AppDialog, DialogSectionTitle } from "@/components/app/dialog";
+import { editedAgo } from "@/components/app/file-meta";
+import { AppIcon, NAV_STROKE } from "@/components/app/icon";
+import { NAV_ICONS } from "@/components/app/nav-icons";
+import { plural } from "@/components/app/screen-kit";
 import { SetupTerm } from "@/components/setup/shell";
+import { LIBRARIAN_GROUPS } from "@/components/app/notification-center";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { startDriveConsent, startLinkedDriveConsent } from "@/lib/backend";
-import { describeChange, relativeTime } from "@/lib/change-text";
+import { DotLine } from "@/components/app/dot-line";
+import type { ChangeEvent, OverviewMember } from "@/lib/organization";
+import { changeParts, relativeTime } from "@/lib/change-text";
 import { appEntryUrl } from "@/lib/origins";
 import {
   decideJoinRequest,
   decideOwnerClaim,
+  isLibrarianTask,
   type Task,
   type TaskPerson,
 } from "@/lib/tasks";
 
 /** Notifications (user 2026-09-27, ADR-0026): what you need to do, then what
- *  changed in your teams. The Accounts dialog's shape (`size="sm"`).
+ *  changed in your teams. `size="md"` since Librarian got its own tab.
  *
  *  Tasks are acted on right here where they can be (join requests, an owner
  *  claim); the rest open the place that does them (the invite form, Google's
@@ -50,6 +60,7 @@ export function NotificationsDialog({
   onInvite: (kind: "owner" | "super_admin") => void;
 }) {
   const { chrome } = useSession();
+  const router = useRouter();
   const {
     overview,
     tasks,
@@ -65,7 +76,10 @@ export function NotificationsDialog({
   }, [open, reloadTasks]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"pending" | "teams">("pending");
+  const [tab, setTab] = useState<"pending" | "librarian" | "teams">("pending");
+
+  const ownTasks = tasks.filter((t) => !isLibrarianTask(t));
+  const librarianTasks = tasks.filter(isLibrarianTask);
 
   const membersById = useMemo(
     () => new Map((overview?.members ?? []).map((m) => [m.id, m])),
@@ -91,18 +105,22 @@ export function NotificationsDialog({
       swap={swap}
       onOpenChange={onOpenChange}
       title="Notifications"
-      size="sm"
+      // A step up from the Accounts dialog's `sm`, so three tabs and
+      // Clear all fit on one line (Ronald, 2026-10-04).
+      size="md"
       footer={<Button onClick={() => onOpenChange(false)}>Close</Button>}
     >
-      {/* Two tabs, grouped, styled like the footer's buttons: the open one
-          is black (user 2026-09-27). Clear sits on the right, Teams only. */}
+      {/* Tabs, grouped, styled like the footer's buttons: the open one is
+          black (user 2026-09-27). Librarian got its own tab (Ronald,
+          2026-10-04). Clear sits on the right, Teams only. */}
       {/* 40px between the tabs and what they show (user 2026-09-27): 24px
           here, 16px as the panel's top padding, where scrolled rows fade. */}
       <div className="mb-6 flex items-center gap-2">
         <div role="tablist" className="flex items-center gap-2">
           {(
             [
-              ["pending", "Pending", tasks.length],
+              ["pending", "Pending", ownTasks.length],
+              ["librarian", "Librarian", librarianTasks.length],
               [
                 "teams",
                 "Teams",
@@ -148,15 +166,18 @@ export function NotificationsDialog({
           role="tabpanel"
           className="-mr-[5%] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-4"
         >
-          {tasks.length === 0 ? (
+          {ownTasks.length === 0 ? (
             <Quiet>Nothing needs you right now.</Quiet>
-          ) : (
+          ) : null}
+          {ownTasks.length > 0 ? (
             <>
-              {/* Label over the first task (user 2026-09-27). */}
-              <DialogSectionTitle className="col-span-2 -mb-3">
+              {/* Label over the first task (user 2026-09-27), with an icon
+                  like the Librarian's groups (Ronald, 2026-10-04). */}
+              <DialogSectionTitle className="col-span-2 -mb-3 flex items-center gap-1.5">
+                <ListChecks size={15} strokeWidth={NAV_STROKE} />
                 Tasks
               </DialogSectionTitle>
-              {tasks.map((task) => (
+              {ownTasks.map((task) => (
                 <TaskRow
                   key={`${task.kind}-${task.id}`}
                   task={task}
@@ -178,10 +199,12 @@ export function NotificationsDialog({
                       task.kind === "no_owner" ? "owner" : "super_admin",
                     );
                   }}
+                  onOpenLibrarian={() => {}}
+                  onClear={() => {}}
                 />
               ))}
             </>
-          )}
+          ) : null}
           {error ? (
             <p
               aria-live="polite"
@@ -190,6 +213,49 @@ export function NotificationsDialog({
               {error}
             </p>
           ) : null}
+        </div>
+      ) : tab === "librarian" ? (
+        // The librarian's tasks (Ronald 2026-10-04), laid out like Tasks:
+        // one section per tab they come from, titled with that tab's
+        // sidebar icon and name, rows flush with the title. Sort / Review
+        // open each screen's own dialog.
+        <div
+          role="tabpanel"
+          className="-mr-[5%] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-4"
+        >
+          {librarianTasks.length === 0 ? (
+            <Quiet>Your librarian has nothing for you.</Quiet>
+          ) : null}
+          {LIBRARIAN_GROUPS.filter((group) =>
+            librarianTasks.some((t) => group.kinds.includes(t.kind)),
+          ).map((group, i) => (
+            <Fragment key={group.label}>
+              <DialogSectionTitle
+                className={`col-span-2 -mb-3 flex items-center gap-1.5 ${i > 0 ? "mt-4" : ""}`}
+              >
+                <AppIcon name={NAV_ICONS[group.href]} size={15} />
+                {group.label}
+              </DialogSectionTitle>
+              {librarianTasks
+                .filter((t) => group.kinds.includes(t.kind))
+                .map((task) => (
+                  <TaskRow
+                    key={`${task.kind}-${task.id}`}
+                    task={task}
+                    busy={false}
+                    onApprove={() => {}}
+                    onInvite={() => {}}
+                    onOpenLibrarian={() => {
+                      const href = librarianHref(task);
+                      if (!href) return;
+                      onOpenChange(false);
+                      router.push(href);
+                    }}
+                    onClear={() => dismissUpdate(task.id)}
+                  />
+                ))}
+            </Fragment>
+          ))}
         </div>
       ) : (
         // The Teams tab scrolls inside a capped height (made 10% taller
@@ -217,10 +283,10 @@ export function NotificationsDialog({
                   {changes.events.slice(0, 5).map((event) => (
                     <li
                       key={event.id}
-                      className={`${satoshi.className} group flex items-center gap-3 text-[0.875rem]`}
+                      className={`${satoshi.className} group flex items-start gap-3 text-[0.875rem]`}
                     >
-                      <span className="min-w-0 flex-1 truncate text-[#1c1917]">
-                        {describeChange(event, membersById)}
+                      <span className="min-w-0 flex-1 text-[#1c1917]">
+                        <ChangeRow event={event} membersById={membersById} />
                       </span>
                       {/* Hovering (or focusing) the row swaps the time for a
                           red minus that removes just this update (user
@@ -252,6 +318,49 @@ export function NotificationsDialog({
   );
 }
 
+/** A team update in the dot style: what, then who with their avatar
+ *  (Ronald 2026-10-04). No team: the row already sits under its team. */
+function ChangeRow({
+  event,
+  membersById,
+}: {
+  event: ChangeEvent;
+  membersById: Map<string, OverviewMember>;
+}) {
+  const { what, actor } = changeParts(event, membersById);
+  return (
+    <DotLine
+      what={what}
+      person={
+        actor
+          ? { identity: actor.email, name: actor.displayName ?? actor.email }
+          : null
+      }
+      teams={[]}
+    />
+  );
+}
+
+const ago = (iso: string | null) => editedAgo(iso).replace(/^Edited /, "");
+
+/** Where a Librarian row's button goes; each screen opens its own dialog. */
+function librarianHref(task: Task): string | null {
+  switch (task.kind) {
+    case "librarian_sort":
+      return "/workspace?librarian=sort";
+    case "librarian_review":
+      return "/workspace?librarian=review";
+    case "ownership_review":
+      return `/ownership?review=${task.id}`;
+    case "ownership_stuck":
+      return "/ownership?stuck=1";
+    case "share_suggestions":
+      return "/sharing?review=1";
+    default:
+      return null;
+  }
+}
+
 function nameOf(person: TaskPerson | null) {
   return person?.displayName ?? person?.email ?? "Someone";
 }
@@ -261,11 +370,15 @@ function TaskRow({
   busy,
   onApprove,
   onInvite,
+  onOpenLibrarian,
+  onClear,
 }: {
   task: Task;
   busy: boolean;
   onApprove: (approve: boolean) => void;
   onInvite: () => void;
+  onOpenLibrarian: () => void;
+  onClear: () => void;
 }) {
   const decide = (yes: string) => (
     <>
@@ -327,8 +440,8 @@ function TaskRow({
         // Moved here from the Workspace screen (user 2026-09-27).
         return [
           <>
-            Connect{" "}
-            <SetupTerm definition={task.email}>personal</SetupTerm> Drive.
+            Connect <SetupTerm definition={task.email}>personal</SetupTerm>{" "}
+            Drive.
           </>,
           <Button
             key="c"
@@ -349,6 +462,52 @@ function TaskRow({
             onClick={startDriveConsent}
           >
             Connect
+          </Button>,
+        ];
+      // Same lines and buttons as Workspace's librarian cards.
+      case "librarian_sort":
+        return [
+          `${plural(task.count, "file", "files")} to sort`,
+          <Button key="s" size="sm" variant="outline" onClick={onOpenLibrarian}>
+            Sort
+          </Button>,
+        ];
+      case "librarian_review":
+        return [
+          `${plural(task.count, "file", "files")} to review`,
+          <Button key="r" size="sm" variant="outline" onClick={onOpenLibrarian}>
+            Review
+          </Button>,
+        ];
+      // The Ownership screen's two bars (Ronald 2026-10-04), same words.
+      case "ownership_review":
+        return [
+          `${task.reason}: ${plural(task.count, "file", "files")} to ${task.toName ?? "a new owner"}.`,
+          <Button key="r" size="sm" variant="outline" onClick={onOpenLibrarian}>
+            Review
+          </Button>,
+        ];
+      case "ownership_stuck":
+        return [
+          `${plural(task.count, "file is", "files are")} owned by a personal Google account.`,
+          <Button key="s" size="sm" variant="outline" onClick={onOpenLibrarian}>
+            See {task.count === 1 ? "it" : "them"}
+          </Button>,
+        ];
+      // Sharing's "Waiting for you" list, now in a dialog on Sharing.
+      case "share_suggestions":
+        return [
+          `${plural(task.count, "file", "files")} to share`,
+          <Button key="r" size="sm" variant="outline" onClick={onOpenLibrarian}>
+            Review
+          </Button>,
+        ];
+      // Offboarding's "Already offboarded" row, as a report you clear.
+      case "offboarded":
+        return [
+          `${task.personName ?? "Someone"} was offboarded ${ago(task.at)}${task.byName ? ` by ${task.byName}` : ""}. ${plural(task.filesMoved, "file", "files")} to ${task.toName ?? "the team"}.${task.needsAttention ? ` ${task.needsAttention} by hand.` : ""}`,
+          <Button key="c" size="sm" variant="outline" onClick={onClear}>
+            Clear
           </Button>,
         ];
     }

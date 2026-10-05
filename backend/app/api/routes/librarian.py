@@ -73,6 +73,9 @@ def import_personal(
 
 class NewDocumentBody(BaseModel):
     kind: str  # "doc" | "sheet" | "slide" | "form"
+    name: str | None = None
+    # The teams it goes in; the first is the file's team (Ronald, 2026-10-04).
+    team_ids: list[uuid.UUID] | None = None
 
 
 @router.post("/documents")
@@ -84,7 +87,7 @@ def create_document(
 ) -> dict:
     from app.documents.service import create_document as _create
 
-    return _run(_create, member, body.kind, db)
+    return _run(lambda m, d: _create(m, body.kind, d, name=body.name, team_ids=body.team_ids), member, db)
 
 
 @router.get("/librarian/review")
@@ -135,13 +138,14 @@ def folders(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
 
 class FolderBody(BaseModel):
     name: str
+    color: str | None = None
 
 
 @router.post("/folders")
 def create_folder(
     org_id: uuid.UUID, body: FolderBody, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
 ) -> dict:
-    return _run(service.create_folder, member, body.name, db)
+    return _run(service.create_folder, member, body.name, db, color=body.color)
 
 
 @router.get("/folders/{folder_id}")
@@ -188,3 +192,50 @@ def company_files(
     org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
 ) -> dict:
     return {"files": _run(service.all_company_files, member, db)}
+
+
+class RenameBody(BaseModel):
+    name: str
+
+
+@router.patch("/folders/{folder_id}")
+def rename_folder(
+    org_id: uuid.UUID,
+    folder_id: uuid.UUID,
+    body: RenameBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    return _run(service.rename_folder, member, folder_id, body.name, db)
+
+
+@router.patch("/company-files/{file_id}")
+def rename_file(
+    org_id: uuid.UUID,
+    file_id: str,
+    body: RenameBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    return _run(service.rename_file, member, file_id, body.name, db)
+
+
+@router.post("/company-files/{file_id}/trash")
+def trash_file(
+    org_id: uuid.UUID, file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
+) -> dict:
+    _run(service.trash_file, member, file_id, db)
+    return {"result": "trashed"}
+
+
+@router.post("/company-files/{file_id}/restore")
+def restore_file(
+    org_id: uuid.UUID, file_id: str, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)
+) -> dict:
+    _run(service.restore_file, member, file_id, db)
+    return {"result": "restored"}
+
+
+@router.get("/trash")
+def trash(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember = Depends(require_same_org)) -> dict:
+    return {"files": _run(service.trash, member, db)}

@@ -165,6 +165,14 @@ class _FakeDrive:
             raise HttpError(_Resp(), b"not found")
         return _Exec({**f, "modifiedTime": "2026-09-20T10:00:00Z", "createdTime": "2026-09-01T10:00:00Z"})
 
+    def update(self, fileId, body, **_kw):
+        f = self.files_by_id[fileId]
+        if "name" in body:
+            f["name"] = body["name"]
+        if "trashed" in body:
+            f["trashed"] = body["trashed"]
+        return _Exec({**f, "modifiedTime": "2026-09-21T10:00:00Z"})
+
 
 class _Exec:
     def __init__(self, value):
@@ -372,6 +380,99 @@ def test_custom_folders_and_team_folder_rules(db, drive):
     assert all(f["id"] != made["id"] for f in service.list_folders(worker, db))
 
 
+def test_opening_a_folder_picks_up_a_rename_and_says_who_owns_it(db, drive):
+    """A file renamed in Docs shows its new name when its folder is opened
+    (Ronald, 2026-10-04), and each file carries its owner and team for the
+    details view."""
+    _o, lead, worker, team = _org(db)
+    service.scan_member_drive(worker, db)
+    work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
+    service.decide(worker, work.id, "company", False, db)
+    service.confirm(lead, work.id, db)
+    folder = service._team_folder(team.org_id, team.id, db)
+
+    drive.files_by_id["work"]["name"] = "Q3 plan v2"
+    row = db.get(FileIndex, "work")
+    row.last_synced_at = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    db.commit()
+
+    [f] = service.folder_detail(worker, folder.id, db)["files"]
+    assert f["name"] == "Q3 plan v2" and db.get(FileIndex, "work").title == "Q3 plan v2"
+    assert f["owner"] == {"name": "Worker", "email": f"worker@{D}", "personal": False}
+    assert f["team_name"] == "Design"
+
+
+def _filed(db, lead, worker):
+    service.scan_member_drive(worker, db)
+    work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
+    service.decide(worker, work.id, "company", False, db)
+    service.confirm(lead, work.id, db)
+
+
+def test_rename_and_trash_go_through_the_owner_and_can_be_undone(db, drive):
+    """Rename / Delete from a file's pop-over (Ronald, 2026-10-04): renamed in
+    Drive, delete only trashes (ADR-0010), Trash restores it to its folder."""
+    org, lead, worker, team = _org(db)
+    _filed(db, lead, worker)
+    folder = service._team_folder(team.org_id, team.id, db)
+
+    assert service.rename_file(worker, "work", "  Q4 plan ", db)["name"] == "Q4 plan"
+    assert drive.files_by_id["work"]["name"] == "Q4 plan"
+
+    service.trash_file(lead, "work", db)  # the team's lead may too
+    assert drive.files_by_id["work"]["trashed"] is True
+    assert service.folder_detail(worker, folder.id, db)["files"] == []
+    [gone] = service.trash(worker, db)
+    assert gone["name"] == "Q4 plan" and gone["trashed_by"] == "Lead"
+
+    service.restore_file(worker, "work", db)
+    assert drive.files_by_id["work"]["trashed"] is False
+    assert [f["file_id"] for f in service.folder_detail(worker, folder.id, db)["files"]] == ["work"]
+    assert service.trash(worker, db) == []
+
+
+def test_only_owner_lead_or_top_may_rename_or_trash(db, drive):
+    org, lead, worker, team = _org(db)
+    _filed(db, lead, worker)
+    teammate = _member(db, org, f"teammate@{D}")
+    db.add(OrgMembership(org_id=org.id, team_id=team.id, user_id=teammate.id, role=OrgRole.MEMBER))
+    db.commit()
+    folder = service._team_folder(team.org_id, team.id, db)
+    [f] = service.folder_detail(teammate, folder.id, db)["files"]
+    assert f["can_manage"] is False
+    with pytest.raises(PermissionError):
+        service.rename_file(teammate, "work", "Mine now", db)
+    with pytest.raises(PermissionError):
+        service.trash_file(teammate, "work", db)
+    assert service.trash(teammate, db) == []
+
+
+def test_custom_folder_renames_team_folder_does_not(db, drive):
+    _o, lead, worker, team = _org(db)
+    made = service.create_folder(worker, "Launch", db)
+    assert service.rename_folder(worker, uuid.UUID(made["id"]), " Launch 2 ", db)["name"] == "Launch 2"
+    with pytest.raises(PermissionError):
+        service.rename_folder(lead, uuid.UUID(made["id"]), "Nope", db)
+    team_folder = service._team_folder(team.org_id, team.id, db)
+    db.commit()
+    with pytest.raises(service.LibrarianError):
+        service.rename_folder(lead, team_folder.id, "Other", db)
+    listed = {f["id"]: f for f in service.list_folders(worker, db)}
+    assert listed[made["id"]]["can_manage"] is True
+    assert listed[str(team_folder.id)]["can_manage"] is False
+
+
+def test_folder_keeps_its_colour(db, drive):
+    _o, _lead, worker, _team = _org(db)
+    made = service.create_folder(worker, "Brand", db, color="#4CC38A")
+    assert made["color"] == "#4cc38a"
+    listed = {f["id"]: f for f in service.list_folders(worker, db)}
+    assert listed[made["id"]]["color"] == "#4cc38a"
+    assert service.create_folder(worker, "Plain", db)["color"] is None
+    with pytest.raises(service.LibrarianError):
+        service.create_folder(worker, "Bad", db, color="red")
+
+
 # ------------------------------------------------- import from personal Drive
 
 
@@ -543,3 +644,87 @@ def test_create_document_makes_a_form(db, monkeypatch):
 
     assert drive.created == [{"name": "Untitled form", "mimeType": "application/vnd.google-apps.form"}]
     assert out["name"] == "Untitled form"
+
+
+def _second_team(db, org, *members):
+    team = Team(id=uuid.uuid4(), org_id=org.id, name="Sales")
+    db.add(team)
+    db.flush()
+    for m in members:
+        db.add(OrgMembership(org_id=org.id, team_id=team.id, user_id=m.id, role=OrgRole.MEMBER))
+    db.commit()
+    return team
+
+
+def test_create_document_takes_a_name_and_several_of_your_teams(db, monkeypatch):
+    from app.activity.changes import team_changes
+    from app.documents import service as docsvc
+    from app.sharing.visibility import can_view_file
+
+    org, _lead, worker, design = _org(db)
+    seller = _member(db, org, f"seller@{D}")
+    sales = _second_team(db, org, worker, seller)
+    drive = _CreateDrive()
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: drive)
+
+    out = docsvc.create_document(worker, "doc", db, name="  Test 1 ", team_ids=[sales.id, design.id])
+
+    assert drive.created[0]["name"] == "Test 1" and out["name"] == "Test 1"
+    assert out["team_ids"] == [str(sales.id), str(design.id)]
+    row = db.get(FileIndex, out["id"])
+    assert row.team_id == sales.id and row.sharing_state == {"extra_team_ids": [str(design.id)]}
+    for team in (sales, design):
+        folder = db.execute(select(KnohowFolder).where(KnohowFolder.team_id == team.id)).scalar_one()
+        assert out["id"] in set(
+            db.execute(select(FolderFile.file_id).where(FolderFile.folder_id == folder.id)).scalars()
+        )
+    # Sales sees it through the file's team, Design through the extra list.
+    assert can_view_file(seller.id, row, org.id, db)
+    feed = team_changes(org.id, None, db)
+    assert {str(sales.id), str(design.id)} <= set(feed["teams"])
+
+
+def test_create_document_refuses_a_team_you_are_not_on(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    org, _lead, worker, _design = _org(db)
+    sales = _second_team(db, org)
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: _CreateDrive())
+    monkeypatch.setattr(docsvc, "record_audit_entry", lambda **k: None)
+    with pytest.raises(PermissionError):
+        docsvc.create_document(worker, "doc", db, team_ids=[sales.id])
+
+
+def test_owner_can_put_a_new_document_in_any_team(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    org, _lead, _worker, design = _org(db)
+    boss = _member(db, org, f"boss@{D}")
+    chart = db.execute(select(OrgChart).where(OrgChart.org_id == org.id)).scalar_one()
+    chart.owner_member_id = boss.id
+    sales = _second_team(db, org)
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: _CreateDrive())
+    monkeypatch.setattr(docsvc, "record_audit_entry", lambda **k: None)
+
+    out = docsvc.create_document(boss, "sheet", db, team_ids=[design.id, sales.id])
+    assert out["team_ids"] == [str(design.id), str(sales.id)]
+
+
+def test_create_document_with_one_team_to_pick_files_it_there(db, monkeypatch):
+    from app.documents import service as docsvc
+
+    _o, _lead, worker, design = _org(db)
+    monkeypatch.setattr(docsvc, "get_drive_client_for_user", lambda *a, **k: _CreateDrive())
+    monkeypatch.setattr(docsvc, "record_audit_entry", lambda **k: None)
+    out = docsvc.create_document(worker, "doc", db, name="", team_ids=[])
+    assert out["team_ids"] == [str(design.id)] and out["name"] == "Untitled document"
+
+
+def test_folder_files_carry_a_link_to_open_them(db):
+    from app.librarian.service import file_link
+    from app.sandbox import SANDBOX_ORG_ID
+
+    real = FileIndex(file_id="abc123", org_id=uuid.uuid4(), file_type="application/vnd.google-apps.document", title="Monday")
+    assert file_link(real) == "https://drive.google.com/open?id=abc123"
+    sandbox = FileIndex(file_id="acme-x", org_id=SANDBOX_ORG_ID, file_type="application/vnd.google-apps.document", title="Monday")
+    assert file_link(sandbox) == "https://docs.google.com/document/create?title=Monday"

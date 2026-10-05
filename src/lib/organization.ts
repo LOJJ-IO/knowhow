@@ -120,6 +120,10 @@ export type ChangeEvent = {
   actorMemberId: string | null;
   /** Who a join / leave was about (the member added or removed). */
   subjectMemberId: string | null;
+  /** Every team it reached: one, or several for a file made into many. */
+  teamIds: string[];
+  /** A created file's type ("doc", "sheet", "slide", "form"), else null. */
+  kind: string | null;
   at: string;
 };
 
@@ -294,6 +298,8 @@ function toChangeEvent(event: {
   action: string;
   actor_member_id: string | null;
   subject_member_id?: string | null;
+  team_ids?: string[];
+  kind?: string | null;
   at: string;
 }): ChangeEvent {
   return {
@@ -301,6 +307,8 @@ function toChangeEvent(event: {
     action: event.action,
     actorMemberId: event.actor_member_id,
     subjectMemberId: event.subject_member_id ?? null,
+    teamIds: event.team_ids ?? [],
+    kind: event.kind ?? null,
     at: event.at,
   };
 }

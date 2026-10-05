@@ -1,17 +1,16 @@
 "use client";
 
-import { Check, UserRoundMinus } from "lucide-react";
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Badge } from "@/components/app/badge";
 import { Button } from "@/components/app/button";
 import { FormDialog } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
-import { FileIcon, editedAgo } from "@/components/app/file-meta";
+import { FileIcon } from "@/components/app/file-meta";
 import { NAV_STROKE } from "@/components/app/icon";
 import {
   Bar,
-  PersonChip,
   SectionHeading,
   SkeletonRows,
   Tabs,
@@ -21,7 +20,9 @@ import {
 } from "@/components/app/screen-kit";
 import { useSession } from "@/components/app/session";
 import { AppPage } from "@/components/app/shell";
+import { TitleAside, TitleHelp } from "@/components/app/title-aside";
 import { useUpdates } from "@/components/app/updates";
+import { LIBRARIAN_GROUPS, LibrarianPopup } from "@/components/app/notification-center";
 import { satoshi } from "@/components/brand/fonts";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import {
@@ -35,13 +36,12 @@ import {
 } from "@/lib/governance";
 import { cn } from "@/lib/utils";
 
-const ago = (iso: string | null) => editedAgo(iso).replace(/^Edited /, "");
 
 /** Offboarding: everyone on a team, and for whoever is leaving, one move
  *  that hands their files to someone who's staying, before access ends. */
 export function OffboardingScreen() {
   const { chrome } = useSession();
-  const { refresh: refreshUpdates } = useUpdates();
+  const { refresh: refreshUpdates, reloadTasks, dismissUpdate } = useUpdates();
   const org = chrome.organizationId;
   const [data, setData] = useState<Offboarding | null>(null);
   const [error, setError] = useState("");
@@ -64,7 +64,6 @@ export function OffboardingScreen() {
     void refresh();
   }, [refresh]);
 
-  const people = useMemo(() => peopleById(data?.people ?? []), [data]);
   const teamName = useMemo(() => new Map((data?.teams ?? []).map((t) => [t.id, t.name])), [data]);
   const shown = (data?.active ?? [])
     .filter((p) => team === "all" || p.team_ids.includes(team))
@@ -81,6 +80,14 @@ export function OffboardingScreen() {
 
   return (
     <AppPage>
+      <LibrarianPopup kinds={LIBRARIAN_GROUPS[3].kinds} onAction={(task) => dismissUpdate(task.id)} />
+      <TitleAside>
+        <TitleHelp label="About Offboarding">
+          <p>
+            Pick who takes over and their files move in one step. Nothing is deleted.
+          </p>
+        </TitleHelp>
+      </TitleAside>
       <Window>
         <div className="p-8">
           {done ? (
@@ -93,16 +100,13 @@ export function OffboardingScreen() {
                 Dismiss
               </Button>
             </Bar>
-          ) : (
-            <Bar
-              icon={<UserRoundMinus size={20} strokeWidth={NAV_STROKE} />}
-              title="When someone leaves"
-              body="Pick who takes over. Their files move in one step, their teams are updated, and a lead hands over if they led one. Nothing is deleted."
-            />
-          )}
+          ) : null}
+          {/* "When someone leaves" is the title's `?`, and "Already
+              offboarded" is in Notifications under Librarian (Ronald
+              2026-10-04). */}
 
           <SectionHeading
-            className="mt-10"
+            className={done ? "mt-10" : undefined}
             title="People"
             detail={data ? plural(data.active.length, "person on a team", "people on a team") : undefined}
           />
@@ -161,28 +165,6 @@ export function OffboardingScreen() {
             </ul>
           )}
 
-          {data?.history.length ? (
-            <>
-              <SectionHeading className="mt-12" title="Already offboarded" />
-              <ul className="mt-4 flex flex-col gap-2">
-                {data.history.map((h) => {
-                  const who = people.get(h.member_id);
-                  return (
-                    <li
-                      key={`${h.member_id}-${h.at}`}
-                      className={`${satoshi.className} flex flex-wrap items-center gap-4 rounded-[18px] bg-[var(--app-muted)] px-4 py-3`}
-                    >
-                      <PersonChip person={who} size={28} />
-                      <span className="flex-1 text-[0.8125rem] text-[var(--app-dim)]">
-                        {`${ago(h.at)}${h.by_id ? ` by ${people.get(h.by_id)?.name ?? "someone"}` : ""} · ${plural(h.files_moved, "file", "files")} to ${people.get(h.to_id ?? "")?.name ?? "the team"}`}
-                        {h.needs_attention ? ` · ${h.needs_attention} by hand` : ""}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
-          ) : null}
         </div>
       </Window>
 
@@ -197,6 +179,7 @@ export function OffboardingScreen() {
             setDone(result);
             await refresh();
             refreshUpdates();
+            reloadTasks();
           }}
         />
       ) : null}

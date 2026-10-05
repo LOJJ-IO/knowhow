@@ -279,6 +279,13 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
       .sort((a, b) => b.changes.latestAt.localeCompare(a.changes.latestAt));
   }, [overview, clearedAt, teamClearedAt, dismissedIds]);
 
+  /** Offboarded rows are a report, cleared one by one with the same list
+   *  as a team update's minus (Ronald 2026-10-04). */
+  const visibleTasks = useMemo(
+    () => tasks.filter((t) => !(t.kind === "offboarded" && dismissedIds.has(t.id))),
+    [tasks, dismissedIds],
+  );
+
   const dismissUpdate = useCallback(
     (eventId: string) => {
       setDismissedIds((current) => {
@@ -326,7 +333,11 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
     if (awaitingApproval) return;
     fetchTasks(chrome.organizationId)
       .then((result) => {
-        setTasks(result);
+        // Same tasks: keep the old array, so opening Notifications doesn't
+        // re-render everything mid-reveal (Ronald, 2026-10-04).
+        setTasks((prev) =>
+          JSON.stringify(prev) === JSON.stringify(result) ? prev : result,
+        );
         // Seen in Notifications already: don't toast these later.
         const known = knownTasks.current;
         if (known) for (const t of result) known.add(`${t.kind}:${t.id}`);
@@ -341,7 +352,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
         error,
         signedOut,
         unseen,
-        tasks,
+        tasks: visibleTasks,
         teamUpdates,
         clearTeamUpdates,
         clearTeamUpdate,

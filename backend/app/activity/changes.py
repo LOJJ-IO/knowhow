@@ -11,7 +11,8 @@ drifting from reality immediately.
 The one thing the audit log doesn't carry is a team. Entries are org-scoped,
 so attribution happens here, in one place, by four rules tried in order:
 
-1. `details.team_id` — membership rows carry the team they were written for.
+1. `details.team_ids` / `details.team_id` — membership rows carry the team
+   they were written for; a new file made into several teams lists them all.
 2. `target_resource_id` that is a team's id — the team.* actions.
 3. a file id (in `details.file_id` or the target) whose `FileIndex` row has a
    team — every sharing, transfer and reassignment action.
@@ -87,15 +88,22 @@ def team_changes(
         ).all()
         file_teams = {file_id: str(team_id) for file_id, team_id in rows if team_id}
 
-    def team_of(entry: AuditLogEntry) -> str | None:
+    def teams_of(entry: AuditLogEntry) -> list[str]:
         details = entry.details or {}
+        # A file made into several teams at once tells each of them.
+        listed = details.get("team_ids")
+        if isinstance(listed, list):
+            hits = [t for t in listed if isinstance(t, str) and t in team_ids]
+            if hits:
+                return hits
         from_details = details.get("team_id")
         if isinstance(from_details, str) and from_details in team_ids:
-            return from_details
+            return [from_details]
         if entry.target_resource_id in team_ids:
-            return entry.target_resource_id
+            return [entry.target_resource_id]
         file_id = _file_id_of(entry)
-        return file_teams.get(file_id) if file_id else None
+        team = file_teams.get(file_id) if file_id else None
+        return [team] if team else []
 
     def subject_of(entry: AuditLogEntry) -> str | None:
         """Who a membership change was about, so the feed can name them
@@ -114,22 +122,28 @@ def team_changes(
     teams: dict[str, dict] = {}
     organization: list[dict] = []
     for entry in entries:
+        entry_teams = teams_of(entry)
         item = {
             "id": str(entry.id),
             "action": entry.action_type,
             "actor_member_id": str(entry.actor_user_id) if entry.actor_user_id else None,
             "subject_member_id": subject_of(entry),
+            # Every team it reached, so a row can name them all (Ronald 2026-10-04).
+            "team_ids": entry_teams,
+            # A created file's type, so it reads "Spreadsheet created" and
+            # not always "Document created" (Ronald 2026-10-04).
+            "kind": kind if isinstance(kind := (entry.details or {}).get("kind"), str) else None,
             "at": entry.created_at.isoformat(),
         }
-        team_id = team_of(entry)
-        if team_id is None:
+        if not entry_teams:
             if len(organization) < PER_TEAM_LIMIT:
                 organization.append(item)
             continue
-        bucket = teams.setdefault(team_id, {"count": 0, "latest_at": item["at"], "events": []})
-        bucket["count"] += 1
-        # Entries arrive newest first, so the first one seen is the latest.
-        if len(bucket["events"]) < PER_TEAM_LIMIT:
-            bucket["events"].append(item)
+        for team_id in entry_teams:
+            bucket = teams.setdefault(team_id, {"count": 0, "latest_at": item["at"], "events": []})
+            bucket["count"] += 1
+            # Entries arrive newest first, so the first one seen is the latest.
+            if len(bucket["events"]) < PER_TEAM_LIMIT:
+                bucket["events"].append(item)
 
     return {"teams": teams, "organization": organization, "total": len(entries)}
