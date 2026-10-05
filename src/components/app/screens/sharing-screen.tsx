@@ -11,8 +11,8 @@ import { EmptyState } from "@/components/app/empty-state";
 import { describeFile, editedAgo, FileIcon } from "@/components/app/file-meta";
 import {
   PersonChip,
+  Bone,
   SectionHeading,
-  SkeletonRows,
   Switch,
   useUrlRequest,
   Window,
@@ -160,7 +160,7 @@ export function SharingScreen() {
             detail="What happens to a new file, by the team that made it."
           />
           {!data ? (
-            <SkeletonRows rows={3} />
+            <RuleCardsSkeleton />
           ) : data.teams.length === 0 ? (
             <EmptyState
               icon="share"
@@ -845,5 +845,44 @@ function PersonBadges({ person, team, data }: { person: Person; team: SharingTea
       {team.lead_id === person.id ? <Badge>Lead</Badge> : null}
       {person.super_admin ? <Badge>Super Admin</Badge> : null}
     </>
+  );
+}
+
+/** The team rule cards while loading: same grid, card, and sections. */
+function RuleCardsSkeleton() {
+  // Each text line sits in a box of that line's height, so a card is as
+  // tall as a real one.
+  const line = (bone: string, height = "h-5") => (
+    <span className={`flex ${height} items-center`}>
+      <Bone className={`rounded-full ${bone}`} />
+    </span>
+  );
+  return (
+    <div aria-hidden className="mt-5 grid grid-cols-[repeat(auto-fill,minmax(19rem,1fr))] gap-3">
+      {Array.from({ length: 6 }, (_, i) => (
+        <section key={i} className="rounded-[24px] border border-[var(--app-border)] p-5">
+          <header className="flex items-center gap-3">
+            <Bone className="size-9 rounded-[10px]" />
+            <div className="min-w-0 flex-1">
+              {line("h-4 w-28", "h-6")}
+              {line("h-3 w-32")}
+            </div>
+            <Bone className="h-8 w-14 rounded-full" />
+          </header>
+          <div className="mt-4 flex flex-col gap-3">
+            {["w-48", "w-16", "w-28"].map((w, j) => (
+              <div key={j}>
+                {line("h-3 w-32")}
+                <div className="mt-1">{line(`h-3.5 ${w}`)}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-[var(--app-border)] pt-4">
+            {line("h-3.5 w-48")}
+            <Bone className="h-6 w-10 rounded-full" />
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }

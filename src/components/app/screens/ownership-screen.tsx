@@ -8,12 +8,13 @@ import { Button } from "@/components/app/button";
 import { AppDialog, FormDialog } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
 import { editedAgo, FileIcon } from "@/components/app/file-meta";
-import { FileTable } from "@/components/app/file-table";
+import { FileTable, FileTableSkeleton } from "@/components/app/file-table";
 import { NAV_STROKE } from "@/components/app/icon";
 import {
+  Bone,
   PersonChip,
   SectionHeading,
-  SkeletonRows,
+  SkeletonTabs,
   Tabs,
   useUrlRequest,
   Window,
@@ -181,13 +182,20 @@ export function OwnershipScreen() {
                     ? `Move ${plural(selected.size, "file", "files")}`
                     : "Select files to move"}
                 </Button>
+              ) : !data ? (
+                // The Move button's place while loading, so nothing jumps.
+                <Bone className="h-8 w-40 rounded-full" />
               ) : null
             }
           />
-          {data ? <Tabs className="mt-4" value={team} onChange={setTeam} options={tabs} /> : null}
+          {data ? (
+            <Tabs className="mt-4" value={team} onChange={setTeam} options={tabs} />
+          ) : (
+            <SkeletonTabs className="mt-4" />
+          )}
 
           {!data ? (
-            <SkeletonRows />
+            <FileTableSkeleton checkboxes />
           ) : files.length === 0 ? (
             <EmptyState
               icon="verified_user"

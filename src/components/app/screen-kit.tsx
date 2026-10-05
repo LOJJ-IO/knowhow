@@ -40,7 +40,8 @@ export function SectionHeading({
   className,
 }: {
   title: string;
-  detail?: string;
+  /** A line under the title; a `Bone` while it loads. */
+  detail?: ReactNode;
   action?: ReactNode;
   className?: string;
 }) {
@@ -240,12 +241,19 @@ export function TeamChip({ name, size = 20 }: { name: string; size?: number }) {
   );
 }
 
-/** A loading placeholder row, in the app's muted grey. */
-export function SkeletonRows({ rows = 6 }: { rows?: number }) {
+/** One grey placeholder shape. Skeletons are built from these inside each
+ *  screen's own layout, so loading looks like what arrives (Ronald,
+ *  2026-10-05: the generic grey bars didn't match the UI). */
+export function Bone({ className }: { className?: string }) {
+  return <span aria-hidden className={cn("block shrink-0 bg-[var(--app-muted)]", className)} />;
+}
+
+/** `Tabs` while loading: the same `sm` pills, empty. */
+export function SkeletonTabs({ className, count = 5 }: { className?: string; count?: number }) {
   return (
-    <div className="mt-6 flex flex-col gap-2">
-      {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="h-14 rounded-[16px] bg-[var(--app-muted)]" />
+    <div aria-hidden className={cn("flex flex-wrap gap-2", className)}>
+      {Array.from({ length: count }, (_, i) => (
+        <Bone key={i} className={cn("h-8 rounded-full", i === 0 ? "w-16" : "w-28")} />
       ))}
     </div>
   );

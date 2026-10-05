@@ -12,7 +12,7 @@ import {
 } from "@/components/app/dialog";
 import { EmptyState } from "@/components/app/empty-state";
 import { describeFile, editedAgo, FileCard, FileIcon, FileTile } from "@/components/app/file-meta";
-import { FileTable } from "@/components/app/file-table";
+import { FileTable, FileTableSkeleton } from "@/components/app/file-table";
 import { ItemMenu, type MenuAnchor, menuAnchor, RenameDialog } from "@/components/app/item-menu";
 import { DEFAULT_FOLDER_COLOR, Folder, FOLDER_COLORS } from "@/components/app/folder";
 import { NAV_STROKE } from "@/components/app/icon";
@@ -294,7 +294,11 @@ export function WorkspaceScreen() {
               {Array.from({ length: 4 }, (_, i) => (
                 <div key={i} className="flex flex-col items-center gap-3">
                   <div className="h-[162px] w-[193px] rounded-[20px] bg-[var(--app-muted)]" />
-                  <div className="h-4 w-24 rounded-full bg-[var(--app-muted)]" />
+                  {/* Name, then "N files" under it, like the real folder. */}
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="h-4 w-24 rounded-full bg-[var(--app-muted)]" />
+                    <div className="h-3 w-12 rounded-full bg-[var(--app-muted)]" />
+                  </div>
                 </div>
               ))}
             </FolderGrid>
@@ -1075,6 +1079,8 @@ function FolderView({
       ) : null}
       {error ? (
         <EmptyState icon="folder_open" title="Couldn't load this folder" description={error} />
+      ) : !folder && view === "details" ? (
+        <FileTableSkeleton />
       ) : !folder ? (
         <div className="mt-6 grid grid-cols-[repeat(auto-fill,8rem)] justify-center gap-x-8 gap-y-3">
           {Array.from({ length: 6 }, (_, i) => (

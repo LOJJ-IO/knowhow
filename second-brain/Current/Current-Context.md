@@ -9,6 +9,8 @@ related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landin
 
 # Current Context
 
+**Skeletons match each screen (Ronald, 2026-10-05):** the generic grey 56px bars (`SkeletonRows`, removed) didn't look like what loaded. Now each loading state is built from `Bone` shapes (`screen-kit.tsx`) inside the screen's own layout: `FileTableSkeleton` (`file-table.tsx`, same header/columns/row height; Ownership and a folder's details view), `PeopleSkeleton` (Offboarding's grid), `RuleCardsSkeleton` (Sharing's card, 6 of them, each line boxed at its text height so cards are the real height), `SkeletonTabs` for the team pills. Headings keep their space while loading (Offboarding's "N people" line, Ownership's Move button) so nothing jumps. Workspace's folder placeholder gained the file-count line. Checked against the loaded screens in the local demo by holding the API responses.
+
 **Librarian tab arranged like Teams (Ronald, 2026-10-05):** each group is its sidebar icon in a 30px muted tile + name at the team header size (1.28rem), rows indented 34px at 0.875rem with the button on the right, inside `FadeScroll` with Teams' group spacing (`notifications-dialog.tsx`, `TaskRow listItem`). Replaces the small uppercase section titles from 2026-10-04. Checked in the local demo.
 
 **Folder flap kept the old colour (Ronald, 2026-10-05):** picking a colour in New folder left the flap showing the previous one for a while. Likely cause: the flap's `backdrop-filter` layer and its SVG filter are cached by the browser. The backdrop div and flap SVG are now keyed by colour so they repaint fresh (`folder.tsx`); the flap switches instantly instead of the 200ms fade. Not reproduced or verified in a browser.

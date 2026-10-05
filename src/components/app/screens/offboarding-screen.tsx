@@ -11,8 +11,9 @@ import { FileIcon } from "@/components/app/file-meta";
 import { NAV_STROKE } from "@/components/app/icon";
 import {
   Bar,
+  Bone,
   SectionHeading,
-  SkeletonRows,
+  SkeletonTabs,
   Tabs,
   Window,
   message,
@@ -108,7 +109,13 @@ export function OffboardingScreen() {
           <SectionHeading
             className={done ? "mt-10" : undefined}
             title="People"
-            detail={data ? plural(data.active.length, "person on a team", "people on a team") : undefined}
+            detail={
+              data ? (
+                plural(data.active.length, "person on a team", "people on a team")
+              ) : (
+                <Bone className="inline-block h-3 w-32 rounded-full align-middle" />
+              )
+            }
           />
           {data ? (
             <Tabs
@@ -124,10 +131,12 @@ export function OffboardingScreen() {
                 })),
               ]}
             />
-          ) : null}
+          ) : (
+            <SkeletonTabs className="mt-4" />
+          )}
 
           {!data ? (
-            <SkeletonRows />
+            <PeopleSkeleton />
           ) : (
             <ul className="mt-4 flex flex-col">
               {shown.map((p) => (
@@ -391,5 +400,32 @@ function OffboardDialog({
       </ul>
     </AppDialog>
     </>
+  );
+}
+
+/** The people list while loading: the same grid and row height. */
+function PeopleSkeleton() {
+  return (
+    <ul aria-hidden className="mt-4 flex flex-col">
+      {Array.from({ length: 8 }, (_, i) => (
+        <li
+          key={i}
+          className="grid grid-cols-[minmax(0,1fr)_14rem_7rem_7rem] items-center gap-4 px-3 py-2.5 max-[900px]:grid-cols-[minmax(0,1fr)_7rem_7rem]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <Bone className="size-8 rounded-full" />
+            <span className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+              <Bone className={`h-3.5 rounded-full ${i % 2 ? "w-28" : "w-36"}`} />
+              <Bone className="h-3 w-40 rounded-full" />
+            </span>
+          </span>
+          <Bone className="h-3 w-24 rounded-full max-[900px]:hidden" />
+          <Bone className="h-3 w-14 rounded-full" />
+          <span className="flex justify-end">
+            <Bone className="h-8 w-[5.5rem] rounded-full" />
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

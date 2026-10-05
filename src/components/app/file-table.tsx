@@ -5,7 +5,7 @@ import { Lock } from "lucide-react";
 import { Badge } from "@/components/app/badge";
 import { describeFile, editedAgo, FileIcon } from "@/components/app/file-meta";
 import { menuAnchor, type MenuAnchor } from "@/components/app/item-menu";
-import { PersonChip, TeamChip } from "@/components/app/screen-kit";
+import { Bone, PersonChip, TeamChip } from "@/components/app/screen-kit";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,44 @@ export type FileTableRow = {
 
 const COLUMNS =
   "grid-cols-[2rem_minmax(0,1fr)_11rem_12rem] max-[900px]:grid-cols-[2rem_minmax(0,1fr)_12rem]";
+
+/** `FileTable` while loading: the same header, columns and row height. */
+export function FileTableSkeleton({ rows = 6, checkboxes = false }: { rows?: number; checkboxes?: boolean }) {
+  return (
+    <div aria-hidden className="mt-5">
+      <div
+        className={`${satoshi.className} grid ${COLUMNS} items-center gap-4 border-b border-[var(--app-border)] px-3 pb-2 text-[0.8125rem] text-[var(--app-dim)]`}
+      >
+        <span />
+        <span>Name</span>
+        <span className="max-[900px]:hidden">Team</span>
+        <span>Owner</span>
+      </div>
+      <ul className="mt-1 flex flex-col gap-1">
+        {Array.from({ length: rows }, (_, i) => (
+          <li key={i} className={`grid ${COLUMNS} items-center gap-4 px-3 py-2.5`}>
+            {checkboxes ? <Bone className="size-4 rounded-[4px]" /> : <span />}
+            <span className="flex min-w-0 items-center gap-3">
+              <Bone className="size-9 rounded-[8px]" />
+              <span className="flex min-w-0 flex-1 flex-col gap-2 py-1">
+                <Bone className={`h-3.5 rounded-full ${i % 2 ? "w-2/5" : "w-3/5"}`} />
+                <Bone className="h-3 w-32 rounded-full" />
+              </span>
+            </span>
+            <span className="flex items-center gap-2 max-[900px]:hidden">
+              <Bone className="size-5 rounded-[6px]" />
+              <Bone className="h-3 w-20 rounded-full" />
+            </span>
+            <span className="flex items-center gap-2">
+              <Bone className="size-5 rounded-full" />
+              <Bone className="h-3 w-24 rounded-full" />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** Files as Ownership lists them: name (type · edited), team, owner. Used by
  *  Ownership and by a Workspace folder's details view (Ronald, 2026-10-04).
