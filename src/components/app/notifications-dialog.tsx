@@ -215,48 +215,55 @@ export function NotificationsDialog({
           ) : null}
         </div>
       ) : tab === "librarian" ? (
-        // The librarian's tasks (Ronald 2026-10-04), laid out like Tasks:
-        // one section per tab they come from, titled with that tab's
-        // sidebar icon and name, rows flush with the title. Sort / Review
-        // open each screen's own dialog.
-        <div
-          role="tabpanel"
-          className="-mr-[5%] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 pt-4"
-        >
+        // The librarian's tasks, arranged like the Teams tab (Ronald,
+        // 2026-10-05): each group is its tab's sidebar icon and name at the
+        // team header's size, its rows under it at the update rows' size,
+        // in the same fading scroll area. Sort / Review open each screen's
+        // own dialog.
+        <FadeScroll>
           {librarianTasks.length === 0 ? (
             <Quiet>Your librarian has nothing for you.</Quiet>
-          ) : null}
-          {LIBRARIAN_GROUPS.filter((group) =>
-            librarianTasks.some((t) => group.kinds.includes(t.kind)),
-          ).map((group, i) => (
-            <Fragment key={group.label}>
-              <DialogSectionTitle
-                className={`col-span-2 -mb-3 flex items-center gap-1.5 ${i > 0 ? "mt-4" : ""}`}
-              >
-                <AppIcon name={NAV_ICONS[group.href]} size={15} />
-                {group.label}
-              </DialogSectionTitle>
-              {librarianTasks
-                .filter((t) => group.kinds.includes(t.kind))
-                .map((task) => (
-                  <TaskRow
-                    key={`${task.kind}-${task.id}`}
-                    task={task}
-                    busy={false}
-                    onApprove={() => {}}
-                    onInvite={() => {}}
-                    onOpenLibrarian={() => {
-                      const href = librarianHref(task);
-                      if (!href) return;
-                      onOpenChange(false);
-                      router.push(href);
-                    }}
-                    onClear={() => dismissUpdate(task.id)}
-                  />
-                ))}
-            </Fragment>
-          ))}
-        </div>
+          ) : (
+            LIBRARIAN_GROUPS.filter((group) =>
+              librarianTasks.some((t) => group.kinds.includes(t.kind)),
+            ).map((group) => (
+              <div key={group.label} className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2.5">
+                  {/* The team icon's 30px box, holding the tab's icon. */}
+                  <span className="grid size-[30px] shrink-0 place-items-center rounded-[8px] bg-[var(--app-muted)] text-[#1c1917]">
+                    <AppIcon name={NAV_ICONS[group.href]} size={18} />
+                  </span>
+                  <span
+                    className={`${satoshi.className} truncate text-[1.28rem] font-medium text-[#1c1917]`}
+                  >
+                    {group.label}
+                  </span>
+                </div>
+                <ul className="m-0 flex list-none flex-col gap-1 p-0 pl-[34px]">
+                  {librarianTasks
+                    .filter((t) => group.kinds.includes(t.kind))
+                    .map((task) => (
+                      <TaskRow
+                        key={`${task.kind}-${task.id}`}
+                        task={task}
+                        busy={false}
+                        listItem
+                        onApprove={() => {}}
+                        onInvite={() => {}}
+                        onOpenLibrarian={() => {
+                          const href = librarianHref(task);
+                          if (!href) return;
+                          onOpenChange(false);
+                          router.push(href);
+                        }}
+                        onClear={() => dismissUpdate(task.id)}
+                      />
+                    ))}
+                </ul>
+              </div>
+            ))
+          )}
+        </FadeScroll>
       ) : (
         // The Teams tab scrolls inside a capped height (made 10% taller
         // overall, user 2026-09-27). Its scrollbar sits in a gutter right of
@@ -372,6 +379,7 @@ function TaskRow({
   onInvite,
   onOpenLibrarian,
   onClear,
+  listItem = false,
 }: {
   task: Task;
   busy: boolean;
@@ -379,6 +387,9 @@ function TaskRow({
   onInvite: () => void;
   onOpenLibrarian: () => void;
   onClear: () => void;
+  /** An `<li>` in a Teams-style list (the Librarian tab) instead of two
+   *  cells in Pending's grid. */
+  listItem?: boolean;
 }) {
   const decide = (yes: string) => (
     <>
@@ -512,6 +523,16 @@ function TaskRow({
         ];
     }
   })();
+
+  if (listItem) {
+    // A Teams tab update row: 0.875rem text, the action on the right.
+    return (
+      <li className={`${satoshi.className} flex items-center gap-3 text-[0.875rem]`}>
+        <span className="min-w-0 flex-1 leading-[1.4] text-[#1c1917]">{text}</span>
+        <span className="flex shrink-0 items-center gap-1.5">{actions}</span>
+      </li>
+    );
+  }
 
   return (
     <>

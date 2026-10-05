@@ -249,7 +249,11 @@ export function Folder({
             : { type: "spring", stiffness: 120, damping: 14 }
         }
       >
+        {/* Keyed by colour: browsers keep the blurred backdrop and the
+            flap's SVG filter cached, so a new colour showed the old one for
+            a while (Ronald, 2026-10-05). A fresh layer paints at once. */}
         <div
+          key={`backdrop-${theme.backFill}`}
           className="absolute inset-0"
           style={{
             backdropFilter: "blur(6px)",
@@ -263,6 +267,7 @@ export function Folder({
           }}
         />
         <svg
+          key={`flap-${theme.flapFill}`}
           className="absolute inset-0"
           width="321"
           height="241"

@@ -247,8 +247,8 @@ that prompts you is the **Librarian**. No grey bars at the top of these tabs any
   Offboarding = offboarded (button clears).
 - **Notifications**: tabs Pending · Librarian · Teams (Librarian got its own tab, Ronald
   2026-10-04; superseded the LIBRARIAN header under Pending and the indented groups). Pending
-  holds **Tasks** (title with lucide `ListChecks`). Librarian has one section per tab
-  (`LIBRARIAN_GROUPS`), titled like Tasks with that tab's sidebar icon, rows flush. Dialog is the
+  holds **Tasks** (title with lucide `ListChecks`). Librarian has one group per tab
+  (`LIBRARIAN_GROUPS`), arranged like the Teams tab (2026-10-05): tab icon tile + name, rows indented. Dialog is the
   new `md` size (`max-w-lg`, 512px) so three tabs + Clear all fit. Buttons go to the tab with `?librarian=` / `?review=` / `?stuck=1`, which
   opens the matching dialog (`useUrlRequest` in `screen-kit.tsx`; those pages now have Suspense).
 - Sharing's "Waiting for you" list moved into a "Waiting for you" dialog on Sharing. Offboarding's
