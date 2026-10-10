@@ -96,12 +96,18 @@ export function RenameDialog({
   title,
   name,
   maxLength,
+  open = true,
+  swap,
   onClose,
   onRename,
 }: {
   title: string;
   name: string;
   maxLength: number;
+  /** Kept mounted and closed by the caller, for the fade (default open). */
+  open?: boolean;
+  /** Opened or closed as part of a dialog swap (no backdrop flash). */
+  swap?: boolean;
   onClose: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
@@ -112,7 +118,8 @@ export function RenameDialog({
 
   return (
     <FormDialog
-      open
+      open={open}
+      swap={swap}
       size="sm"
       onOpenChange={(o) => {
         if (!o) onClose();

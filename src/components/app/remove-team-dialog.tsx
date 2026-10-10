@@ -13,7 +13,7 @@ import { PersonAvatar } from "@/components/identity/person-avatar";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { removeTeam, type OverviewTeam } from "@/lib/organization";
 
-/** The warning behind Manage teams' red minus (Ronald, 2026-10-05). An empty
+/** The warning behind Manage teams' Remove team (Ronald, 2026-10-05). An empty
  *  team just goes. A team with people asks what happens to them first: move
  *  everyone to another team, or offboard everyone, with their files going to
  *  someone outside the team. Rows are the New file dialog's picker rows.

@@ -345,7 +345,24 @@ export async function assignTeamLead(
   if (!res.ok) throw new Error(await backendError(res));
 }
 
-/** Manage teams' red minus (Ronald, 2026-10-05): removes a team. One with
+/** Manage teams' team menu, Rename (Ronald, 2026-10-10). */
+export async function renameTeam(
+  organizationId: string,
+  teamId: string,
+  name: string,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+}
+
+/** Manage teams' Remove team (team menu; was a red minus until Ronald, 2026-10-10): removes a team. One with
  *  people in it needs either a team to move them to or a person to take
  *  their files as they're offboarded. Owner or Super Admin only. */
 export async function removeTeam(

@@ -2,16 +2,20 @@
 
 import { useState } from "react";
 import { Menu } from "@base-ui/react/menu";
+import { Pencil, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/app/badge";
 import {
   FadeScroll,
   TEAM_CLEAR_WIDTH,
 } from "@/components/app/notifications-dialog";
+import { NAV_STROKE } from "@/components/app/icon";
+import { MENU_ITEM } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
 import { TeamIcon } from "@/components/identity/team-icon";
+import { cn } from "@/lib/utils";
 import {
   assignTeamLead,
   removeFromTeam,
@@ -25,12 +29,14 @@ import {
  *  the circle the red minus uses there, grey instead of red; it opens Make
  *  Team Lead and, in red, Remove Member.
  *
- *  The owner and a Super Admin also get Notifications' red minus on each
- *  team's row (Ronald, 2026-10-05), which asks the caller to open the
- *  remove-team warning. */
+ *  The owner and a Super Admin also get the same kebab on each team's row
+ *  (Ronald, 2026-10-10; a red minus before): Rename, and in red, Remove
+ *  team. Each asks the caller to open its dialog. */
 export function TeamMembersSection({
+  onRenameTeam,
   onRemoveTeam,
 }: {
+  onRenameTeam?: (team: OverviewTeam) => void;
   onRemoveTeam?: (team: OverviewTeam) => void;
 }) {
   const { chrome, me } = useSession();
@@ -73,20 +79,16 @@ export function TeamMembersSection({
                 >
                   {team.name}
                 </span>
-                {canRemoveTeams && onRemoveTeam ? (
-                  // Notifications' red minus, in the column the member
-                  // kebabs use, springing in on hover or focus.
+                {canRemoveTeams && onRenameTeam && onRemoveTeam ? (
+                  // In the column the member kebabs use.
                   <span
                     className={`${TEAM_CLEAR_WIDTH} relative flex h-5 shrink-0 items-center pl-3.5`}
                   >
-                    <button
-                      type="button"
-                      aria-label={`Remove ${team.name}`}
-                      onClick={() => onRemoveTeam(team)}
-                      className="absolute left-3.5 grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[#EA4335] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#d93025] focus-visible:ring-2 focus-visible:ring-[#EA4335]/40 active:scale-90 motion-reduce:scale-100"
-                    >
-                      <span className="h-[2px] w-2 rounded-full bg-white" />
-                    </button>
+                    <TeamMenu
+                      name={team.name}
+                      onRename={() => onRenameTeam(team)}
+                      onRemove={() => onRemoveTeam(team)}
+                    />
                   </span>
                 ) : null}
               </div>
@@ -172,6 +174,59 @@ export function TeamMembersSection({
   );
 }
 
+/** The grey kebab that springs in on a row's hover or focus, and stays
+ *  while its menu is open. */
+const KEBAB_TRIGGER =
+  "absolute left-3.5 grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[var(--app-active)] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#dcdad6] focus-visible:ring-2 focus-visible:ring-[#1c1917]/20 active:scale-90 data-[popup-open]:scale-100 data-[popup-open]:opacity-100 motion-reduce:scale-100";
+
+const KEBAB_DOTS = (
+  <span aria-hidden className="flex items-center gap-[2px]">
+    <span className="size-[3px] rounded-full bg-[#1c1917]" />
+    <span className="size-[3px] rounded-full bg-[#1c1917]" />
+    <span className="size-[3px] rounded-full bg-[#1c1917]" />
+  </span>
+);
+
+/** A team's kebab (Ronald, 2026-10-10): Rename with the pencil, and Remove
+ *  team with the bin in Notifications' destructive red, like the Workspace
+ *  right-click menu. */
+function TeamMenu({
+  name,
+  onRename,
+  onRemove,
+}: {
+  name: string;
+  onRename: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <Menu.Root>
+      <Menu.Trigger aria-label={`Options for ${name}`} className={KEBAB_TRIGGER}>
+        {KEBAB_DOTS}
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="end" sideOffset={6} className="isolate z-[550]">
+          <Menu.Popup
+            className={`${satoshi.className} app-modal min-w-[11rem] rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none`}
+          >
+            <Menu.Item onClick={onRename} className={MENU_ITEM}>
+              <Pencil size={18} strokeWidth={NAV_STROKE} />
+              Rename
+            </Menu.Item>
+            <Menu.Item
+              onClick={onRemove}
+              className={cn(MENU_ITEM, "text-[#EA4335] data-[highlighted]:text-[#EA4335]")}
+            >
+              <Trash2 size={18} strokeWidth={NAV_STROKE} />
+              Remove team
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
 /** The kebab and its menu, drawn like the Joining tab's lifetime menu. Stays
  *  shown while its menu is open. */
 function MemberMenu({
@@ -196,13 +251,9 @@ function MemberMenu({
     <Menu.Root>
       <Menu.Trigger
         aria-label={`Options for ${name}`}
-        className="absolute left-3.5 grid size-[18px] cursor-pointer scale-50 place-items-center rounded-full bg-[var(--app-active)] opacity-0 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] outline-none group-focus-within:scale-100 group-focus-within:opacity-100 group-hover:scale-100 group-hover:opacity-100 hover:bg-[#dcdad6] focus-visible:ring-2 focus-visible:ring-[#1c1917]/20 active:scale-90 data-[popup-open]:scale-100 data-[popup-open]:opacity-100 motion-reduce:scale-100"
+        className={KEBAB_TRIGGER}
       >
-        <span aria-hidden className="flex items-center gap-[2px]">
-          <span className="size-[3px] rounded-full bg-[#1c1917]" />
-          <span className="size-[3px] rounded-full bg-[#1c1917]" />
-          <span className="size-[3px] rounded-full bg-[#1c1917]" />
-        </span>
+        {KEBAB_DOTS}
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={6} className="isolate z-[550]">
