@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState, type ReactNode } from "react";
 import { OrgNameStep } from "./org-name-step";
 import { TeamsStep } from "./teams-step";
 import { OwnTeamStep } from "./own-team-step";
@@ -8,6 +8,7 @@ import { InviteLinkStep } from "./invite-link-step";
 import { InviteOwnerStep } from "./invite-owner-step";
 import { ConnectWorkspaceStep } from "./connect-workspace-step";
 import type { SetupTeam } from "./types";
+import { SetupBackContext } from "./shell";
 import {
   backendError,
   backendFetch,
@@ -67,6 +68,26 @@ export function OrgSetupForm({
   const [teams, setTeams] = useState<SetupTeam[]>([]);
   const [chartReady, setChartReady] = useState(!me.needs_org_setup);
   const [bootError, setBootError] = useState("");
+  /** Back from the first step: whatever opened setup (AppEntry signs out). */
+  const exit = useContext(SetupBackContext);
+  /** The step before each one. Not recorded server-side: a reload resumes
+   *  where they'd got to, which is the furthest step, not the one they
+   *  stepped back to. */
+  const PREVIOUS: Partial<Record<SetupStep, SetupStep>> = {
+    teams: "orgName",
+    ownTeam: "teams",
+    inviteLink: "ownTeam",
+    connectWorkspace: "inviteLink",
+    inviteOwner: "connectWorkspace",
+  };
+  const previous = PREVIOUS[step];
+  const withBack = (screen: ReactNode) => (
+    <SetupBackContext.Provider
+      value={previous ? () => setStep(previous) : exit}
+    >
+      {screen}
+    </SetupBackContext.Provider>
+  );
 
   useEffect(() => {
     if (chartReady) return;
@@ -114,9 +135,10 @@ export function OrgSetupForm({
     );
 
   if (step === "orgName")
-    return (
+    return withBack(
       <OrgNameStep
         me={me}
+        initialName={orgName !== me.organization_name ? orgName : undefined}
         onDone={(name) => {
           setOrgName(name);
           void recordSetupStep("teams");
@@ -126,7 +148,7 @@ export function OrgSetupForm({
     );
 
   if (step === "teams")
-    return (
+    return withBack(
       <TeamsStep
         me={me}
         orgName={orgName}
@@ -139,7 +161,7 @@ export function OrgSetupForm({
     );
 
   if (step === "ownTeam")
-    return (
+    return withBack(
       <OwnTeamStep
         me={me}
         teams={teams}
@@ -151,7 +173,7 @@ export function OrgSetupForm({
     );
 
   if (step === "inviteLink")
-    return (
+    return withBack(
       <InviteLinkStep
         me={me}
         onDone={() => {
@@ -164,7 +186,7 @@ export function OrgSetupForm({
   // The Google check leaves for Google and comes back through AppEntry, which
   // resumes here or on the owner question (ADR-0023).
   if (step === "connectWorkspace")
-    return (
+    return withBack(
       <ConnectWorkspaceStep
         me={me}
         initialPhase={connectInitialPhase}
@@ -176,7 +198,7 @@ export function OrgSetupForm({
     );
 
   if (step === "inviteOwner")
-    return (
+    return withBack(
       <InviteOwnerStep
         me={me}
         onDone={() => {

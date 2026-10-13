@@ -134,9 +134,13 @@ export function CtaSplitLayer({
   reverse = false,
   onStep,
   extras = [],
+  steps = true,
 }: {
   spread: boolean;
   settled: boolean;
+  /** False while the feature deck is hidden: the pill flows wholly into the
+   *  extras instead of dividing into the deck's ← / → circles. */
+  steps?: boolean;
   /** Flowing back into the pill: no hold up front — in reverse the hold comes
    *  after, while the deck sinks. */
   reverse?: boolean;
@@ -220,26 +224,30 @@ export function CtaSplitLayer({
               type="button"
               aria-label={label}
               data-step={key}
-              disabled={!settled}
+              disabled={!settled || !steps}
+              aria-hidden={!steps}
+              tabIndex={steps ? undefined : -1}
               onClick={() => onStep?.(dir < 0 ? "left" : "right")}
-              className={`${CTA_DAUGHTER_CLASS} ${settled ? "bg-black/80 shadow" : ""}`}
+              className={`${CTA_DAUGHTER_CLASS} ${settled && steps ? "bg-black/80 shadow" : ""}`}
               style={{
                 position: "absolute",
                 top: "50%",
                 left: "50%",
                 height: CTA_DIAMETER,
                 marginTop: -CTA_DIAMETER / 2,
-                width: spread ? CTA_DIAMETER : "100%",
+                // No steps: the pill narrows to nothing at its left edge, so the
+                // last of the goo runs off towards the extras.
+                width: spread ? (steps ? CTA_DIAMETER : 0) : "100%",
                 // Position via `translate`, not `transform`: CSS applies
                 // `scale` before `transform` but after `translate`, so the
                 // press shrinks the circle about its own centre instead of
                 // pulling it towards where its box started. A literal px
                 // offset, not `-50%` — see the `--cta-box-w` note above.
-                translate: spread
+                translate: spread && steps
                   ? `calc(${-CTA_DIAMETER / 2}px + ${dir * CTA_OFFSET}px) 0`
                   : "calc(var(--cta-box-w, 100%) * -0.5) 0",
                 transition: `${move("width")}, ${move("translate")}, scale 150ms var(--default-transition-timing-function)`,
-                pointerEvents: settled ? "auto" : "none",
+                pointerEvents: settled && steps ? "auto" : "none",
               }}
             />
           </Liquid.Item>
@@ -260,6 +268,7 @@ export function GetStartedCta({
   onStep,
   onExtraClick,
   extras = [],
+  steps = true,
 }: {
   phase: CtaPhase;
   onClick: () => void;
@@ -267,6 +276,8 @@ export function GetStartedCta({
   onExtraClick?: (key: string) => void;
   /** Rendered as real buttons to the left, hidden until the pill has divided. */
   extras?: readonly CtaExtra[];
+  /** See `CtaSplitLayer`. */
+  steps?: boolean;
 }) {
   /** Dividing, or divided. */
   const splitting = phase === "splitting" || phase === "controls";
@@ -382,12 +393,13 @@ export function GetStartedCta({
             reverse={reverse}
             onStep={onStep}
             extras={extras}
+            steps={steps}
           />
         )}
 
         <span
           className="pointer-events-none absolute inset-0 text-white transition-opacity duration-200"
-          style={{ opacity: phase === "arrows" || liquid ? 1 : 0 }}
+          style={{ opacity: steps && (phase === "arrows" || liquid) ? 1 : 0 }}
           aria-hidden
         >
           {CTA_DAUGHTERS.map(({ key, dir }) => (

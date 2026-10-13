@@ -21,12 +21,14 @@ DELEGATION_LOST = (
 )
 
 
-def _run(fn, member: OrgMember, *args):
+def _run(fn, member: OrgMember, *args, **kwargs):
     """One translation of the librarian's failures into answers a screen can
-    show, so no route leaks a raw Google or Python error."""
+    show, so no route leaks a raw Google or Python error. `db` is the last
+    positional argument; keyword arguments pass straight through (New folder's
+    colour broke every create with a 500 until they did)."""
     db = args[-1]
     try:
-        return fn(member, *args)
+        return fn(member, *args, **kwargs)
     except RefreshError as exc:
         # Delegation was withdrawn in the Admin console after Knohow approved
         # it. Say so, and stop treating the grant as approved.
@@ -68,6 +70,27 @@ def import_personal(
     from app.librarian.import_personal import import_picked_files
 
     result = _run(import_picked_files, member, body.access_token, body.file_ids, db)
+    return {"imported": result.imported, "failed": result.failed}
+
+
+class LinkedImportBody(BaseModel):
+    email: str
+    file_ids: list[str]
+    # "company": a copy the org owns, in your team folder. "me": shared with
+    # your own work account only.
+    to: str = "company"
+
+
+@router.post("/librarian/import-linked")
+def import_linked(
+    org_id: uuid.UUID,
+    body: LinkedImportBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    from app.librarian.import_personal import import_linked_files
+
+    result = _run(import_linked_files, member, body.email, body.file_ids, body.to, db)
     return {"imported": result.imported, "failed": result.failed}
 
 

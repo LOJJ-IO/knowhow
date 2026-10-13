@@ -49,6 +49,7 @@ const SIGN_IN_ERRORS = [
   "other_organization",
   "no_account",
   "state_expired",
+  "google_denied",
   "error",
 ] as const;
 export type SignInError = (typeof SIGN_IN_ERRORS)[number];
@@ -336,6 +337,7 @@ export function SignInResultPanel({
     case "other_organization":
     case "no_account":
     case "state_expired":
+    case "google_denied":
     case "error": {
       // Sign-in failures (user 2026-09-29): the same X, one heading, one
       // line, back to Log In.
@@ -365,6 +367,10 @@ export function SignInResultPanel({
           "Ask your team for a join link, or sign up.",
         ],
         state_expired: ["That sign-in took too long", "Nothing changed. Try again."],
+        google_denied: [
+          "Google didn’t let that account in",
+          "That account can’t use Knohow yet. Try a different Google account.",
+        ],
         error: ["We couldn’t sign you in", "Nothing changed. Try again in a moment."],
       };
       const [title, line] = copy[result];

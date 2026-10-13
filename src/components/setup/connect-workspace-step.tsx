@@ -163,7 +163,9 @@ export function ConnectWorkspaceStep({
   if (phase === "email")
     return (
       <div>
-        <SetupHeading>Their work email</SetupHeading>
+        <SetupHeading onBack={() => setPhase("knowWho")}>
+          Their work email
+        </SetupHeading>
         <SetupBody>
           We&rsquo;ll send an invite. Google checks whether they can connect
           Workspace when they sign in.
@@ -204,7 +206,9 @@ export function ConnectWorkspaceStep({
   if (phase === "openLink")
     return (
       <div>
-        <SetupHeading>Share this link</SetupHeading>
+        <SetupHeading onBack={() => setPhase("knowWho")}>
+          Share this link
+        </SetupHeading>
         <SetupBody>
           Whoever opens it signs in with Google. Google checks whether they can
           connect {me.organization_name}&rsquo;s Workspace. If not, they join

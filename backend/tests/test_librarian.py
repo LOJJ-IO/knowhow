@@ -580,6 +580,100 @@ def test_import_personal_rejects_empty_and_oversize(db, monkeypatch):
         imp.import_picked_files(worker, "tok", [f"f{i}" for i in range(imp.MAX_IMPORT + 1)], db)
 
 
+class _UploadDrives:
+    """A personal Drive that can't reshare (403 on share) but can export, and
+    an org Drive that takes uploads."""
+
+    def __init__(self):
+        self.uploaded = []
+
+    # personal side
+    def permissions(self):
+        return self
+
+    def create(self, **kwargs):
+        if "media_body" in kwargs:  # org upload
+            self.uploaded.append(kwargs["body"])
+            return _Exec(
+                {
+                    "id": "up-1",
+                    "name": kwargs["body"]["name"],
+                    "mimeType": kwargs["body"].get("mimeType", ""),
+                    "createdTime": "2026-10-01T10:00:00Z",
+                    "modifiedTime": "2026-10-01T10:00:00Z",
+                }
+            )
+        from googleapiclient.errors import HttpError
+
+        class _R(dict):
+            status = 403
+            reason = "cannot share"
+
+        raise HttpError(_R(), b"nope")
+
+    def files(self):
+        return self
+
+    def get(self, fileId, fields):
+        return _Exec({"id": fileId, "name": "Meeting agendas", "mimeType": "application/vnd.google-apps.document"})
+
+    def export(self, fileId, mimeType):
+        return _Exec(b"docx-bytes")
+
+
+def test_import_linked_falls_back_to_upload_when_sharing_is_closed(db, monkeypatch):
+    """A file only shared *with* the personal account can't be reshared; it
+    still comes in as an org-owned copy (cofounder 2026-10-13)."""
+    from app.auth import linked_drive
+    from app.librarian import import_personal as imp
+
+    _o, _lead, worker, team = _org(db)
+    drives = _UploadDrives()
+    monkeypatch.setattr(linked_drive, "linked_drive_client", lambda *a, **k: drives)
+    monkeypatch.setattr(imp, "get_drive_client_for_user", lambda *a, **k: drives)
+    monkeypatch.setattr(imp, "record_audit_entry", lambda **k: None)
+
+    result = imp.import_linked_files(worker, "me@gmail.com", ["shared-1"], "company", db)
+
+    assert result.imported == ["up-1"] and result.failed == []
+    assert drives.uploaded == [{"name": "Meeting agendas", "mimeType": "application/vnd.google-apps.document"}]
+    assert db.get(FileIndex, "up-1").team_id == team.id
+
+
+def test_import_linked_to_me_only_shares_with_the_work_account(db, monkeypatch):
+    from app.auth import linked_drive
+    from app.librarian import import_personal as imp
+
+    _o, _lead, worker, _team = _org(db)
+    personal = _PersonalDrive()
+    monkeypatch.setattr(linked_drive, "linked_drive_client", lambda *a, **k: personal)
+    monkeypatch.setattr(imp, "record_audit_entry", lambda **k: None)
+
+    result = imp.import_linked_files(worker, "me@gmail.com", ["fileA"], "me", db)
+
+    assert result.imported == ["fileA"]
+    assert personal.shared == [("fileA", worker.email)] and personal.unshared == []
+    # Still the person's own file: nothing indexed.
+    assert db.get(FileIndex, "fileA") is None
+
+
+def test_import_linked_needs_a_linked_connected_account(db, monkeypatch):
+    from app.auth import linked_drive
+    from app.librarian import import_personal as imp
+
+    _o, _lead, worker, _team = _org(db)
+
+    def _not_linked(*_a, **_k):
+        raise linked_drive.NotLinked("nope")
+
+    monkeypatch.setattr(linked_drive, "linked_drive_client", _not_linked)
+    with pytest.raises(imp.LibrarianError):
+        imp.import_linked_files(worker, "x@gmail.com", ["f"], "company", db)
+    monkeypatch.setattr(linked_drive, "linked_drive_client", lambda *a, **k: None)
+    with pytest.raises(imp.LibrarianError):
+        imp.import_linked_files(worker, "x@gmail.com", ["f"], "company", db)
+
+
 # ------------------------------------------------------- New button: create doc
 
 

@@ -337,7 +337,11 @@ export function NotificationCenter({
       className="app-nc pointer-events-none fixed inset-0 z-[400]"
     >
       <div
-        className="pointer-events-auto absolute flex flex-col gap-2.5"
+        // Only the close button and the cards take presses: the heading sits
+        // over the screen's own top-right controls (Workspace's New folder
+        // was unclickable under it, cofounder 2026-10-13), and a press there
+        // now reaches them and tucks the column away.
+        className="pointer-events-none absolute flex flex-col gap-2.5"
         style={{ top: bell?.top ?? 72, right, width: columnWidth }}
       >
         {/* Blur only behind what's in the column (Ronald): the heading and
@@ -354,13 +358,13 @@ export function NotificationCenter({
               e.stopPropagation();
               void close();
             }}
-            className="flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/10 text-[#44403c] transition-colors duration-150 hover:bg-black/15"
+            className="pointer-events-auto flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/10 text-[#44403c] transition-colors duration-150 hover:bg-black/15"
           >
             <X size={14} strokeWidth={2.25} />
           </button>
         </div>
         <div
-          className="flex flex-col gap-2.5"
+          className="flex flex-col gap-2.5 [&_[data-nc-pill]]:pointer-events-auto"
           style={{ visibility: flying ? "hidden" : undefined }}
         >
           {children}

@@ -36,11 +36,14 @@ export function suggestOrgName(me: Me): string {
 export function OrgNameStep({
   me,
   onDone,
+  initialName,
 }: {
   me: Me;
   onDone: (name: string) => void;
+  /** What they typed before, when Back from the next step returns here. */
+  initialName?: string;
 }) {
-  const [name, setName] = useState(() => suggestOrgName(me));
+  const [name, setName] = useState(() => initialName ?? suggestOrgName(me));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);

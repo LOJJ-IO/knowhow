@@ -84,7 +84,9 @@ export function InviteLinkStep({
   if (phase === "lifetime")
     return (
       <div>
-        <SetupHeading>How long should the link work?</SetupHeading>
+        <SetupHeading onBack={() => setPhase("offer")}>
+          How long should the link work?
+        </SetupHeading>
         <SetupBody>You can turn it off at any time.</SetupBody>
         <div className="mx-[2.5%] mt-6 flex flex-wrap items-center gap-1.5">
           {LIFETIMES.map((option) => (

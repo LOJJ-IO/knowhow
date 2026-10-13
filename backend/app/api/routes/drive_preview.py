@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from google.auth.exceptions import RefreshError
 from googleapiclient.errors import HttpError
 from sqlalchemy.orm import Session
@@ -114,3 +114,59 @@ def linked_drive_previews(
                 }
             )
     return out
+
+
+def _escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+@router.get("/organizations/{org_id}/linked-drive/files")
+def linked_drive_files(
+    org_id: uuid.UUID,
+    email: str,
+    q: str | None = Query(default=None, max_length=200),
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """One of the caller's linked personal Drives, to pick files from: what
+    it owns and what's been shared with it (cofounder 2026-10-13: a file
+    shared with them was the one they couldn't bring in), newest first,
+    optionally narrowed by name. Live, never stored, only ever the caller's."""
+    try:
+        drive = linked_drive_client(member, email, db)
+    except (PermissionError, LookupError, ValueError) as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "that account isn't linked to you") from exc
+    if drive is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Connect that account's Drive first.")
+    query = "trashed = false and mimeType != 'application/vnd.google-apps.folder'"
+    if q and q.strip():
+        query += f" and name contains '{_escape(q.strip())}'"
+    try:
+        result = (
+            drive.files()
+            .list(
+                q=query,
+                orderBy="modifiedTime desc",
+                pageSize=100,
+                fields="files(id,name,mimeType,modifiedTime,ownedByMe)",
+            )
+            .execute()
+        )
+    except RefreshError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Google signed that account out. Connect it again.") from exc
+    except HttpError as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY, f"Google didn't answer the Drive request ({exc.status_code})."
+        ) from exc
+    return {
+        "files": [
+            {
+                "id": f["id"],
+                "name": f.get("name", "Untitled"),
+                "mime_type": f.get("mimeType", ""),
+                "modified_at": f.get("modifiedTime"),
+                "owned_by_me": bool(f.get("ownedByMe")),
+            }
+            for f in result.get("files", [])
+        ]
+    }

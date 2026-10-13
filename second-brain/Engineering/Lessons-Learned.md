@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-10-04
+updated: 2026-10-13
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -617,3 +617,9 @@ Putting `PersonAvatar` (its `FluidOrb` is a `<div>`) in a toast description thro
 - **Railway: the backend only follows `main` if auto-deploy is on, and `railway up` from the repo root deploys the frontend (Ronald, 2026-10-04).** After pushing `51f74f8`, the frontend redeployed but the backend service had **auto-deploy disabled**, so production ran the new frontend against the old API (87 routes vs 93). Sharing crashed on `t.rule.excluded_member_ids` ("This page couldn't load") and the Librarian tab was empty. A later deploy to the backend service then served the Next.js app at the backend URL (`/health` 404), most likely a `railway up` from the repo root: the root `.railwayignore` excludes `backend/`, so that upload is the frontend. Fix: backend service Root Directory `/backend` (already set), auto-deploy **enabled** on `main`, redeploy from GitHub. Check after any deploy: `curl …/health` returns `{"status":"ok"}` and `/openapi.json` route count matches `app.main:app` locally. Deploy the backend by pushing, or `railway up` from inside `backend/`.
 
 - **Don't read React state you just set in the same handler (Ronald, 2026-10-10).** `setX(next)` then calling a function that reads `x` sends the old value: the join form's last "Yes, I'm the lead" was dropped because submit ran in the same click. Build the new value in a local, set it, and pass it along. It hides when another step usually comes in between (here the owner question), so test the path where it doesn't. See [[Known-Issues]].
+
+## Windows: `uvicorn --reload` leaves the old worker serving (2026-10-13)
+On the Windows dev box, a reload after an edit logs "Reloading..." and never restarts; worse, the old `multiprocessing` worker keeps answering on :8000 with the old code even after the reloader is killed, so an edit looks like it did nothing. Check `Get-NetTCPConnection -LocalPort 8000` / the worker's `spawn_main(parent_pid=…)` command line and kill it. Run the backend **without** `--reload` there and restart by hand after backend edits.
+
+## Google OAuth callbacks must accept `?error=` (2026-10-13)
+Google returns `error=access_denied` (cancel, or an unverified app in Testing mode refusing a non-test user) with **no `code`**. A FastAPI callback declaring `code: str` turns that into a raw 422 JSON page with no way back. Every callback takes `code`/`state`/`error` as optional and sends errors somewhere retryable; after a failed sign-in, ask Google for the account chooser (`prompt=select_account`) or it silently reuses the same blocked account.

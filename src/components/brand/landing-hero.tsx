@@ -23,6 +23,12 @@ import {
   MOBILE_SUBHEAD_FONT_SIZE,
 } from "@/components/landing/type-scale";
 
+/** The feature deck (cards behind Get Started). Hidden until the features it
+ *  shows are finished (cofounder, 2026-10-13: "functionality first"): Get
+ *  Started then just turns into Log In / Book a Demo over the hero, and on
+ *  mobile, which has no header buttons, goes straight to Log In. */
+const SHOW_FEATURE_DECK = false;
+
 /** Desktop header buttons that appear only after Get Started divides. */
 const DESKTOP_HEADER_EXTRAS: readonly CtaExtra[] = [
   { key: "login", label: "Log In" },
@@ -456,7 +462,7 @@ function LandingHero() {
     reverseCta();
   }
 
-  const openAttr = nextOpen ? "true" : "false";
+  const openAttr = nextOpen && SHOW_FEATURE_DECK ? "true" : "false";
 
   return (
     <div
@@ -525,7 +531,14 @@ function LandingHero() {
         <div className="relative z-30 flex -translate-y-[2vh] justify-center px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-14">
           <GetStartedCta
             phase={ctaPhase}
-            onClick={handleCtaClick}
+            onClick={
+              SHOW_FEATURE_DECK
+                ? handleCtaClick
+                : () => {
+                    setSheetKind("login");
+                    setSheetOpen(true);
+                  }
+            }
             onStep={stepMobileDeck}
           />
         </div>
@@ -571,6 +584,7 @@ function LandingHero() {
                 }
               }}
               extras={DESKTOP_HEADER_EXTRAS}
+              steps={SHOW_FEATURE_DECK}
             />
           </div>
         </div>
@@ -606,6 +620,8 @@ function LandingHero() {
         </div>
       </div>
 
+      {SHOW_FEATURE_DECK ? (
+      <>
       {/* Desktop: rise + linear spread (16:9) */}
       <div
         ref={deskDeckEl}
@@ -659,6 +675,8 @@ function LandingHero() {
           onActiveIndexChange={setDeckIndex}
         />
       </div>
+      </>
+      ) : null}
 
       </div>
 

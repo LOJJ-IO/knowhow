@@ -35,6 +35,9 @@ import {
   decide,
   deleteFolder,
   fetchCompanyFiles,
+  fetchLinkedDriveFiles,
+  importLinkedFiles,
+  type LinkedDriveFile,
   fetchFolder,
   fetchFolders,
   fetchProposals,
@@ -339,7 +342,12 @@ export function WorkspaceScreen() {
         {linked
           .filter((account) => account.connected)
           .map((account) => (
-            <LinkedAccount key={account.email} account={account} />
+            <LinkedAccount
+              key={account.email}
+              org={org}
+              account={account}
+              onImported={() => void refreshFolders()}
+            />
           ))}
       </Window>
 
@@ -428,14 +436,29 @@ export function WorkspaceScreen() {
 /** A connected personal account linked to you (ADR-0025): its recent files.
  *  Shown only to you; nothing here is saved to Knohow. Connecting one is a
  *  Pending task in Notifications. */
-function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
+function LinkedAccount({
+  org,
+  account,
+  onImported,
+}: {
+  org: string;
+  account: LinkedDrivePreview;
+  onImported: () => void;
+}) {
+  const [adding, setAdding] = useState(false);
   return (
     <div className="border-t border-[var(--app-border)] p-8">
-      <h2
-        className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
-      >
-        Personal account
-      </h2>
+      <div className="flex items-center justify-between gap-4">
+        <h2
+          className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
+        >
+          Personal account
+        </h2>
+        <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+          <Plus size={16} strokeWidth={NAV_STROKE} />
+          Add to Knohow
+        </Button>
+      </div>
       <p
         className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
       >
@@ -459,11 +482,234 @@ function LinkedAccount({ account }: { account: LinkedDrivePreview }) {
           ))}
         </ul>
       ) : null}
+      <LinkedImportDialog
+        org={org}
+        email={account.email}
+        open={adding}
+        onOpenChange={setAdding}
+        onImported={onImported}
+      />
     </div>
   );
 }
 
+/** Pick files from a linked personal Drive and bring them in (user
+ *  2026-10-13): to the company as copies it owns, or to your own work
+ *  account only. Lists what that account owns and what's shared with it. */
+function LinkedImportDialog({
+  org,
+  email,
+  open,
+  onOpenChange,
+  onImported,
+}: {
+  org: string;
+  email: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onImported: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [got, setGot] = useState<{ q: string; files?: LinkedDriveFile[]; error?: string }>();
+  const [picked, setPicked] = useState<string[]>([]);
+  const [to, setTo] = useState<"company" | "me">("company");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState("");
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const q = query;
+    // Typing narrows by name after a short pause.
+    const timer = window.setTimeout(
+      () => {
+        fetchLinkedDriveFiles(org, email, q)
+          .then((files) => {
+            if (!cancelled) setGot({ q, files });
+          })
+          .catch((e: unknown) => {
+            if (!cancelled) setGot({ q, error: message(e) });
+          });
+      },
+      q ? 250 : 0,
+    );
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, org, email, query]);
+
+  const files = got?.files ?? null;
+  const allOn = !!files?.length && files.every((f) => picked.includes(f.id));
+
+  return (
+    <FormDialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) {
+          setPicked([]);
+          setError("");
+          setDone("");
+          setQuery("");
+        }
+        onOpenChange(o);
+      }}
+      size="sm"
+      title="Add to Knohow"
+      submitLabel={picked.length ? `Add ${picked.length}` : "Add"}
+      busy={busy}
+      disabled={!picked.length}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        setError("");
+        setDone("");
+        try {
+          const result = await importLinkedFiles(org, email, picked, to);
+          if (to === "company") onImported();
+          setPicked([]);
+          if (result.failed.length) {
+            setError(
+              `${plural(result.failed.length, "file", "files")} couldn’t be added. Google may not allow copying them.`,
+            );
+          } else {
+            setDone(
+              to === "company"
+                ? `Added ${plural(result.imported.length, "file", "files")} to your team’s folder.`
+                : `Shared ${plural(result.imported.length, "file", "files")} with your work account.`,
+            );
+          }
+        } catch (err) {
+          setError(message(err));
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <p className={`${satoshi.className} m-0 text-[0.875rem] text-[var(--app-dim)]`}>{email}</p>
+      <div className={`${satoshi.className} mt-4 flex gap-2`} role="radiogroup" aria-label="Add them for">
+        {(
+          [
+            ["company", "The company"],
+            ["me", "Just me"],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={to === value}
+            variant={to === value ? "default" : "outline"}
+            size="sm"
+            onClick={() => setTo(value)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      <p className={`${satoshi.className} mt-2 mb-0 text-[0.8125rem] leading-[1.5] text-[var(--app-dim)]`}>
+        {to === "company"
+          ? "Copies go in your team’s folder, owned by the company. Your originals stay as they are."
+          : "Shared with your work account so you can open them at work. They stay yours."}
+      </p>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Search this Drive"
+        aria-label="Search this Drive"
+        className={cn(INPUT_CLASS, "mt-4")}
+      />
+      {error ? <p className={`${satoshi.className} mt-3 mb-0 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
+      {done ? <p className={`${satoshi.className} mt-3 mb-0 text-[0.875rem] text-[#1c1917]`}>{done}</p> : null}
+      {got?.error ? (
+        <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[#EA4335]`}>{got.error}</p>
+      ) : !files ? (
+        <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>Loading…</p>
+      ) : files.length === 0 ? (
+        <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
+          {query.trim() ? "Nothing by that name." : "No files in this Drive."}
+        </p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() =>
+              setPicked((p) =>
+                allOn
+                  ? p.filter((id) => !files.some((f) => f.id === id))
+                  : [...new Set([...p, ...files.map((f) => f.id)])].slice(0, 50),
+              )
+            }
+            className={`${satoshi.className} mt-3 cursor-pointer text-[0.8125rem] font-medium text-[#1c1917] underline-offset-2 hover:underline`}
+          >
+            {allOn ? "Clear" : "Select all"}
+          </button>
+          <ul className="mt-2 flex max-h-[18rem] flex-col gap-2 overflow-y-auto">
+            {files.map((f) => (
+              <li key={f.id}>
+                <PickableFile
+                  name={f.name}
+                  mimeType={f.mimeType}
+                  modifiedAt={f.modifiedAt}
+                  on={picked.includes(f.id)}
+                  onToggle={() =>
+                    setPicked((p) => (p.includes(f.id) ? p.filter((x) => x !== f.id) : [...p, f.id]))
+                  }
+                />
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </FormDialog>
+  );
+}
+
+/** A file row with a checkbox, for the pick-files dialogs. */
+function PickableFile({
+  name,
+  mimeType,
+  modifiedAt,
+  on,
+  onToggle,
+}: {
+  name: string;
+  mimeType: string;
+  modifiedAt: string | null;
+  on: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="block cursor-pointer">
+      <input type="checkbox" className="peer sr-only" checked={on} onChange={onToggle} />
+      <FileTile
+        name={name}
+        mimeType={mimeType}
+        modifiedAt={modifiedAt}
+        className={cn(
+          "outline-offset-2 peer-focus-visible:outline-2 peer-focus-visible:outline-[#1c1917]",
+          on ? "bg-[var(--app-active)]" : "hover:bg-[var(--app-active)]",
+        )}
+      >
+        <span
+          aria-hidden
+          className={cn(
+            "mt-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] border",
+            on ? "border-[#1c1917] bg-[#1c1917] text-white" : "border-[#d6d1c9] bg-white",
+          )}
+        >
+          {on ? (
+            <svg viewBox="0 0 16 16" className="size-3" fill="none">
+              <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          ) : null}
+        </span>
+      </FileTile>
+    </label>
+  );
+}
 
 /** The type filter inside a folder, in this order, only for types present. */
 const KIND_ORDER = ["Doc", "Sheet", "Slides", "Form", "PDF", "Image", "Video", "Folder", "File"];
@@ -1314,39 +1560,15 @@ function AddFilesDialog({
             const on = picked.includes(f.fileId);
             return (
               <li key={f.fileId}>
-                <label className="block cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="peer sr-only"
-                    checked={on}
-                    onChange={() =>
-                      setPicked((p) => (on ? p.filter((x) => x !== f.fileId) : [...p, f.fileId]))
-                    }
-                  />
-                  <FileTile
-                    name={f.name}
-                    mimeType={f.mimeType}
-                    modifiedAt={f.modifiedAt}
-                    className={cn(
-                      "outline-offset-2 peer-focus-visible:outline-2 peer-focus-visible:outline-[#1c1917]",
-                      on ? "bg-[var(--app-active)]" : "hover:bg-[var(--app-active)]",
-                    )}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "mt-2 flex size-5 shrink-0 items-center justify-center rounded-[6px] border",
-                        on ? "border-[#1c1917] bg-[#1c1917] text-white" : "border-[#d6d1c9] bg-white",
-                      )}
-                    >
-                      {on ? (
-                        <svg viewBox="0 0 16 16" className="size-3" fill="none">
-                          <path d="M3.5 8.5l3 3 6-7" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      ) : null}
-                    </span>
-                  </FileTile>
-                </label>
+                <PickableFile
+                  name={f.name}
+                  mimeType={f.mimeType}
+                  modifiedAt={f.modifiedAt}
+                  on={on}
+                  onToggle={() =>
+                    setPicked((p) => (on ? p.filter((x) => x !== f.fileId) : [...p, f.fileId]))
+                  }
+                />
               </li>
             );
           })}

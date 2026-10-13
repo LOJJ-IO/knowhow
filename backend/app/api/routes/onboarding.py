@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_member, get_db, require_same_org, require_same_org_any_standing
 from app.api.routes.auth import (  # reuse: same cookie contract as login
     PENDING_PERSONAL_SIGNUP_COOKIE,
+    google_declined_redirect,
     set_session_cookies,
     signup_redirect,
 )
@@ -70,7 +71,14 @@ def signup(
 
 
 @router.get("/onboarding/signup/callback")
-def signup_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
+def signup_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if error or not code or not state:
+        return google_declined_redirect(state, error or "missing_code")
     try:
         return signup_redirect(complete_signup(code, state, db))
     except InvalidOAuthState as exc:

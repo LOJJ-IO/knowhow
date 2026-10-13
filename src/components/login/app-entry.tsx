@@ -20,6 +20,7 @@ import {
   continueWithGoogle,
   fetchMe,
   fetchRememberedOrgs,
+  logOut,
   readInviteToken,
   type RememberedOrg,
 } from "@/lib/remembered-accounts";
@@ -27,6 +28,7 @@ import { APP_HOME } from "@/lib/app-nav";
 import { readJoinToken, type JoinLinkPreview } from "@/lib/join-link";
 import { siteUrl } from "@/lib/origins";
 import type { Me } from "@/lib/backend";
+import { SetupBackContext } from "@/components/setup/shell";
 
 /** Loaded on demand — only one of these is ever on screen. */
 const AccountPicker = dynamic(
@@ -128,6 +130,9 @@ export function AppEntry({
   const [joinPreview, setJoinPreview] = useState<JoinLinkPreview | null>(
     joinPreviewProp,
   );
+  /** Back on Log In after a failed sign-in: Google must ask which account,
+   *  or it quietly reuses the one that just failed. */
+  const [chooseAccount, setChooseAccount] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,6 +236,48 @@ export function AppEntry({
     router.prefetch(APP_HOME);
   }, [router]);
 
+  /** Back from the first screen after Google: wrong account, most likely.
+   *  Sign out and return to Log In, which then asks Google which account
+   *  (cofounder 2026-10-13: stuck after signing in with the wrong one). */
+  async function backToLogIn() {
+    await logOut();
+    setMe(null);
+    setSignInResult(null);
+    setSetupStartAt(undefined);
+    setChooseAccount(true);
+    setKind("login");
+  }
+
+  /** The back arrow on each card that has one. Log In itself has Close. */
+  const back: (() => void) | null =
+    kind === "setup" || kind === "join"
+      ? () => void backToLogIn()
+      : kind === "connect"
+        ? intoTheApp
+        : kind === "delegation"
+          ? me?.setup_step && me.setup_step !== "done"
+            ? () => {
+                setSetupStartAt("connectWorkspace");
+                setKind("setup");
+              }
+            : intoTheApp
+          : kind === "result" && signInResult
+            ? signInResult.startsWith("admin_") &&
+              me?.setup_step &&
+              me.setup_step !== "done"
+              ? () => {
+                  setSignInResult(null);
+                  setConnectInitialPhase("check");
+                  setSetupStartAt("connectWorkspace");
+                  setKind("setup");
+                }
+              : signInResult === "personal" ||
+                  signInResult === "invite_wrong_account" ||
+                  isSignInError(signInResult)
+                ? () => void backToLogIn()
+                : null
+            : null;
+
   /** Close the card first (its own resize), so the finish is visible at
    *  once, then hand over to the app. */
   function intoTheApp() {
@@ -245,6 +292,7 @@ export function AppEntry({
       cardOpen={kind !== null && (kind !== "login" || loginReady)}
       onClose={() => window.location.assign(siteUrl("/"))}
     >
+      <SetupBackContext.Provider value={back}>
       {kind === "login" && rememberedOrgs.length > 0 ? (
         <AccountPicker
           organizations={rememberedOrgs}
@@ -299,7 +347,12 @@ export function AppEntry({
             <button
               type="button"
               onClick={() =>
-                continueWithGoogle(readInviteToken(), null, joinToken)
+                continueWithGoogle(
+                  readInviteToken(),
+                  null,
+                  joinToken,
+                  chooseAccount,
+                )
               }
               className={`${satoshi.className} relative mx-[2.5%] mt-8 flex h-12 w-[95%] cursor-pointer items-center justify-center rounded-[var(--login-button-radius)] border border-[#d9d9de] bg-white text-[1rem] font-bold text-[#1c1917] transition-transform duration-150 active:scale-[0.98]`}
             >
@@ -355,6 +408,7 @@ export function AppEntry({
             // A failed sign-in goes back to Log In, whatever the session.
             if (isSignInError(signInResult)) {
               setSignInResult(null);
+              setChooseAccount(true);
               setKind("login");
               return;
             }
@@ -400,6 +454,7 @@ export function AppEntry({
       ) : kind === "delegation" && me ? (
         <DelegationConnectStep me={me} onDone={afterGoogleCheck} />
       ) : null}
+      </SetupBackContext.Provider>
     </SignInSheet>
   );
 }

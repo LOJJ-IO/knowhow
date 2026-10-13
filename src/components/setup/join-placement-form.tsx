@@ -142,7 +142,13 @@ export function JoinPlacementForm({
   if (phase === "leads" && currentLeadTeam)
     return (
       <div>
-        <SetupHeading>Are you the lead for {currentLeadTeam.name}?</SetupHeading>
+        <SetupHeading
+          onBack={() =>
+            leadIndex > 0 ? setLeadIndex((i) => i - 1) : setPhase("teams")
+          }
+        >
+          Are you the lead for {currentLeadTeam.name}?
+        </SetupHeading>
         <SetupBody>
           If you&rsquo;re just on the team, say no. More leads can be added
           later.
@@ -170,7 +176,16 @@ export function JoinPlacementForm({
   if (phase === "owner")
     return (
       <div>
-        <SetupHeading>Are you the owner of this organization?</SetupHeading>
+        <SetupHeading
+          onBack={() => {
+            if (leadQuestions.length > 0) {
+              setLeadIndex(leadQuestions.length - 1);
+              setPhase("leads");
+            } else setPhase("teams");
+          }}
+        >
+          Are you the owner of this organization?
+        </SetupHeading>
         <SetupBody>
           The <OwnerTerm /> sits at the top of the chart. You can skip if you&rsquo;re not sure.
         </SetupBody>

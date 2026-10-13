@@ -279,15 +279,39 @@ def sign_in_error_redirect(code: str, detail: str | None = None) -> RedirectResp
     return RedirectResponse(f"{get_settings().frontend_origin}?{query}", status_code=status.HTTP_302_FOUND)
 
 
+def google_declined_redirect(state: str | None, error: str) -> RedirectResponse:
+    """Google came back with `?error=` instead of a code: the person cancelled,
+    or Google blocked the account (an unverified app in Testing mode answers
+    `access_denied` to anyone who isn't a test user). FastAPI used to answer
+    that with a raw 422 page and no way back (cofounder, 2026-10-13); now
+    every flow lands somewhere it can be retried from."""
+    settings = get_settings()
+    try:
+        purpose = peek_state_purpose(state) if state else None
+    except InvalidOAuthState:
+        purpose = None
+    logger.info("auth.google_declined", error=error, purpose=purpose)
+    if purpose in (PERSONAL_OAUTH_STATE_PURPOSE, LINKED_DRIVE_STATE_PURPOSE):
+        return RedirectResponse(
+            f"{settings.frontend_origin}/workspace?drive_error=declined", status_code=status.HTTP_302_FOUND
+        )
+    if purpose == ADMIN_PROOF_STATE_PURPOSE:
+        return RedirectResponse(f"{settings.frontend_origin}?admin_proof=error", status_code=status.HTTP_302_FOUND)
+    return sign_in_error_redirect("google_denied")
+
+
 @router.get("/callback")
 def login_callback(
     request: Request,
-    code: str,
-    state: str,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
     db: Session = Depends(get_db),
     knohow_device: str | None = Cookie(default=None),
 ) -> RedirectResponse:
     settings = get_settings()
+    if error or not code or not state:
+        return google_declined_redirect(state, error or "missing_code")
     # Google calls back on the registered URI (this service's own host). When
     # browsers reach the API through the frontend's origin, hop there first so
     # this browser's cookies are read, and the session set, first-party.
@@ -609,7 +633,14 @@ def personal_oauth_redirect(code: str, state: str, db: Session) -> RedirectRespo
 
 
 @router.get("/personal-oauth/callback")
-def personal_oauth_callback(code: str, state: str, db: Session = Depends(get_db)) -> RedirectResponse:
+def personal_oauth_callback(
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    if error or not code or not state:
+        return google_declined_redirect(state, error or "missing_code")
     try:
         return personal_oauth_redirect(code, state, db)
     except InvalidOAuthState as exc:

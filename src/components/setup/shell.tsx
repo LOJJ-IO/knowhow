@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
@@ -23,13 +23,60 @@ import {
  *  fields and actions left where they are (user, 2026-09-27).
  */
 
-export function SetupHeading({ children }: { children: ReactNode }) {
+/** Where a setup screen's back arrow goes. Provided by whoever owns the
+ *  sequence (setup → the previous step, the first step → sign out and back to
+ *  Log In), so every screen gets one without wiring it through each step
+ *  (cofounder, 2026-10-13: "there should be a back button at every step"). */
+export const SetupBackContext = createContext<(() => void) | null>(null);
+
+/** The account picker's back chevron, shared. */
+export function SetupBackButton({ onClick }: { onClick: () => void }) {
   return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Back"
+      className="-ml-1 mt-[0.1rem] flex size-7 shrink-0 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
+    >
+      <svg viewBox="0 0 24 24" fill="none" className="size-5">
+        <path
+          d="M15 5l-7 7 7 7"
+          stroke="currentColor"
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
+/** `onBack` overrides the context for a sub-screen inside one step (e.g. the
+ *  email field after "Yes, invite them" goes back to that question). `null`
+ *  hides the arrow. */
+export function SetupHeading({
+  children,
+  onBack,
+}: {
+  children: ReactNode;
+  onBack?: (() => void) | null;
+}) {
+  const fromContext = useContext(SetupBackContext);
+  const back = onBack === undefined ? fromContext : onBack;
+  const heading = (
     <h2
-      className={`${sohne.className} m-0 pl-[7%] pr-[3%] text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
+      className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
     >
       {children}
     </h2>
+  );
+  return back ? (
+    <div className="flex items-start gap-2 pl-[7%] pr-[3%]">
+      <SetupBackButton onClick={back} />
+      {heading}
+    </div>
+  ) : (
+    <div className="pl-[7%] pr-[3%]">{heading}</div>
   );
 }
 

@@ -331,3 +331,43 @@ export type LogEntry = {
 export async function fetchLog(org: string): Promise<LogEntry[]> {
   return (await call<{ entries: LogEntry[] }>(`${base(org)}/audit/log`)).entries;
 }
+
+/** A file in one of your linked personal Drives, to pick from. */
+export type LinkedDriveFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  modifiedAt: string | null;
+  ownedByMe: boolean;
+};
+
+export async function fetchLinkedDriveFiles(org: string, email: string, q = "") {
+  const params = new URLSearchParams({ email });
+  if (q.trim()) params.set("q", q.trim());
+  const body = await call<{
+    files: { id: string; name: string; mime_type: string; modified_at: string | null; owned_by_me: boolean }[];
+  }>(`${base(org)}/linked-drive/files?${params}`);
+  return body.files.map(
+    (f): LinkedDriveFile => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mime_type,
+      modifiedAt: f.modified_at,
+      ownedByMe: f.owned_by_me,
+    }),
+  );
+}
+
+/** `company`: copies the org owns, filed in your team folder. `me`: shared
+ *  with your own work account only; they stay yours. */
+export async function importLinkedFiles(
+  org: string,
+  email: string,
+  fileIds: string[],
+  to: "company" | "me",
+) {
+  return call<{ imported: string[]; failed: string[] }>(`${base(org)}/librarian/import-linked`, {
+    method: "POST",
+    body: JSON.stringify({ email, file_ids: fileIds, to }),
+  });
+}

@@ -11,6 +11,7 @@ from app.google.retry import google_api_call
 from app.members.lookup import resolve_member_by_email
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
+from app.search.fuzzy import title_score
 from app.sharing.visibility import can_view_file
 
 
@@ -97,4 +98,36 @@ def search(org_id: uuid.UUID, requester_member_id: uuid.UUID, query: str, db: Se
     # Rank: files found via more members' searches first (a rough proxy for
     # relevance/shared significance), then most recently modified.
     visible_results.sort(key=lambda r: (len(r.matched_via_member_ids), r.modified_at or ""), reverse=True)
+    if len(visible_results) < limit:
+        visible_results += _fuzzy_title_matches(
+            org_id, requester_member_id, query, db, skip={r.file_id for r in visible_results}
+        )
     return visible_results[:limit]
+
+
+def _fuzzy_title_matches(
+    org_id: uuid.UUID, requester_id: uuid.UUID, query: str, db: Session, skip: set[str]
+) -> list[SearchResult]:
+    """Company files whose titles match despite spacing or a typo, which
+    Drive's exact word search misses ("Test4" → "Test 4"). Only FileIndex
+    titles, through the same visibility; after Drive's own hits, best first."""
+    scored: list[tuple[float, FileIndex]] = []
+    for row in db.execute(
+        select(FileIndex).where(FileIndex.org_id == org_id, FileIndex.trashed_at.is_(None))
+    ).scalars():
+        if row.file_id in skip:
+            continue
+        score = title_score(query, row.title)
+        if score is not None and can_view_file(requester_id, row, org_id, db):
+            scored.append((score, row))
+    scored.sort(key=lambda pair: (pair[0], pair[1].modified_at), reverse=True)
+    return [
+        SearchResult(
+            file_id=row.file_id,
+            title=row.title,
+            file_type=row.file_type,
+            owner_email=None,
+            modified_at=row.modified_at.isoformat() if row.modified_at else None,
+        )
+        for _, row in scored
+    ]

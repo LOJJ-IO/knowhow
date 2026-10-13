@@ -181,7 +181,9 @@ export function TeamsStep({
 
   return (
     <div>
-      <SetupHeading>What are they called?</SetupHeading>
+      <SetupHeading onBack={() => setPhase("count")}>
+        What are they called?
+      </SetupHeading>
       <SetupBody>Name each one. You can change them later.</SetupBody>
       {/* Each slot carries the team's generated icon, seeded from the name as
           it is typed: the identity appears with the team rather than being

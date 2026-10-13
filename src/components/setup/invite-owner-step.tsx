@@ -119,7 +119,9 @@ export function InviteOwnerStep({
   if (phase === "email")
     return (
       <div>
-        <SetupHeading>Owner&rsquo;s work email</SetupHeading>
+        <SetupHeading onBack={() => setPhase("ask")}>
+          Owner&rsquo;s work email
+        </SetupHeading>
         <SetupBody>
           We&rsquo;ll invite them to confirm they sit at the top of{" "}
           {me.organization_name}.
@@ -156,7 +158,9 @@ export function InviteOwnerStep({
 
   return (
     <div>
-      <SetupHeading>Do you know who sits at the top?</SetupHeading>
+      <SetupHeading onBack={() => setPhase("top")}>
+        Do you know who sits at the top?
+      </SetupHeading>
       <SetupBody>
         That person is the{" "}
         <OwnerTerm />{" "}
