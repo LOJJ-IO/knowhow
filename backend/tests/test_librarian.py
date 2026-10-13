@@ -848,3 +848,43 @@ def test_folder_files_carry_a_link_to_open_them(db):
     assert file_link(real) == "https://drive.google.com/open?id=abc123"
     sandbox = FileIndex(file_id="acme-x", org_id=SANDBOX_ORG_ID, file_type="application/vnd.google-apps.document", title="Monday")
     assert file_link(sandbox) == "https://docs.google.com/document/create?title=Monday"
+
+
+# ------------------------------------------- sharing rules applied (2026-10-13)
+
+
+class _ShareDrive:
+    def __init__(self):
+        self.granted = []
+
+    def permissions(self):
+        return self
+
+    def create(self, fileId, body, **_kw):
+        self.granted.append((fileId, body["emailAddress"], body["role"]))
+        return _Exec({"id": "p"})
+
+
+def test_filing_a_file_shares_it_by_the_team_rule(db, drive, monkeypatch):
+    """The cofounder's "sharing rules don't work": a file the librarian filed
+    was never shared with the team. Now the rule runs: the team, minus anyone
+    left out, plus extra people, at the team's access."""
+    from app.sharing import service as sharing
+
+    org, lead, worker, team = _org(db)
+    left_out = _member(db, org, f"quiet@{D}")
+    extra = _member(db, org, f"friend@{D}")
+    db.add(OrgMembership(org_id=org.id, team_id=team.id, user_id=left_out.id, role=OrgRole.MEMBER))
+    team.share_excluded_member_ids = [str(left_out.id)]
+    team.share_extra_member_ids = [str(extra.id)]
+    team.share_role = "commenter"
+    db.commit()
+    shares = _ShareDrive()
+    monkeypatch.setattr(sharing, "get_drive_client_for_user", lambda *a, **k: shares)
+
+    service.scan_member_drive(worker, db)
+    work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
+    service.decide(worker, work.id, "company", False, db)
+
+    assert sorted(shares.granted) == [("work", f"friend@{D}", "commenter"), ("work", f"lead@{D}", "commenter")]
+    assert len(db.get(FileIndex, "work").sharing_state["shared_with_member_ids"]) == 2

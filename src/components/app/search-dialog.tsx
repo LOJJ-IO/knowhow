@@ -140,10 +140,15 @@ export function SearchDialog({
                 (r.owner_email && members.byEmail.get(r.owner_email.toLowerCase())) ||
                 undefined;
               return (
-                <li
-                  key={r.file_id}
-                  className="grid grid-cols-[minmax(0,1fr)_9rem_9rem] items-center gap-4 rounded-[14px] px-3 py-3 hover:bg-[var(--app-muted)] max-[640px]:grid-cols-[minmax(0,1fr)_9rem]"
-                >
+                <li key={r.file_id}>
+                  {/* The whole row opens the file in Google, in a new tab
+                      (user 2026-10-13). */}
+                  <a
+                    href={r.link ?? `https://drive.google.com/open?id=${encodeURIComponent(r.file_id)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="grid grid-cols-[minmax(0,1fr)_9rem_9rem] items-center gap-4 rounded-[14px] px-3 py-3 outline-none hover:bg-[var(--app-muted)] focus-visible:bg-[var(--app-muted)] max-[640px]:grid-cols-[minmax(0,1fr)_9rem]"
+                  >
                   <span className="flex min-w-0 items-center gap-3">
                     <FileIcon mimeType={r.file_type} size={36} />
                     <span className={`${satoshi.className} min-w-0`}>
@@ -171,6 +176,7 @@ export function SearchDialog({
                   <span className="min-w-0">
                     <PersonChip person={owner} />
                   </span>
+                  </a>
                 </li>
               );
             })}

@@ -146,6 +146,8 @@ export type SearchResult = {
   team_id: string | null;
   owner_id: string | null;
   company: boolean;
+  /** The file in Google; results open it in a new tab. */
+  link: string | null;
 };
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {

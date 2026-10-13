@@ -1,7 +1,7 @@
 "use client";
 
 import { Toast } from "@base-ui/react/toast";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { LayoutGrid, List, Plus } from "lucide-react";
 
 import { Button } from "@/components/app/button";
@@ -170,6 +170,11 @@ export function WorkspaceScreen() {
     void refreshLibrarian();
   }, [refreshFolders, refreshLibrarian]);
 
+  const refreshLatest = useRef(refreshLibrarian);
+  useEffect(() => {
+    refreshLatest.current = refreshLibrarian;
+  }, [refreshLibrarian]);
+
   // The librarian looks through your Drive by itself when you open
   // Workspace (ADR-0032), at most every few minutes per tab, and anything it
   // finds arrives as its side pills (user 2026-10-13: no page bar with a
@@ -184,16 +189,13 @@ export function WorkspaceScreen() {
     } catch {
       // No storage: scan anyway.
     }
-    let cancelled = false;
+    // Not cancelled on re-render: `refreshLibrarian` changes identity when
+    // the tasks reload, and a cancelled refresh left Sort showing the list
+    // from before the scan (16 to sort, 1 listed).
     scanDrive(org)
-      .then(() => {
-        if (!cancelled) void refreshLibrarian();
-      })
+      .then(() => void refreshLatest.current())
       .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [org, refreshLibrarian]);
+  }, [org]);
 
   const toSort = review?.total ?? 0;
 

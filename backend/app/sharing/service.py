@@ -43,6 +43,55 @@ def share_role_for(team_id: uuid.UUID | None, db: Session) -> str:
 SHARE_ROLES = ("writer", "commenter", "reader")
 
 
+def apply_sharing_rule(
+    org_id: uuid.UUID,
+    file_id: str,
+    owner_member_id: uuid.UUID,
+    team_ids: list[uuid.UUID],
+    db: Session,
+) -> list[uuid.UUID]:
+    """Share a company file the way its teams' Sharing rules say: each team's
+    recipients (the team minus anyone left out, plus extra people and teams,
+    plus Top Leaders unless turned off) at that team's access, through the
+    file owner's Drive. Someone in two teams gets the first team's access.
+
+    Every path that makes a company file calls this: New, the librarian
+    filing a file, Add files from your Drive, importing from a personal
+    account (cofounder 2026-10-13: "the sharing rules don't work"; until now
+    only Drive activity detection applied them, so in practice they never
+    ran). Best effort: Google refusing one person doesn't stop the rest, and
+    a Drive that can't be reached shares nothing. Returns who got access."""
+    try:
+        drive = get_drive_client_for_user(owner_member_id, db=db)
+    except Exception:  # noqa: BLE001 — no Drive, nothing to share through
+        return []
+    granted: dict[uuid.UUID, str] = {}
+    for team_id in team_ids:
+        role = share_role_for(team_id, db)
+        for member_id in resolve_auto_share_recipients(org_id, team_id, db):
+            if member_id != owner_member_id and member_id not in granted:
+                granted[member_id] = role
+    shared: list[uuid.UUID] = []
+    for member_id, role in granted.items():
+        recipient = db.get(OrgMember, member_id)
+        if recipient is None or recipient.organization_id != org_id:
+            continue
+        try:
+            _grant_access(drive, file_id, recipient.email, role=role)
+        except Exception:  # noqa: BLE001 — one person failing mustn't stop the rest
+            continue
+        shared.append(member_id)
+    row = db.get(FileIndex, file_id)
+    if row is not None and shared:
+        before = set((row.sharing_state or {}).get("shared_with_member_ids", []))
+        row.sharing_state = {
+            **(row.sharing_state or {}),
+            "shared_with_member_ids": sorted(before | {str(m) for m in shared}),
+        }
+        db.commit()
+    return shared
+
+
 def _auto_own_target(org_id: uuid.UUID, team_id: uuid.UUID | None, db: Session) -> OrgMember | None:
     """The institutional ownership target for a team's files: that team's
     leader if one is assigned and is a domain member, else the org's

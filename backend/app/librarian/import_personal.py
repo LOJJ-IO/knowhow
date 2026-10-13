@@ -231,6 +231,11 @@ def import_with_personal_client(member: OrgMember, personal, file_ids: list[str]
         result.imported.append(copy_id)
 
     db.commit()
+    if team_id is not None:
+        from app.sharing.service import apply_sharing_rule
+
+        for copy_id in result.imported:
+            apply_sharing_rule(member.organization_id, copy_id, member.id, [team_id], db)
     record_audit_entry(
         org_id=member.organization_id,
         actor_user_id=member.id,

@@ -127,6 +127,9 @@ def create_document(
         details={"kind": kind, "team_ids": [str(t) for t in teams]},
         db=db,
     )
+    from app.sharing.service import apply_sharing_rule
+
+    apply_sharing_rule(member.organization_id, file_id, member.id, teams, db)
     return {
         "id": file_id,
         "name": created.get("name", name),

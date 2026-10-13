@@ -2,12 +2,13 @@
 
 import { Menu } from "@base-ui/react/menu";
 import { Toast } from "@base-ui/react/toast";
-import { Check } from "lucide-react";
+import { Check, Upload } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { FormDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
+import { NAV_STROKE } from "@/components/app/icon";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { satoshi } from "@/components/brand/fonts";
@@ -58,6 +59,10 @@ const ITEMS: { kind: Kind; label: string; src: string; untitled: string }[] = [
     untitled: "Untitled form",
   },
 ];
+
+/** Where Upload goes: your Drive, which has Google's own upload (New → File
+ *  upload, or drop files on the page). */
+const DRIVE_UPLOAD_URL = "https://drive.google.com/drive/my-drive";
 
 /** Google's own "make a blank file" shortcuts, used as a failsafe (user
  *  2026-09-29): if the backend can't create the org-owned, folder-filed file,
@@ -196,6 +201,21 @@ export function NewMenu({ children }: { children: ReactNode }) {
                 </Menu.Item>
               ))}
             </Menu.Group>
+            <Menu.Separator className="mx-3 my-1 h-px bg-[var(--app-border)]" />
+            {/* Upload hands over to Google Drive, where uploading lives (user
+                2026-10-13: "should redirect you to where you can upload");
+                the librarian picks the file up from there. */}
+            <Menu.Item
+              onClick={() => window.open(DRIVE_UPLOAD_URL, "_blank", "noopener")}
+              className="group mx-1 mb-1 flex w-[calc(100%-0.5rem)] cursor-pointer items-center gap-3 rounded-[12px] px-3 py-2.5 outline-none select-none data-[highlighted]:bg-[var(--app-muted)]"
+            >
+              <Upload
+                size={20}
+                strokeWidth={NAV_STROKE}
+                className="shrink-0 text-[#1c1917] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-data-[highlighted]:-translate-y-0.5 motion-reduce:transition-none"
+              />
+              <span className="text-[0.9375rem] font-medium text-[#1c1917]">Upload</span>
+            </Menu.Item>
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

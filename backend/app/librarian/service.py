@@ -472,6 +472,10 @@ def confirm(actor: OrgMember, candidate_id: uuid.UUID, db: Session, own: bool = 
         details={"proposer_id": str(proposer_id), "team_id": str(team_id) if team_id else None},
         db=db,
     )
+    if team_id is not None:
+        from app.sharing.service import apply_sharing_rule
+
+        apply_sharing_rule(org_id, file_id, proposer_id, [team_id], db)
     return {"file_id": file_id, "folder_id": str(folder_id) if folder_id else None}
 
 
@@ -760,6 +764,7 @@ def add_drive_file_to_folder(actor: OrgMember, folder_id: uuid.UUID, file_id: st
     row = db.get(FileIndex, file_id)
     if row is not None and row.org_id != actor.organization_id:
         raise LookupError("file not found")
+    newly_indexed = row is None
     if row is None:
         drive = get_drive_client_for_user(actor.id, db)
         live = drive.files().get(fileId=file_id, fields=CONFIRM_FIELDS).execute()
@@ -804,6 +809,10 @@ def add_drive_file_to_folder(actor: OrgMember, folder_id: uuid.UUID, file_id: st
         if team_folder is not None:
             _add_to_folder(team_folder, file_id, actor.id, db)
     db.commit()
+    if newly_indexed and row.team_id is not None:
+        from app.sharing.service import apply_sharing_rule
+
+        apply_sharing_rule(actor.organization_id, file_id, actor.id, [row.team_id], db)
     return {"file_id": file_id}
 
 

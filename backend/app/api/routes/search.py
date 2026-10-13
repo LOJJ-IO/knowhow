@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_approved_member, get_db
 from app.models.file_index import FileIndex
 from app.models.org_member import OrgMember
+from app.librarian.service import file_link
 from app.search.deepsearch import search
 
 router = APIRouter(tags=["search"])
@@ -40,6 +41,11 @@ def deepsearch(
                 "team_id": str(indexed[r.file_id].team_id) if r.file_id in indexed and indexed[r.file_id].team_id else None,
                 "owner_id": str(indexed[r.file_id].owner_user_id) if r.file_id in indexed and indexed[r.file_id].owner_user_id else None,
                 "company": r.file_id in indexed,
+                # Where clicking the result goes (user 2026-10-13), opened in
+                # a new tab: the file in Google.
+                "link": file_link(indexed[r.file_id])
+                if r.file_id in indexed
+                else f"https://drive.google.com/open?id={r.file_id}",
             }
             for r in results
         ],
