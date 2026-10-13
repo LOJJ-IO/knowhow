@@ -9,6 +9,10 @@ related: ["[[FEAT-legal-pages]]", "[[FEAT-landing-book-a-demo]]", "[[FEAT-landin
 
 # Current Context
 
+**Empty folder: no "No files yet." line (Ronald, 2026-10-13):** inside a folder, the grey line under the name no longer says "No files yet." when it's empty; the "This folder is empty" message below already says it. A team folder still says "This team's folder.", and a folder with files still shows its count (`workspace-screen.tsx`). Lint passes. Not checked in the browser.
+
+**"Demo changes aren't in the real app" (Ronald, 2026-10-13):** checked: production was current (live bundle had Rename team / Remove team / Make Team Lead and Tolu's `c09e845`; live API 96 routes). `/demo` is the same app signed in as Acme's owner with seeded data, so changes gated on owner / Super Admin or on librarian data don't show in a smaller real org. Ronald hasn't said yet which change he wasn't seeing.
+
 ## Cofounder feedback pass (2026-10-13, before the Front Row Ventures call 10/14 3pm)
 Cofounder's notes, triaged into tiers; tier 1 + linked-account import done locally, **uncommitted, not deployed**:
 - **Feature slides hidden:** `SHOW_FEATURE_DECK = false` in `landing-hero.tsx`. Get Started now flows straight into Log In / Book a Demo (new `steps={false}` on `GetStartedCta`: the pill narrows into the extras, no ← / → circles), logo and subhead stay put, decks aren't rendered. Mobile (no header buttons) goes straight to Log In. Flip the flag to bring the deck back. Checked in Chrome.

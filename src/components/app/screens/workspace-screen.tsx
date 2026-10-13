@@ -1246,11 +1246,15 @@ function FolderView({
           <h2 className={`${sohne.className} text-[1.375rem] leading-[1.25] tracking-tight text-[#1c1917]`}>
             {folder?.name ?? ""}
           </h2>
-          <p className={`${satoshi.className} mt-1 text-[0.875rem] text-[var(--app-dim)]`}>
-            {folder
-              ? `${folder.teamId ? "This team's folder. " : ""}${folder.files.length ? plural(folder.files.length, "file", "files") : "No files yet"}.`
-              : ""}
-          </p>
+          {/* No count line on an empty folder: the empty state below already
+              says so (Ronald, 2026-10-13). */}
+          {folder && (folder.teamId || folder.files.length) ? (
+            <p className={`${satoshi.className} mt-1 text-[0.875rem] text-[var(--app-dim)]`}>
+              {[folder.teamId ? "This team's folder." : "", folder.files.length ? `${plural(folder.files.length, "file", "files")}.` : ""]
+                .filter(Boolean)
+                .join(" ")}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <div role="group" aria-label="View" className="flex items-center gap-1">
