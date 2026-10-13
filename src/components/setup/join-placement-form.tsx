@@ -78,7 +78,13 @@ export function JoinPlacementForm({
     );
   }
 
-  async function submit(finalClaimOwner: boolean) {
+  // The lead answers come in as an argument: the last "Yes, I'm the lead"
+  // submits on the same click, before its state update has landed, so
+  // reading `leadClaims` here sent it as false (Ronald, 2026-10-10).
+  async function submit(
+    finalClaimOwner: boolean,
+    claims: Record<string, boolean> = leadClaims,
+  ) {
     if (busy) return;
     setBusy(true);
     setError("");
@@ -91,7 +97,7 @@ export function JoinPlacementForm({
           body: JSON.stringify({
             teams: selected.map((team_id) => ({
               team_id,
-              claim_lead: Boolean(leadClaims[team_id]),
+              claim_lead: Boolean(claims[team_id]),
             })),
             claim_owner: finalClaimOwner,
           }),
@@ -120,7 +126,8 @@ export function JoinPlacementForm({
 
   function afterLead(claim: boolean) {
     if (!currentLeadTeam) return;
-    setLeadClaims((c) => ({ ...c, [currentLeadTeam.id]: claim }));
+    const claims = { ...leadClaims, [currentLeadTeam.id]: claim };
+    setLeadClaims(claims);
     if (leadIndex + 1 < leadQuestions.length) {
       setLeadIndex((i) => i + 1);
       return;
@@ -129,7 +136,7 @@ export function JoinPlacementForm({
       setPhase("owner");
       return;
     }
-    void submit(false);
+    void submit(false, claims);
   }
 
   if (phase === "leads" && currentLeadTeam)
