@@ -268,24 +268,11 @@ def decide(member: OrgMember, candidate_id: uuid.UUID, label: str, confirmed_aga
     c.proposed_at = datetime.now(timezone.utc)
     db.commit()
 
-    # Owner and verified Super Admin may confirm their own proposals (rule 6's
-    # owner exception), as may the only person in the organization.
-    if _may_confirm_own(member, db):
-        confirm(member, c.id, db)
-        return {"result": "confirmed"}
-    return {"result": "proposed"}
-
-
-def _may_confirm_own(member: OrgMember, db: Session) -> bool:
-    org_id = member.organization_id
-    if is_owner(org_id, member, db) or is_verified_super_admin(org_id, member):
-        return True
-    others = db.execute(
-        select(func.count()).select_from(OrgMember).where(
-            OrgMember.organization_id == org_id, OrgMember.id != member.id
-        )
-    ).scalar_one()
-    return others == 0
+    # Anyone's "Company" files it straight away: no lead's approval (user
+    # 2026-10-13: "asking your lead if you can work is not necessary").
+    # Proposals left from before this still wait in the leads' Review.
+    confirm(member, c.id, db, own=True)
+    return {"result": "confirmed"}
 
 
 def _member_team_ids(org_id: uuid.UUID, member_id: uuid.UUID, db: Session) -> list[uuid.UUID]:
@@ -422,13 +409,14 @@ def proposals_for(actor: OrgMember, db: Session) -> dict:
     return {"total": total, "items": items}
 
 
-def confirm(actor: OrgMember, candidate_id: uuid.UUID, db: Session) -> dict:
+def confirm(actor: OrgMember, candidate_id: uuid.UUID, db: Session, own: bool = False) -> dict:
     """A company file, confirmed: it enters `FileIndex` (now allowed to keep
-    its title) and goes into the proposer's team folder."""
+    its title) and goes into the proposer's team folder. `own`: the file's
+    owner filing their own answer, which needs nobody's approval."""
     c = db.get(LibrarianCandidate, candidate_id)
     if c is None or c.org_id != actor.organization_id or c.status != LibrarianStatus.PROPOSED:
         raise LookupError("no proposal to confirm")
-    if not _can_confirm_for(actor, c.member_id, db):
+    if not (own and c.member_id == actor.id) and not _can_confirm_for(actor, c.member_id, db):
         raise PermissionError("only a lead of the proposer's team, the owner, or a verified Super Admin can confirm")
 
     org_id, file_id, proposer_id = c.org_id, c.file_id, c.member_id
@@ -759,6 +747,64 @@ def set_file_in_folder(actor: OrgMember, folder_id: uuid.UUID, file_id: str, pre
     else:
         db.execute(delete(FolderFile).where(FolderFile.folder_id == folder.id, FolderFile.file_id == file_id))
     db.commit()
+
+
+def add_drive_file_to_folder(actor: OrgMember, folder_id: uuid.UUID, file_id: str, db: Session) -> dict:
+    """Add one of your own Drive files to a folder, straight from Add files
+    (cofounder 2026-10-13: Add file only listed files already filed, so a file
+    in their Drive could only get in through Sort). It becomes a company file
+    owned by you, in that folder and its team's, with no approval."""
+    folder = db.get(KnohowFolder, folder_id)
+    if folder is None or folder.org_id != actor.organization_id:
+        raise LookupError("folder not found")
+    row = db.get(FileIndex, file_id)
+    if row is not None and row.org_id != actor.organization_id:
+        raise LookupError("file not found")
+    if row is None:
+        drive = get_drive_client_for_user(actor.id, db)
+        live = drive.files().get(fileId=file_id, fields=CONFIRM_FIELDS).execute()
+        now = datetime.now(timezone.utc)
+
+        def _ts(value: str | None) -> datetime:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")) if value else now
+
+        row = FileIndex(
+            file_id=file_id,
+            org_id=actor.organization_id,
+            owner_user_id=actor.id,
+            team_id=folder.team_id or _route_team(actor.organization_id, actor.id, live, db),
+            file_type=live.get("mimeType", ""),
+            title=live.get("name", "Untitled"),
+            created_at=_ts(live.get("createdTime")),
+            modified_at=_ts(live.get("modifiedTime")),
+            sharing_state={},
+            last_synced_at=now,
+        )
+        db.add(row)
+        # Answered: it no longer waits in Sort or anyone's Review.
+        db.execute(
+            delete(LibrarianCandidate).where(
+                LibrarianCandidate.org_id == actor.organization_id, LibrarianCandidate.file_id == file_id
+            )
+        )
+        db.flush()
+        record_audit_entry(
+            org_id=actor.organization_id,
+            actor_user_id=actor.id,
+            action_type="librarian.added_from_drive",
+            target_resource_id=file_id,
+            details={"folder_id": str(folder.id)},
+            db=db,
+        )
+    elif not _can_see(actor, row, _sees_everything(actor, db), db):
+        raise LookupError("file not found")
+    _add_to_folder(folder, file_id, actor.id, db)
+    if row.team_id is not None and row.team_id != folder.team_id:
+        team_folder = _team_folder(actor.organization_id, row.team_id, db)
+        if team_folder is not None:
+            _add_to_folder(team_folder, file_id, actor.id, db)
+    db.commit()
+    return {"file_id": file_id}
 
 
 def all_company_files(actor: OrgMember, db: Session) -> list[dict]:

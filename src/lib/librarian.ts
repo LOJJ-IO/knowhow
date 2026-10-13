@@ -231,6 +231,14 @@ export async function setFileInFolder(
   );
 }
 
+/** One of your own Drive files into a folder, as a company file you own,
+ *  no approval (it leaves Sort too). */
+export async function addDriveFileToFolder(org: string, folderId: string, fileId: string) {
+  await call(`${base(org)}/folders/${folderId}/drive-files/${encodeURIComponent(fileId)}`, {
+    method: "PUT",
+  });
+}
+
 /** The topbar's New button: make a blank Google Doc/Sheet/Slide as the org.
  *  Returns the new file's link so the caller can open it. */
 export async function createDocument(

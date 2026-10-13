@@ -78,9 +78,17 @@ export function AppDialog({
   onSubmit?: (event: FormEvent<HTMLFormElement>) => void | Promise<void>;
   children?: ReactNode;
 }) {
+  // A question with no body (most confirms): the header meets the footer's
+  // line, without an empty band between two rules.
+  const hasBody = children != null && children !== false;
   const chrome = (
     <>
-      <header className="shrink-0 border-b border-[var(--app-border)] px-6 py-5 pr-14">
+      <header
+        className={cn(
+          "shrink-0 px-6 py-5 pr-14",
+          hasBody && "border-b border-[var(--app-border)]",
+        )}
+      >
         {/* Title only: no sub-line under it (user 2026-09-27), and 10%
             larger three times over (1.125 → 1.2375 → 1.36125 → 1.4974rem). Indented 5% like the setup
             screens' headings, as is the body; the footer stays put. */}
@@ -90,7 +98,7 @@ export function AppDialog({
           {title}
         </DialogPrimitive.Title>
       </header>
-      <DialogBody kind={kind}>{children}</DialogBody>
+      {hasBody ? <DialogBody kind={kind}>{children}</DialogBody> : null}
       {footer ? (
         <footer className="flex shrink-0 justify-end gap-2 border-t border-[var(--app-border)] px-6 py-4">
           {footer}

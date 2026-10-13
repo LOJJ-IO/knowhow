@@ -184,6 +184,7 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
           key={renameOpens}
           title="Rename team"
           name={renaming.name}
+          icon={(name) => <TeamIcon name={name} size={40} />}
           maxLength={255}
           open={renameOpen}
           swap={swapping}

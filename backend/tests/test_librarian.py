@@ -288,22 +288,22 @@ def test_answer_against_strong_suggestion_asks_again_once(db, drive):
     assert service.decide(worker, work.id, "personal", True, db) == {"result": "personal"}
 
 
-def test_proposal_waits_for_lead_then_lands_in_team_folder(db, drive):
+def _leave_proposed(c, db):
+    """A proposal made before 2026-10-13, still waiting on a lead."""
+    c.status = LibrarianStatus.PROPOSED
+    c.proposed_at = datetime.now(timezone.utc)
+    db.commit()
+
+
+def test_a_members_company_answer_files_it_without_a_lead(db, drive):
+    """No lead's approval (user 2026-10-13): a member's Company answer lands in
+    their team folder straight away, and nothing waits in the lead's Review."""
     org, lead, worker, team = _org(db)
     service.scan_member_drive(worker, db)
     work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
 
-    assert service.decide(worker, work.id, "company", False, db) == {"result": "proposed"}
-    assert db.execute(select(FileIndex)).first() is None  # not company until confirmed
-
-    # The proposer can't confirm their own file.
-    assert service.proposals_for(worker, db)["items"] == []
-    with pytest.raises(PermissionError):
-        service.confirm(worker, work.id, db)
-
-    queue = service.proposals_for(lead, db)
-    assert [i["name"] for i in queue["items"]] == ["Q3 plan"]
-    service.confirm(lead, work.id, db)
+    assert service.decide(worker, work.id, "company", False, db) == {"result": "confirmed"}
+    assert service.proposals_for(lead, db)["items"] == []
 
     row = db.get(FileIndex, "work")
     assert row.title == "Q3 plan" and row.team_id == team.id and row.owner_user_id == worker.id
@@ -334,8 +334,7 @@ def test_confirm_routes_to_the_collaborators_team(db, monkeypatch):
 
     service.scan_member_drive(worker, db)
     cand = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "deal")).scalar_one()
-    assert service.decide(worker, cand.id, "company", False, db) == {"result": "proposed"}
-    service.confirm(lead, cand.id, db)  # Design's lead confirms their member's file
+    assert service.decide(worker, cand.id, "company", False, db) == {"result": "confirmed"}
 
     row = db.get(FileIndex, "deal")
     assert row.team_id == sales.id and row.owner_user_id == worker.id  # routed to Sales, not Design
@@ -360,10 +359,39 @@ def test_someone_outside_the_team_cannot_confirm(db, drive):
     db.commit()
     service.scan_member_drive(worker, db)
     work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
-    service.decide(worker, work.id, "company", False, db)
+    _leave_proposed(work, db)
     assert service.proposals_for(outsider, db)["items"] == []
     with pytest.raises(PermissionError):
         service.confirm(outsider, work.id, db)
+
+
+def test_an_old_proposal_still_reaches_the_lead(db, drive):
+    _o, lead, worker, team = _org(db)
+    service.scan_member_drive(worker, db)
+    work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
+    _leave_proposed(work, db)
+    assert [i["name"] for i in service.proposals_for(lead, db)["items"]] == ["Q3 plan"]
+    service.confirm(lead, work.id, db)
+    assert db.get(FileIndex, "work").team_id == team.id
+
+
+def test_add_a_drive_file_straight_into_a_folder(db, drive):
+    """Add files lists your own Drive too (cofounder 2026-10-13): picking one
+    files it as a company file you own, in that folder, and clears it from
+    Sort."""
+    _o, _lead, worker, team = _org(db)
+    service.scan_member_drive(worker, db)
+    made = service.create_folder(worker, "Launch", db)
+
+    service.add_drive_file_to_folder(worker, uuid.UUID(made["id"]), "work", db)
+
+    row = db.get(FileIndex, "work")
+    assert row.owner_user_id == worker.id and row.team_id == team.id
+    in_launch = set(db.execute(select(FolderFile.file_id).where(FolderFile.folder_id == uuid.UUID(made["id"]))).scalars())
+    assert in_launch == {"work"}
+    team_folder = service._team_folder(team.org_id, team.id, db)
+    assert "work" in set(db.execute(select(FolderFile.file_id).where(FolderFile.folder_id == team_folder.id)).scalars())
+    assert db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).first() is None
 
 
 def test_custom_folders_and_team_folder_rules(db, drive):
@@ -388,7 +416,6 @@ def test_opening_a_folder_picks_up_a_rename_and_says_who_owns_it(db, drive):
     service.scan_member_drive(worker, db)
     work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
     service.decide(worker, work.id, "company", False, db)
-    service.confirm(lead, work.id, db)
     folder = service._team_folder(team.org_id, team.id, db)
 
     drive.files_by_id["work"]["name"] = "Q3 plan v2"
@@ -406,7 +433,6 @@ def _filed(db, lead, worker):
     service.scan_member_drive(worker, db)
     work = db.execute(select(LibrarianCandidate).where(LibrarianCandidate.file_id == "work")).scalar_one()
     service.decide(worker, work.id, "company", False, db)
-    service.confirm(lead, work.id, db)
 
 
 def test_rename_and_trash_go_through_the_owner_and_can_be_undone(db, drive):

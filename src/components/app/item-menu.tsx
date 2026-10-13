@@ -2,7 +2,7 @@
 
 import { Menu } from "@base-ui/react/menu";
 import { FolderInput, FolderMinus, Pencil, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { FormDialog } from "@/components/app/dialog";
 import { NAV_STROKE } from "@/components/app/icon";
@@ -100,7 +100,11 @@ export function RenameDialog({
   swap,
   onClose,
   onRename,
+  icon,
 }: {
+  /** Drawn left of the field from what's typed, so a team's icon visibly
+   *  changes with its name (user 2026-10-13), as in New team. */
+  icon?: (name: string) => ReactNode;
   title: string;
   name: string;
   maxLength: number;
@@ -144,15 +148,27 @@ export function RenameDialog({
     >
       <label className={`${satoshi.className} flex flex-col gap-1.5`}>
         <span className="text-[0.875rem] text-[#1c1917]">Name</span>
-        <input
-          autoFocus
-          type="text"
-          value={value}
-          maxLength={maxLength}
-          onFocus={(e) => e.currentTarget.select()}
-          onChange={(e) => setValue(e.target.value)}
-          className={INPUT_CLASS}
-        />
+        <span className="flex items-center gap-2.5">
+          {icon ? (
+            next ? (
+              icon(next)
+            ) : (
+              <span
+                aria-hidden
+                className="size-10 shrink-0 rounded-full border border-dashed border-[#d9d9de]"
+              />
+            )
+          ) : null}
+          <input
+            autoFocus
+            type="text"
+            value={value}
+            maxLength={maxLength}
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setValue(e.target.value)}
+            className={INPUT_CLASS}
+          />
+        </span>
       </label>
       {error ? <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>{error}</p> : null}
     </FormDialog>

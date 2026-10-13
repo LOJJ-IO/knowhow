@@ -198,6 +198,17 @@ def add_file(
     return {"result": "added"}
 
 
+@router.put("/folders/{folder_id}/drive-files/{file_id}")
+def add_drive_file(
+    org_id: uuid.UUID,
+    folder_id: uuid.UUID,
+    file_id: str,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    return _run(service.add_drive_file_to_folder, member, folder_id, file_id, db)
+
+
 @router.delete("/folders/{folder_id}/files/{file_id}")
 def remove_file(
     org_id: uuid.UUID,
