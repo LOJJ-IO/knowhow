@@ -272,6 +272,7 @@ export function AppEntry({
                   setKind("setup");
                 }
               : signInResult === "personal" ||
+                  signInResult === "choose" ||
                   signInResult === "invite_wrong_account" ||
                   isSignInError(signInResult)
                 ? () => void backToLogIn()

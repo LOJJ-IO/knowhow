@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
+import { cn } from "@/lib/utils";
 import { ErrorTip } from "@/components/brand/tooltip";
 import {
   BACKEND_API_URL,
@@ -32,6 +33,8 @@ export type SignInResult =
   | "admin_verified"
   | "admin_not_verified"
   | "admin_error"
+  /** A new account, asked "What are you setting up?" (2026-10-14). */
+  | "choose"
   | "personal"
   | "invite_wrong_account"
   | "link_linked"
@@ -64,6 +67,7 @@ export function readSignInResult(): SignInResult | null {
   if (adminProof === "verified") return "admin_verified";
   if (adminProof === "not_verified") return "admin_not_verified";
   if (adminProof === "error") return "admin_error";
+  if (params.get("signup") === "choose") return "choose";
   if (params.get("signup") === "personal") return "personal";
   if (params.get("invite") === "wrong_account") return "invite_wrong_account";
   const link = params.get("link");
@@ -100,6 +104,12 @@ export function linkOrganizationAccount() {
   window.location.assign(`${BACKEND_API_URL}/onboarding/link-org-account`);
 }
 
+/** Signed in from this screen: reload the sign-in page, which finds the new
+ *  session and goes on to setup or the app. */
+function continueSignedIn() {
+  window.location.replace(window.location.pathname);
+}
+
 /** Sends the browser back to Google with the account chooser forced open. */
 export function signInWithAnotherAccount() {
   if (!BACKEND_API_URL) return;
@@ -133,6 +143,52 @@ export function SignInResultPanel({
   const [done, setDone] = useState(false);
   /** "No, just me" was chosen: now name the workspace. */
   const [naming, setNaming] = useState(false);
+  /** For "What are you setting up?": the account's Workspace domain (null
+   *  for Gmail) and Knohow's organization for it, if there is one. */
+  const [pending, setPending] = useState<{
+    domain: string | null;
+    existing_organization_name: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (result !== "choose") return;
+    let cancelled = false;
+    backendFetch("/onboarding/pending")
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await backendError(res));
+        return res.json();
+      })
+      .then((body) => {
+        if (!cancelled) setPending(body);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [result]);
+
+  /** "A business or organization" or "A club or group": made (or joined) on
+   *  the backend, then the sign-in screen picks up the new session and
+   *  carries on into setup. */
+  async function choose(kind: "business" | "club") {
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await backendFetch("/onboarding/pending", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind }),
+      });
+      if (!res.ok) throw new Error(await backendError(res));
+      continueSignedIn();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setSubmitting(false);
+    }
+  }
   const [orgName, setOrgName] = useState("");
   const nameRef = useRef<HTMLInputElement>(null);
 
@@ -153,6 +209,9 @@ export function SignInResultPanel({
         throw new Error(await backendError(res));
       }
       setDone(true);
+      // Signed in now: reopen the sign-in screen, which takes it from here
+      // (it used to sit on an empty card).
+      continueSignedIn();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       shakeSetupField(nameRef.current);
@@ -193,6 +252,30 @@ export function SignInResultPanel({
           onClick={b.onClick}
         >
           <ChoiceLabel>{b.label}</ChoiceLabel>
+        </button>
+      ))}
+    </div>
+  );
+  /** A choice with a line under it saying what it means. */
+  const describedChoices = (
+    buttons: { label: string; description: string; onClick: () => void }[],
+  ) => (
+    <div className={`${satoshi.className} mt-8 flex flex-col gap-3`}>
+      {buttons.map((b) => (
+        <button
+          key={b.label}
+          type="button"
+          disabled={submitting}
+          className={cn(
+            SETUP_CHOICE_CLASS,
+            "h-auto min-h-12 flex-col items-start justify-center gap-0.5 px-4 py-3 text-left active:scale-[0.98]",
+          )}
+          onClick={b.onClick}
+        >
+          <span>{b.label}</span>
+          <span className="text-[0.8125rem] leading-[1.35] font-medium text-[#1c1917]/65">
+            {b.description}
+          </span>
         </button>
       ))}
     </div>
@@ -255,6 +338,7 @@ export function SignInResultPanel({
           <SetupAction label="Try again" onClick={startAdminProof} />
         </div>
       );
+    case "choose":
     case "personal":
       // One action per screen: naming the workspace is its own step, reached
       // only after "No".
@@ -291,6 +375,53 @@ export function SignInResultPanel({
             <SetupAction label="Continue" onClick={submitWorkspaceName} />
           </div>
         );
+      if (result === "choose") {
+        // What Knohow needs to know is whether the group has its own email
+        // domain. People know their address, not "Workspace", so the first
+        // answer shows theirs: no student thinks everyone at ualberta.ca is
+        // their club (user-picked wording, 2026-10-14).
+        const domain = pending?.domain ?? null;
+        const business = pending?.existing_organization_name
+          ? {
+              label: `Join ${pending.existing_organization_name}`,
+              description: "Your team is already on Knohow.",
+              onClick: () => void choose("business"),
+            }
+          : domain
+            ? {
+                label: `A business or organization at ${domain}`,
+                description: `Everyone with an @${domain} email is part of it.`,
+                onClick: () => void choose("business"),
+              }
+            : {
+                label: "A business or organization",
+                description: "You\u2019ll sign in with your work email next.",
+                onClick: linkOrganizationAccount,
+              };
+        return (
+          <div>
+            {heading("What are you setting up?")}
+            {body("It decides who your files belong to.")}
+            {pending
+              ? describedChoices([
+                  business,
+                  {
+                    label: "A club or group",
+                    description:
+                      "A student club, volunteer group or team. People join with any email.",
+                    onClick: () => void choose("club"),
+                  },
+                  {
+                    label: "Just me",
+                    description: "Only your own files.",
+                    onClick: () => setNaming(true),
+                  },
+                ])
+              : null}
+            {errorLine}
+          </div>
+        );
+      }
       return (
         <div>
           {heading("This is a personal Google account")}

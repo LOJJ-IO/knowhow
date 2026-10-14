@@ -63,7 +63,12 @@ export function OrgSetupForm({
   startAt?: SetupStep;
   connectInitialPhase?: "check" | "knowWho";
 }) {
-  const [step, setStep] = useState<SetupStep>(() => initialStep(me, startAt));
+  const club = me.organization_kind === "club";
+  const [step, setStep] = useState<SetupStep>(() => {
+    const first = initialStep(me, startAt);
+    // A club has no Workspace to connect (ADR-0034).
+    return club && first === "connectWorkspace" ? "inviteOwner" : first;
+  });
   const [orgName, setOrgName] = useState(me.organization_name);
   const [teams, setTeams] = useState<SetupTeam[]>([]);
   const [chartReady, setChartReady] = useState(!me.needs_org_setup);
@@ -78,7 +83,7 @@ export function OrgSetupForm({
     ownTeam: "teams",
     inviteLink: "ownTeam",
     connectWorkspace: "inviteLink",
-    inviteOwner: "connectWorkspace",
+    inviteOwner: club ? "inviteLink" : "connectWorkspace",
   };
   const previous = PREVIOUS[step];
   const withBack = (screen: ReactNode) => (
@@ -177,8 +182,9 @@ export function OrgSetupForm({
       <InviteLinkStep
         me={me}
         onDone={() => {
-          void recordSetupStep("connectWorkspace");
-          setStep("connectWorkspace");
+          const next = club ? "inviteOwner" : "connectWorkspace";
+          void recordSetupStep(next);
+          setStep(next);
         }}
       />
     );

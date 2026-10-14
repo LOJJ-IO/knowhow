@@ -1,5 +1,7 @@
 "use client";
 
+import { Menu } from "@base-ui/react/menu";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { satoshi } from "@/components/brand/fonts";
@@ -8,6 +10,7 @@ import { AppDialog } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
 import { FileIcon } from "@/components/app/file-meta";
+import { PersonAvatar } from "@/components/identity/person-avatar";
 import { backendError, backendFetch } from "@/lib/backend";
 import { actionLabel, relativeTime } from "@/lib/change-text";
 import {
@@ -38,7 +41,12 @@ export function SettingsDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { chrome, me, setOrganizationName } = useSession();
-  const { refresh } = useUpdates();
+  const { refresh, reloadTasks } = useUpdates();
+  const club = me.organization_kind === "club";
+  /** A club's club account (ADR-0034), saved the moment it's picked. */
+  const [clubAccount, setClubAccount] = useState<string | null>(me.club_account_member_id);
+  const [savingClubAccount, setSavingClubAccount] = useState(false);
+  const canPickClubAccount = me.is_owner || me.is_founding_member;
   const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [name, setName] = useState(chrome.name);
   const [saving, setSaving] = useState(false);
@@ -163,6 +171,25 @@ export function SettingsDialog({
     }
   }
 
+  async function pickClubAccount(memberId: string | null) {
+    setSavingClubAccount(true);
+    setError("");
+    try {
+      const res = await backendFetch(`/organizations/${chrome.organizationId}/club-account`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId }),
+      });
+      if (!res.ok) throw new Error(await backendError(res));
+      setClubAccount(memberId);
+      reloadTasks();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingClubAccount(false);
+    }
+  }
+
   const teamName = (teamId: string) =>
     overview?.teams.find((t) => t.id === teamId)?.name ?? "a team";
 
@@ -222,6 +249,18 @@ export function SettingsDialog({
             className="t-input t-demo-input h-10 w-full min-w-0 rounded-[var(--login-button-radius,10px)] border bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none read-only:text-[var(--app-dim)]"
           />
         </section>
+
+        {club ? (
+          <section className="flex flex-col gap-2">
+            <SettingsHeading>Club account</SettingsHeading>
+            <ClubAccountMenu
+              members={overview?.members ?? []}
+              value={clubAccount}
+              disabled={!canPickClubAccount || savingClubAccount}
+              onChange={(id) => void pickClubAccount(id)}
+            />
+          </section>
+        ) : null}
 
         {requests.length > 0 ? (
           <section className="flex flex-col gap-2">
@@ -331,6 +370,62 @@ export function SettingsDialog({
 }
 
 /** Manage teams' "Join Link" heading: bigger and bolder than the rows. */
+/** Who the club account is: a club member, or nobody (members keep their
+ *  own files). Same dropdown look as Manage teams' link lifetime. */
+function ClubAccountMenu({
+  members,
+  value,
+  disabled,
+  onChange,
+}: {
+  members: OrgOverview["members"];
+  value: string | null;
+  disabled: boolean;
+  onChange: (memberId: string | null) => void;
+}) {
+  const current = members.find((m) => m.id === value);
+  const item =
+    "mx-1 flex min-h-10 cursor-pointer items-center gap-3 rounded-[12px] px-3 py-1.5 text-[0.9375rem] outline-none select-none data-[highlighted]:bg-[var(--app-muted)]";
+  return (
+    <Menu.Root>
+      <Menu.Trigger
+        disabled={disabled}
+        className={`${satoshi.className} flex h-10 w-full items-center gap-2.5 rounded-[var(--login-button-radius,10px)] border border-[#d9d9de] bg-white px-3 text-left text-[0.9375rem] text-[#1c1917] outline-none focus-visible:ring-2 focus-visible:ring-[#1c1917]/15 disabled:cursor-default disabled:text-[var(--app-dim)] data-[popup-open]:border-[#1c1917]`}
+      >
+        {current ? (
+          <PersonAvatar identity={current.email} label={current.displayName ?? current.email} size={22} />
+        ) : null}
+        <span className="min-w-0 flex-1 truncate">
+          {current ? current.email : "None yet. Members keep their own files."}
+        </span>
+        <ChevronDown aria-hidden className="size-4 shrink-0 text-[var(--app-dim)]" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner align="start" sideOffset={6} className="isolate z-[550]">
+          <Menu.Popup
+            className={`${satoshi.className} app-modal max-h-[18rem] min-w-[var(--anchor-width)] overflow-y-auto rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none`}
+          >
+            {members.map((m) => (
+              <Menu.Item key={m.id} onClick={() => onChange(m.id)} className={item}>
+                <PersonAvatar identity={m.email} label={m.displayName ?? m.email} size={22} />
+                <span className="min-w-0">
+                  <span className="block truncate text-[#1c1917]">{m.displayName ?? m.email}</span>
+                  <span className="block truncate text-[0.8125rem] text-[var(--app-dim)]">{m.email}</span>
+                </span>
+              </Menu.Item>
+            ))}
+            {value ? (
+              <Menu.Item onClick={() => onChange(null)} className={`${item} text-[#44403c]`}>
+                None: members keep their own files
+              </Menu.Item>
+            ) : null}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
+  );
+}
+
 function SettingsHeading({ children }: { children: React.ReactNode }) {
   return (
     <h3 className="m-0 text-[1.0625rem] leading-[1.3] font-bold tracking-tight text-[#1c1917]">

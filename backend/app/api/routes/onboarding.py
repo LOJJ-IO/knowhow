@@ -9,6 +9,7 @@ from app.api.deps import get_current_member, get_db, require_same_org, require_s
 from app.api.routes.auth import (  # reuse: same cookie contract as login
     PENDING_PERSONAL_SIGNUP_COOKIE,
     google_declined_redirect,
+    remember_on_this_device,
     set_session_cookies,
     signup_redirect,
 )
@@ -31,10 +32,13 @@ from app.onboarding.service import (
     org_overview,
     reassign_owner,
     set_auto_accept_workspace_members,
+    set_club_account,
     complete_signup,
     complete_join_placement,
     TeamPlacementChoice,
     create_domainless_org,
+    create_from_pending,
+    pending_signup_view,
     create_org_chart,
     invite_to_org,
     invite_url,
@@ -58,6 +62,7 @@ def signup(
     invite: str | None = None,
     email: str | None = None,
     join: str | None = None,
+    club: bool = False,
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
     result = start_signup(
@@ -66,6 +71,7 @@ def signup(
         db=db,
         email_hint=email,
         join_token=join,
+        club=club,
     )
     return RedirectResponse(result.authorization_url, status_code=status.HTTP_302_FOUND)
 
@@ -108,6 +114,26 @@ class JoinLinkRequest(BaseModel):
     24h / 7d / 30d / forever."""
 
     lifetime: str
+
+
+class ClubAccountBody(BaseModel):
+    member_id: uuid.UUID | None = None
+
+
+@router.put("/organizations/{org_id}/club-account")
+def club_account_route(
+    org_id: uuid.UUID,
+    body: ClubAccountBody,
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org_any_standing),
+) -> dict:
+    try:
+        org = set_club_account(org_id, member, body.member_id, db)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    return {"club_account_member_id": str(org.club_account_member_id) if org.club_account_member_id else None}
 
 
 @router.get("/join-links/{token}")
@@ -219,6 +245,7 @@ def personal_org(
     payload: PersonalOrgRequest | None = None,
     db: Session = Depends(get_db),
     knohow_pending_signup: str | None = Cookie(default=None),
+    knohow_device: str | None = Cookie(default=None),
 ) -> dict:
     """The "No / just me" answer after a personal-account sign-in: creates
     the person's domainless org, under the name they chose, and starts their
@@ -231,6 +258,49 @@ def personal_org(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
     set_session_cookies(response, result.access_token, result.refresh_token)
+    remember_on_this_device(response, knohow_device, result.member, db)
+    response.delete_cookie(PENDING_PERSONAL_SIGNUP_COOKIE)
+    return {"organization_id": str(result.member.organization_id), "member_id": str(result.member.id)}
+
+
+@router.get("/onboarding/pending")
+def pending_signup(
+    db: Session = Depends(get_db),
+    knohow_pending_signup: str | None = Cookie(default=None),
+) -> dict:
+    """For "What are you setting up?": the account's domain, and the name of
+    Knohow's organization for it if there is one."""
+    if knohow_pending_signup is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no pending signup — sign in with Google again")
+    try:
+        return pending_signup_view(knohow_pending_signup, db)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+
+
+class PendingChoice(BaseModel):
+    # "business" or "club"; "Just me" goes through /onboarding/personal-org.
+    kind: str
+
+
+@router.post("/onboarding/pending")
+def pending_signup_choice(
+    body: PendingChoice,
+    response: Response,
+    db: Session = Depends(get_db),
+    knohow_pending_signup: str | None = Cookie(default=None),
+    knohow_device: str | None = Cookie(default=None),
+) -> dict:
+    """The answer to "What are you setting up?": creates or joins what they
+    picked and starts their session."""
+    if knohow_pending_signup is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no pending signup — sign in with Google again")
+    try:
+        result = create_from_pending(knohow_pending_signup, body.kind, db)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    set_session_cookies(response, result.access_token, result.refresh_token)
+    remember_on_this_device(response, knohow_device, result.member, db)
     response.delete_cookie(PENDING_PERSONAL_SIGNUP_COOKIE)
     return {"organization_id": str(result.member.organization_id), "member_id": str(result.member.id)}
 

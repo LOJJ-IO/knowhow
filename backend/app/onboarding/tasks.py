@@ -8,6 +8,7 @@ Kinds, in the order they're returned:
   no_owner        nobody sits at the top and nobody has claimed it
   no_super_admin  nobody has been confirmed by Google as a Super Admin
   company_drive   the company-wide Drive connection isn't approved
+  club_account    a club (ADR-0034) hasn't chosen its club account yet
   own_drive       the caller's own Drive isn't reachable
   linked_drive    a personal account linked to the caller (ADR-0025) whose
                   Drive isn't connected; one per address, only to the caller
@@ -91,16 +92,26 @@ def pending_tasks(org_id: uuid.UUID, member: OrgMember, db: Session) -> list[dic
         if chart.owner_member_id is None and claimant_id is None and (founder or super_admin):
             tasks.append({"kind": "no_owner", "id": str(chart.id)})
 
+    club = org is not None and org.is_club
+    if club and org.club_account_member_id is None and (founder or owner):
+        # Clubs have no Workspace admin and no company Drive connection
+        # (ADR-0034); what they can set up instead is the club account.
+        tasks.append({"kind": "club_account", "id": str(org_id)})
+
     any_super_admin = db.execute(
         select(OrgMember.id).where(
             OrgMember.organization_id == org_id, OrgMember.super_admin_verified_at.is_not(None)
         ).limit(1)
     ).first()
-    if any_super_admin is None and (founder or owner):
+    if any_super_admin is None and (founder or owner) and not club:
         tasks.append({"kind": "no_super_admin", "id": str(org_id)})
 
     grant = org.delegation_grant if org else None
-    if (grant is None or grant.status != DelegationStatus.APPROVED) and (founder or owner or super_admin):
+    if (
+        not club
+        and (grant is None or grant.status != DelegationStatus.APPROVED)
+        and (founder or owner or super_admin)
+    ):
         tasks.append({"kind": "company_drive", "id": str(org_id)})
 
     if org is not None and not _drive_connected(member, org):

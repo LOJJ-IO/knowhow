@@ -121,6 +121,44 @@ def classify_workspace(file: dict, org_domain: str) -> Verdict | None:
     return Verdict(LibrarianSuggestion.COMPANY, company)
 
 
+def classify_club(file: dict, member_emails: set[str]) -> Verdict | None:
+    """A club member's Drive (ADR-0034) mixes club work with everything else
+    in their life (coursework, on a shared @ualberta.ca domain), so there's
+    no domain to go by and no "everything is the club's". Only a file with
+    club evidence is suggested: shared with, or last edited by, another club
+    member. Everything else is left alone (None); members can still add any
+    file themselves."""
+    if _skipped(file):
+        return None
+    company: dict[str, int] = {}
+    members = 0
+    for perm in file.get("permissions") or []:
+        if perm.get("role") == "owner":
+            continue
+        if perm.get("type") in ("user", "group") and (perm.get("emailAddress") or "").lower() in member_emails:
+            members += 1
+    if members:
+        company["coworkers_shared"] = members
+    editor = file.get("lastModifyingUser") or {}
+    if not editor.get("me") and (editor.get("emailAddress") or "").lower() in member_emails:
+        company["edited_by_coworker"] = 1
+    return Verdict(LibrarianSuggestion.COMPANY, company) if company else None
+
+
+def member_collaborator_emails(file: dict, member_emails: set[str]) -> list[str]:
+    """`org_collaborator_emails` for a club: the club's members a file is
+    shared with or last edited by, matched by address, not by domain."""
+    emails = [
+        (perm.get("emailAddress") or "").lower()
+        for perm in file.get("permissions") or []
+        if perm.get("role") != "owner" and perm.get("type") in ("user", "group")
+    ]
+    editor = file.get("lastModifyingUser") or {}
+    if not editor.get("me"):
+        emails.append((editor.get("emailAddress") or "").lower())
+    return [e for e in emails if e and e in member_emails]
+
+
 def org_collaborator_emails(file: dict, org_domain: str) -> list[str]:
     """The org-domain people a file is shared with or was last edited by, for
     routing a confirmed file to the team most of its collaborators are on

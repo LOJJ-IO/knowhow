@@ -10,7 +10,7 @@ related: ["[[0006-observed-domain-tenant-identity]]", "[[0021-founder-not-owner-
 # ADR-0034: Club orgs: invite-only, no domain; members own their files, a club account can own them
 
 ## Status
-`active`. Decided by the user 2026-10-13 ("a mixture of A and B"). Not built yet.
+`active`. Decided by the user 2026-10-13 ("a mixture of A and B"). **Built 2026-10-14** (local, not deployed): see "Implementation" below.
 
 ## Context
 University clubs (UAlberta first; a likely ICP) don't have their own Google Workspace domain. Two of Knohow's rules break for them:
@@ -46,6 +46,18 @@ A new kind of organization, the **club org**:
 - Setup flow for clubs skips the Workspace / Super Admin / delegation steps and adds "Connect your club account" (optional).
 - Features needing the Admin console degrade for clubs: the org-wide activity feed (Reports API) isn't available; detection relies on each member's Drive.
 - Auto-Own and offboarding gain a club-account target and per-pair transfer rules above.
+
+## Implementation (2026-10-14)
+- Migration `0025_club_orgs`: `organizations.kind` ("company" | "club"), `organizations.club_account_member_id`.
+- **One account, many orgs:** `members_for_email` (`auth/login.py`, newest first) replaces every org-agnostic `scalar_one_or_none` email lookup (login, signup, identity linking, domainless orgs). Signing in remembers *all* of the account's orgs on the device, so the picker lists each club. Company join links still refuse an account that's already elsewhere.
+- **Start:** "Starting a club or student group?" on the Log In card and the account picker → `/onboarding/signup?club=true` → state `club` → `create_club_org` (named "New club", no domain, founder approved). Setup asks "What's your club called?" and skips the Google Workspace step.
+- **Join:** a club's link takes any Google account (Gmail too) and works for people already in other orgs (`_join_club`, approved on arrival).
+- **Tasks:** clubs get no Super Admin / company Drive tasks; founder / owner get `club_account` → Settings' **Club account** dropdown (`PUT /organizations/{org}/club-account`).
+- **Ownership:** `_auto_own_target` is the club account for clubs. `_eligibility(..., club=True)`: same-domain Workspace pairs, and Gmail → Gmail via `hand_over_personal_ownership` (pendingOwner, accepted as the new owner); otherwise skipped → `UnresolvedOwnership` + the club account gets edit access. Filing a club file (`apply_sharing_rule`) auto-owns to the club account unless the team's "Ownership moves automatically" is off.
+- **Librarian:** `classify_club` only suggests files shared with / last edited by another club member (coursework is never suggested); team routing matches club members' addresses.
+- **"What are you setting up?" (user, 2026-10-14; replaces the "Starting a club?" link and the "This is a personal Google account" screen):** every brand-new account that isn't joining by link or invited is asked after Google, before anything is created (`complete_signup` returns the pending token for Workspace accounts too; `?signup=choose`). User-picked, domain-aware wording: heading "What are you setting up?", sub-line "It decides who your files belong to.", then **A business or organization at {domain}** ("Everyone with an @{domain} email is part of it.") — or **Join {Org}** ("Your team is already on Knohow.") when that domain's org exists, or for Gmail **A business or organization** ("You'll sign in with your work email next.", → link work account) · **A club or group** ("A student club, volunteer group or team. People join with any email.") · **Just me** ("Only your own files."). Backend: `GET/POST /onboarding/pending` (`pending_signup_view`, `create_from_pending`), pending token carries `hd`; "Just me" keeps a Workspace account's auth type.
+- Tests: `tests/test_club_orgs.py` (12).
+- **Known limits:** a person in two clubs connects their Drive once per club (consent is per membership). ~~A `@ualberta.ca` student who signs in through plain Log In still creates a "ualberta.ca" company org~~: solved by asking (above); only someone who picks "A business or organization at ualberta.ca" does. Google verification of the `drive` scope is still the gate for real numbers of club members.
 
 ## Related
 [[0006-observed-domain-tenant-identity]] (amended: club orgs are exempt) · [[0021-founder-not-owner-leads-self-claim]] · [[0024-own-drive-consent-for-work-accounts]] · [[0025-linked-personal-drive-visible-to-owner]] · [[0032-librarian-files-on-its-own-and-reports]]

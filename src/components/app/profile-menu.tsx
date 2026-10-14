@@ -18,6 +18,7 @@ import { MODAL_SWAP_MS } from "@/components/app/dialog";
 import { useSession } from "@/components/app/session";
 import { ManageAccountsDialog } from "@/components/app/manage-accounts-dialog";
 import { SettingsDialog } from "@/components/app/settings-dialog";
+import { OPEN_SETTINGS_EVENT } from "@/lib/app-events";
 import { satoshi } from "@/components/brand/fonts";
 import { PersonAvatar } from "@/components/identity/person-avatar";
 import {
@@ -45,6 +46,11 @@ export function ProfileMenu({ children }: { children: ReactNode }) {
   const { me, chrome } = useSession();
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setSettingsOpen(true);
+    window.addEventListener(OPEN_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, open);
+  }, []);
   const [leaving, setLeaving] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
   /** The accounts this browser has signed in with, the same list the Log In

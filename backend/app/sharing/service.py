@@ -12,6 +12,7 @@ from app.google.retry import google_api_call
 from app.members.lookup import member_team
 from app.models.file_index import FileIndex
 from app.models.org_chart import OrgChart
+from app.models.organization import Organization
 from app.models.org_member import AuthType, OrgMember
 from app.models.org_membership import OrgRole
 from app.models.pending_reassignment import PendingReassignment, ReassignmentStatus
@@ -19,6 +20,7 @@ from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
 from app.models.unresolved_ownership import UnresolvedOwnership, UnresolvedOwnershipReason
 from app.sharing.visibility import resolve_auto_share_recipients
+from app.models.transfer_batch import TransferItemStatus
 from app.transfers.service import PlannedTransfer, auto_own_single_file, create_transfer_batch
 
 
@@ -89,7 +91,43 @@ def apply_sharing_rule(
             "shared_with_member_ids": sorted(before | {str(m) for m in shared}),
         }
         db.commit()
+    _club_auto_own(org_id, file_id, owner_member_id, team_ids, db)
     return shared
+
+
+def _club_auto_own(
+    org_id: uuid.UUID, file_id: str, owner_member_id: uuid.UUID, team_ids: list[uuid.UUID], db: Session
+) -> None:
+    """A club with a club account (ADR-0034, option B): a newly filed file
+    moves to it where Google allows, unless the team turned "Ownership moves
+    automatically" off. Where Google won't, it's listed as stuck (the club
+    account was given editor access instead). Best effort."""
+    org = db.get(Organization, org_id)
+    if org is None or not org.is_club or org.club_account_member_id in (None, owner_member_id):
+        return
+    team = db.get(Team, team_ids[0]) if team_ids else None
+    if team is not None and not team.auto_own_enabled:
+        return
+    try:
+        batch = auto_own_single_file(org_id, file_id, owner_member_id, org.club_account_member_id, db)
+    except Exception:  # noqa: BLE001 — filing must not fail over ownership
+        db.rollback()
+        return
+    _share_stuck_with_club_account(batch, org, owner_member_id, db)
+
+
+def _share_stuck_with_club_account(batch, org: Organization, owner_member_id: uuid.UUID, db: Session) -> None:
+    """Google wouldn't move it (across the Workspace / Gmail line): the club
+    account still gets to edit it, and it's listed as stuck."""
+    if not batch.items or batch.items[0].status != TransferItemStatus.SKIPPED_INELIGIBLE:
+        return
+    club_account = db.get(OrgMember, org.club_account_member_id)
+    if club_account is None:
+        return
+    try:
+        _grant_access(get_drive_client_for_user(owner_member_id, db=db), batch.items[0].file_id, club_account.email)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _auto_own_target(org_id: uuid.UUID, team_id: uuid.UUID | None, db: Session) -> OrgMember | None:
@@ -98,7 +136,13 @@ def _auto_own_target(org_id: uuid.UUID, team_id: uuid.UUID | None, db: Session) 
     confirmed owner (OrgChart.owner_member_id) if they are a domain member.
     Returns None if neither is configured/eligible — Auto-Own is then
     skipped for lack of a target, not misfiled as a personal-account
-    platform limitation (see handle_file_created)."""
+    platform limitation (see handle_file_created).
+
+    A club (ADR-0034) has one target: its club account, if it chose one;
+    otherwise its members keep their own files."""
+    org = db.get(Organization, org_id)
+    if org is not None and org.is_club:
+        return db.get(OrgMember, org.club_account_member_id) if org.club_account_member_id else None
     if team_id is not None:
         team = db.get(Team, team_id)
         # The team's own pick first (Sharing's rule editor), then its lead.
@@ -209,10 +253,16 @@ def handle_file_created(
 
     target = _auto_own_target(org_id, team_id, db)
 
-    if creator.auth_type == AuthType.DOMAIN_DELEGATED and target is not None and target.id != creator_user_id:
+    org = db.get(Organization, org_id)
+    club = org is not None and org.is_club
+    # A club moves Gmail and Workspace files alike, by Google's per-pair
+    # rules (ADR-0034); the transfer itself says what it couldn't move.
+    if (creator.auth_type == AuthType.DOMAIN_DELEGATED or club) and target is not None and target.id != creator_user_id:
         team = db.get(Team, team_id) if team_id else None
         if team is not None and team.auto_own_enabled:
             batch = auto_own_single_file(org_id, file_id, creator_user_id, target.id, db)
+            if club:
+                _share_stuck_with_club_account(batch, org, creator_user_id, db)
             result["auto_own"] = {"mode": "immediate", "batch_id": str(batch.id)}
         else:
             batch = create_transfer_batch(

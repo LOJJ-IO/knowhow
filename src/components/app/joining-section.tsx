@@ -230,14 +230,17 @@ export function JoiningSection() {
           </div>
         </div>
       ) : null}
-      <Row label="Let people from your domain in automatically">
-        <Switch
-          checked={checked}
-          disabled={!canEditAutoAccept || savingSwitch}
-          label="Let people from your domain in automatically"
-          onChange={(next) => void toggleAutoAccept(next)}
-        />
-      </Row>
+      {/* A club has no domain (ADR-0034): its link is the only way in. */}
+      {me.organization_kind === "club" ? null : (
+        <Row label="Let people from your domain in automatically">
+          <Switch
+            checked={checked}
+            disabled={!canEditAutoAccept || savingSwitch}
+            label="Let people from your domain in automatically"
+            onChange={(next) => void toggleAutoAccept(next)}
+          />
+        </Row>
+      )}
       <Row
         label={
           !linkOn

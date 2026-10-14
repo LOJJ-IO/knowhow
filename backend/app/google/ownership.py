@@ -22,6 +22,35 @@ def transfer_ownership(drive: Resource, file_id: str, new_owner_email: str) -> N
     )
 
 
+def hand_over_personal_ownership(
+    owner_drive: Resource, new_owner_drive: Resource, file_id: str, new_owner_email: str
+) -> None:
+    """Ownership between two personal Google accounts: the owner makes the
+    new owner an editor marked `pendingOwner`, then the new owner accepts
+    (their own client sets role=owner with transferOwnership). Google
+    doesn't allow a one-step transfer between consumer accounts."""
+    perm = google_api_call(
+        owner_drive.permissions()
+        .create(
+            fileId=file_id,
+            body={"role": "writer", "type": "user", "emailAddress": new_owner_email},
+            sendNotificationEmail=False,
+            fields="id",
+        )
+        .execute
+    )
+    google_api_call(
+        owner_drive.permissions()
+        .update(fileId=file_id, permissionId=perm["id"], body={"role": "writer", "pendingOwner": True})
+        .execute
+    )
+    google_api_call(
+        new_owner_drive.permissions()
+        .update(fileId=file_id, permissionId=perm["id"], body={"role": "owner"}, transferOwnership=True)
+        .execute
+    )
+
+
 def revoke_permission_if_not_owner(drive: Resource, file_id: str, member_email: str) -> None:
     """Removes member_email's permission on file_id, unless they are still
     the owner (e.g. an ownership transfer for this file wasn't eligible/

@@ -30,6 +30,7 @@ import { DotLine } from "@/components/app/dot-line";
 import type { ChangeEvent, OverviewMember } from "@/lib/organization";
 import { changeParts, relativeTime } from "@/lib/change-text";
 import { appEntryUrl } from "@/lib/origins";
+import { OPEN_SETTINGS_EVENT } from "@/lib/app-events";
 import {
   decideJoinRequest,
   decideOwnerClaim,
@@ -445,6 +446,20 @@ function TaskRow({
             }
           >
             Connect
+          </Button>,
+        ];
+      case "club_account":
+        // A club's general / admin account (ADR-0034): Settings has the
+        // picker, opened through the profile menu that owns it.
+        return [
+          "Choose your club account.",
+          <Button
+            key="c"
+            size="sm"
+            variant="outline"
+            onClick={() => window.dispatchEvent(new Event(OPEN_SETTINGS_EVENT))}
+          >
+            Choose
           </Button>,
         ];
       case "linked_drive":

@@ -16,6 +16,7 @@ from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
 from app.models.organization import Organization
 from app.onboarding import service
+from app.onboarding.service import SignupResult
 from app.onboarding.service import (
     SIGNUP_STATE_PURPOSE,
     approve_member,
@@ -53,7 +54,15 @@ def _google(monkeypatch, email: str, hd: str | None = None, name: str = "Test Pe
 
 
 def _signup(db):
-    return complete_signup("code", build_state_token("verifier", purpose=SIGNUP_STATE_PURPOSE), db)
+    """A sign-up that answers "What are you setting up?" with a business or
+    organization when it's a Workspace account (2026-10-14), so these tests
+    keep covering the business flow. A Gmail account still comes back
+    pending."""
+    result = complete_signup("code", build_state_token("verifier", purpose=SIGNUP_STATE_PURPOSE), db)
+    token = result.pending_personal_token
+    if result.login is None and token and service.decode_pending_personal_signup_token(token).get("hd"):
+        return SignupResult(login=service.create_from_pending(token, "business", db))
+    return result
 
 
 def _org_count(db) -> int:
@@ -187,7 +196,7 @@ def test_personal_signup_round_trip_over_http(db, monkeypatch):
 
     callback = client.get("/auth/callback", params={"code": "c", "state": state})
     assert callback.status_code == 302
-    assert urlparse(callback.headers["location"]).query == "signup=personal"
+    assert urlparse(callback.headers["location"]).query == "signup=choose"
     assert "knohow_pending_signup" in callback.cookies
     assert "knohow_access_token" not in callback.cookies
 

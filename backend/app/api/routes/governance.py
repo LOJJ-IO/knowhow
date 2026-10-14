@@ -21,6 +21,7 @@ from app.google.drive_client import get_drive_client_for_user
 from app.models.audit_log import AuditLogEntry
 from app.models.file_index import FileIndex
 from app.models.org_chart import OrgChart
+from app.models.organization import Organization
 from app.models.org_member import AuthType, OrgMember
 from app.models.org_membership import OrgMembership, OrgRole
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
@@ -370,6 +371,9 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
     )
     manages = _manages_org(member, db)
     led = _led_team_ids(member, db)
+    org = db.get(Organization, org_id)
+    is_club = org is not None and org.is_club
+    club_account = org.club_account_member_id if is_club else None
 
     pending = db.execute(
         select(SuggestedShare)
@@ -406,7 +410,11 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
                 "member_count": counts.get(t.id, 0),
                 "file_count": file_counts.get(t.id, 0),
                 "auto_own": t.auto_own_enabled,
-                "owner_target_id": str(target) if (target := _ownership_target(t, owner_id)) else None,
+                # A club's files go to its club account, or stay with whoever
+                # made them (ADR-0034).
+                "owner_target_id": str(target)
+                if (target := (club_account if is_club else _ownership_target(t, owner_id)))
+                else None,
                 "can_edit": manages or t.id in led,
                 "rule": _rule_view(t),
             }

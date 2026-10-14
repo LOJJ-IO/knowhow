@@ -39,6 +39,19 @@ class LoginResult:
     refresh_token: str
 
 
+def members_for_email(email: str, db: Session) -> list[OrgMember]:
+    """Every membership this Google account has, newest first. Before club
+    orgs (ADR-0034) an email had at most one; now a student can be in a
+    company and several clubs."""
+    return list(
+        db.execute(
+            select(OrgMember)
+            .where(func.lower(OrgMember.email) == email.lower())
+            .order_by(OrgMember.created_at.desc())
+        ).scalars()
+    )
+
+
 def complete_login(code: str, state: str, db: Session, expected_purpose: str = LOGIN_STATE_PURPOSE) -> LoginResult:
     """expected_purpose lets the identity-linking flow reuse this: adding
     another account is an ordinary login that happens to carry a different
@@ -53,9 +66,10 @@ def complete_login(code: str, state: str, db: Session, expected_purpose: str = L
     if not id_token_claims.get("email_verified"):
         raise MemberNotProvisioned(email)
 
-    member = db.execute(
-        select(OrgMember).where(func.lower(OrgMember.email) == email)
-    ).scalar_one_or_none()
+    # One Google account can be in several orgs (clubs, ADR-0034): sign in to
+    # the one it joined most recently; the account picker switches between
+    # the rest without another trip to Google.
+    member = next(iter(members_for_email(email, db)), None)
 
     if member is None:
         raise MemberNotProvisioned(email)

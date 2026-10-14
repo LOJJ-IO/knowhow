@@ -31,8 +31,10 @@ from app.config import get_settings
 from app.google.drive_client import get_drive_client_for_user
 from app.librarian.rules import (
     DRIVE_FIELDS,
+    classify_club,
     classify_workspace,
     contradicts,
+    member_collaborator_emails,
     org_collaborator_emails,
 )
 from app.models.file_index import FileIndex
@@ -76,6 +78,12 @@ def _org_domain(org: Organization) -> str:
     return (org.verified_domain or org.observed_domain or "").lower()
 
 
+def _club_member_emails(org_id: uuid.UUID, db: Session) -> set[str]:
+    return {
+        e.lower() for e in db.execute(select(OrgMember.email).where(OrgMember.organization_id == org_id)).scalars()
+    }
+
+
 def _file_hash(file_id: str) -> str:
     key = get_settings().jwt_signing_key.encode()
     return hmac.new(key, file_id.encode(), hashlib.sha256).hexdigest()
@@ -98,7 +106,11 @@ def scan_member_drive(member: OrgMember, db: Session) -> ScanResult:
     if org is None:
         raise LibrarianError("organization not found")
     domain = _org_domain(org)
-    if not domain:
+    club_members: set[str] = set()
+    if org.is_club:
+        # No domain in a club (ADR-0034): its members' addresses stand in.
+        club_members = _club_member_emails(org.id, db) - {member.email.lower()}
+    elif not domain:
         raise LibrarianError("this organization has no Workspace domain to compare against")
 
     drive = get_drive_client_for_user(member.id, db)
@@ -138,7 +150,7 @@ def scan_member_drive(member: OrgMember, db: Session) -> ScanResult:
                 continue
             # A Workspace account's files are the organization's (ADR-0029):
             # Company by default, no company-vs-personal quiz.
-            verdict = classify_workspace(f, domain)
+            verdict = classify_club(f, club_members) if org.is_club else classify_workspace(f, domain)
             if verdict is None:
                 continue
             existing = known.get(file_id)
@@ -300,7 +312,10 @@ def _route_team(org_id: uuid.UUID, proposer_id: uuid.UUID, file_meta: dict, db: 
     # The proposer is already out of the vote: their owner permission is
     # skipped, and they are the `me` the fetch runs as, so lastModifyingUser is
     # skipped too. What's left is other people the file touches.
-    emails = org_collaborator_emails(file_meta, domain) if domain else []
+    if org is not None and org.is_club:
+        emails = member_collaborator_emails(file_meta, _club_member_emails(org_id, db))
+    else:
+        emails = org_collaborator_emails(file_meta, domain) if domain else []
     if not emails:
         return fallback
 

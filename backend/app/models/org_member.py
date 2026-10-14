@@ -67,7 +67,7 @@ class OrgMember(Base):
 
     created_at: Mapped[datetime] = created_at_col()
 
-    organization: Mapped["Organization"] = relationship(back_populates="members")
+    organization: Mapped["Organization"] = relationship(back_populates="members", foreign_keys=[organization_id])
     person: Mapped["Person | None"] = relationship(back_populates="accounts")
     oauth_credential: Mapped["OAuthCredential | None"] = relationship(
         back_populates="member", uselist=False

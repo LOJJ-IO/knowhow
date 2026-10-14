@@ -15,6 +15,9 @@ export function continueWithGoogle(
   /** Always show Google's account chooser — after a failed sign-in, so the
    *  same blocked account isn't silently picked again. */
   switchAccount = false,
+  /** "Starting a club or student group?": a new club org, never one for the
+   *  account's domain (ADR-0034). */
+  club = false,
 ) {
   if (!BACKEND_API_URL) {
     console.error(
@@ -29,6 +32,7 @@ export function continueWithGoogle(
   if (emailHint) params.set("email", emailHint);
   if (joinToken) params.set("join", joinToken);
   if (switchAccount) params.set("switch_account", "true");
+  if (club) params.set("club", "true");
   const query = params.size ? `?${params}` : "";
   // External origin (the backend), not a Next.js route — a router push can't leave the app.
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination

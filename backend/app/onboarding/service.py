@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.sandbox import is_sandbox_org
 from app.activity.changes import team_changes
 from app.audit.service import record_audit_entry
 from app.auth.google_oauth import build_authorization_url, exchange_code_for_tokens, verify_id_token
-from app.auth.login import LoginResult
+from app.auth.login import LoginResult, members_for_email
 from app.auth.pkce import build_state_token, decode_state_token, derive_code_challenge, generate_code_verifier
 from app.config import get_settings
 from app.google.scopes import LOGIN_SCOPES
@@ -20,7 +21,7 @@ from app.models.invitation import Invitation, InvitationKind
 from app.models.org_chart import OrgChart
 from app.models.org_member import AuthType, MemberStanding, OrgMember
 from app.models.org_membership import OrgMembership, OrgRole
-from app.models.organization import Organization
+from app.models.organization import ORG_KIND_CLUB, Organization
 from app.models.team import Team
 from app.models.team_join_request import TeamJoinRequest, TeamJoinRequestStatus
 from app.security.jwt import issue_access_token, issue_refresh_token
@@ -146,7 +147,14 @@ def create_org_chart(
     # The founder starts the org, so nobody is above them to approve them
     # (ADR-0021: founder is not the owner, but is never left waiting).
     initiator.standing = MemberStanding.APPROVED
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two requests at once (setup's first screen can fire twice): the
+        # other one made the chart, so this is the same answer.
+        db.rollback()
+        winner = db.execute(select(OrgChart).where(OrgChart.org_id == org_id)).scalar_one()
+        return OrgChartCreationResult(org_chart=winner)
     db.refresh(org_chart)
 
     record_audit_entry(
@@ -556,6 +564,7 @@ def start_signup(
     db: Session | None = None,
     email_hint: str | None = None,
     join_token: str | None = None,
+    club: bool = False,
 ) -> SignupStart:
     """Google OAuth, same as app/auth/login.py's login flow (same scopes,
     same PKCE primitives — imported, not reimplemented) but with its own
@@ -585,6 +594,9 @@ def start_signup(
         extra = {"invite_email": invitation.email} if invitation.email else {"open_admin_invite": invitation.token}
     elif join_token:
         extra = {"join_token": join_token}
+    elif club:
+        # "Starting a club or student group?" on Log In (ADR-0034).
+        extra = {"club": True}
     state = build_state_token(code_verifier, purpose=SIGNUP_STATE_PURPOSE, extra=extra)
     url = build_authorization_url(
         LOGIN_SCOPES,
@@ -643,30 +655,50 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     invite_email = state_payload.get("invite_email")
     wrong_account = invite_email is not None and invite_email != email
     join_token = state_payload.get("join_token")
+    # Invited by email or by the open Super Admin link: they're expected in
+    # their domain's org, so they aren't asked what they're setting up.
+    invited = invite_email is not None or "open_admin_invite" in state_payload
     join_org: Organization | None = None
     if join_token:
         join_org = _org_for_valid_join_token(join_token, db)
 
-    member = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
-    if member is None:
-        hosted_domain = id_token_claims.get("hd")
+    members = members_for_email(email, db)
+    hosted_domain = id_token_claims.get("hd")
+    member = members[0] if members else None
+    in_join_org = (
+        next((m for m in members if m.organization_id == join_org.id), None) if join_org is not None else None
+    )
+    if join_org is not None and join_org.is_club:
+        # A club takes any Google account, and you can be in other orgs too
+        # (ADR-0034). Already in it: just sign in to it.
+        member = in_join_org or _join_club(email, id_token_claims.get("name"), join_org, hosted_domain, db)
+    elif join_org is None and state_payload.get("club"):
+        member = create_club_org(email, id_token_claims.get("name"), hosted_domain, db)
+    elif member is None:
         if join_org is not None:
             _assert_join_domain_lock(join_org, hosted_domain)
             member = _join_existing_org(
                 email, id_token_claims.get("name"), join_org, hosted_domain.lower() if hosted_domain else None, db
             )
-        elif not hosted_domain:
+        elif not hosted_domain or not invited:
+            # A new account, not invited anywhere: nothing is created until
+            # it answers "What are you setting up?" (a business at its
+            # domain, a club or group, or just them). Asking beats guessing:
+            # a @ualberta.ca student starting a club must never become
+            # "ualberta.ca" (user 2026-10-14).
             return SignupResult(
-                pending_personal_token=issue_pending_personal_signup_token(email, id_token_claims.get("name")),
+                pending_personal_token=issue_pending_personal_signup_token(
+                    email, id_token_claims.get("name"), hosted_domain
+                ),
                 invite_wrong_account=wrong_account,
             )
         else:
             member = join_or_create_domain_org(email, id_token_claims.get("name"), hosted_domain.lower(), db)
     elif join_org is not None:
-        hosted_domain = id_token_claims.get("hd")
         _assert_join_domain_lock(join_org, hosted_domain)
-        if member.organization_id != join_org.id:
+        if in_join_org is None:
             raise ValueError("this Google account already belongs to another organization")
+        member = in_join_org
 
     needs_admin_proof = accept_invitations_on_sign_in(member, db)
     open_invite = find_invitation(state_payload["open_admin_invite"], db) if "open_admin_invite" in state_payload else None
@@ -704,6 +736,75 @@ def _assert_join_domain_lock(org: Organization, hosted_domain: str | None) -> No
     org_domain = (org.observed_domain or org.verified_domain or "").lower()
     if org_domain and hosted_domain.lower() != org_domain:
         raise ValueError(f"sign in with a {org_domain} account to join")
+
+
+def _auth_type_for(hosted_domain: str | None) -> AuthType:
+    """A Workspace account (Google sent `hd`) or a personal one."""
+    return AuthType.DOMAIN_DELEGATED if hosted_domain else AuthType.PERSONAL_OAUTH
+
+
+def create_club_org(email: str, display_name: str | None, hosted_domain: str | None, db: Session) -> OrgMember:
+    """A new club (ADR-0034): no domain claimed or reserved, whatever account
+    starts it, so a @ualberta.ca student never creates "ualberta.ca". The
+    founder goes through setup like any founder; the club's name is the
+    first question there."""
+    org = Organization(
+        id=uuid.uuid4(),
+        name="New club",
+        kind=ORG_KIND_CLUB,
+        observed_domain=None,
+        verified_domain=None,
+    )
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=email,
+        display_name=display_name,
+        auth_type=_auth_type_for(hosted_domain),
+        standing=MemberStanding.APPROVED,
+    )
+    db.add(org)
+    db.flush()
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    record_audit_entry(
+        org_id=org.id,
+        actor_user_id=member.id,
+        action_type="onboarding.club_created",
+        target_resource_id=str(org.id),
+        details={"email": email},
+        db=db,
+    )
+    return member
+
+
+def _join_club(
+    email: str, display_name: str | None, org: Organization, hosted_domain: str | None, db: Session
+) -> OrgMember:
+    """Into a club by its link: any Google account, approved on arrival (the
+    link is the club's invitation); teams with a lead still approve a
+    newcomer in the join wizard (ADR-0021)."""
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=org.id,
+        email=email,
+        display_name=display_name,
+        auth_type=_auth_type_for(hosted_domain),
+        standing=MemberStanding.APPROVED,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    record_audit_entry(
+        org_id=org.id,
+        actor_user_id=member.id,
+        action_type="onboarding.joined_club_via_link",
+        target_resource_id=str(member.id),
+        details={"email": email},
+        db=db,
+    )
+    return member
 
 
 def _join_existing_org(
@@ -799,7 +900,7 @@ def join_or_create_domain_org(email: str, display_name: str | None, hosted_domai
     return member
 
 
-def issue_pending_personal_signup_token(email: str, display_name: str | None) -> str:
+def issue_pending_personal_signup_token(email: str, display_name: str | None, hosted_domain: str | None = None) -> str:
     """A short-lived signed record of a verified personal Google identity
     that has no org yet, so the question "does your company use Workspace?"
     can be asked without creating anything first."""
@@ -809,6 +910,9 @@ def issue_pending_personal_signup_token(email: str, display_name: str | None) ->
         "purpose": PENDING_PERSONAL_SIGNUP_PURPOSE,
         "email": email,
         "name": display_name,
+        # Google's `hd` for a Workspace account, so the "What are you
+        # setting up?" answers can name the domain (2026-10-14).
+        "hd": hosted_domain.lower() if hosted_domain else None,
         "iat": now,
         "exp": now + PENDING_PERSONAL_SIGNUP_TTL,
     }
@@ -837,7 +941,7 @@ def create_domainless_org(pending_token: str, db: Session, name: str | None = No
     payload = decode_pending_personal_signup_token(pending_token)
     email = payload["email"]
 
-    existing = db.execute(select(OrgMember).where(func.lower(OrgMember.email) == email)).scalar_one_or_none()
+    existing = next(iter(members_for_email(email, db)), None)
     if existing is not None:
         return _login_result(existing)
 
@@ -848,7 +952,9 @@ def create_domainless_org(pending_token: str, db: Session, name: str | None = No
         organization_id=org.id,
         email=email,
         display_name=payload.get("name"),
-        auth_type=AuthType.PERSONAL_OAUTH,
+        # "Just me" from a Workspace account is still a Workspace account:
+        # its Drive is read through its own consent (ADR-0024).
+        auth_type=_auth_type_for(payload.get("hd")),
         standing=MemberStanding.APPROVED,
     )
     org_chart = OrgChart(id=uuid.uuid4(), org_id=org.id, initiator_member_id=member.id, owner_member_id=member.id)
@@ -1447,3 +1553,66 @@ def decide_team_join_request(
         db=db,
     )
     return req
+
+
+def set_club_account(org_id: uuid.UUID, actor: OrgMember, member_id: uuid.UUID | None, db: Session) -> Organization:
+    """Choose (or clear) a club's club account (ADR-0034, option B): the
+    club's general / admin Google account, already in the club, that file
+    ownership moves to. The founder or the owner chooses."""
+    org = db.get(Organization, org_id)
+    if org is None or actor.organization_id != org_id:
+        raise PermissionError("not a member of this organization")
+    if not org.is_club:
+        raise ValueError("only a club has a club account")
+    if not (is_owner(org_id, actor, db) or is_founding_member(org_id, actor.id, db)):
+        raise PermissionError("only the club's founder or owner can choose its club account")
+    if member_id is not None:
+        account = db.get(OrgMember, member_id)
+        if account is None or account.organization_id != org_id:
+            raise ValueError("that account isn't in this club")
+    org.club_account_member_id = member_id
+    db.commit()
+    record_audit_entry(
+        org_id=org_id,
+        actor_user_id=actor.id,
+        action_type="onboarding.club_account_set",
+        target_resource_id=str(member_id) if member_id else str(org_id),
+        details={"member_id": str(member_id) if member_id else None},
+        db=db,
+    )
+    return org
+
+
+def pending_signup_view(pending_token: str, db: Session) -> dict:
+    """What the "What are you setting up?" screen needs: the account's
+    Workspace domain (none for Gmail) and, if Knohow already has that
+    domain's organization, its name, so the first answer can read "Join
+    Acme". The email itself is not sent back (it's in the cookie)."""
+    payload = decode_pending_personal_signup_token(pending_token)
+    domain = payload.get("hd")
+    existing = None
+    if domain:
+        existing = db.execute(
+            select(Organization).where(
+                (Organization.observed_domain == domain) | (Organization.verified_domain == domain)
+            )
+        ).scalar_one_or_none()
+    return {"domain": domain, "existing_organization_name": existing.name if existing else None}
+
+
+def create_from_pending(pending_token: str, kind: str, db: Session) -> LoginResult:
+    """The answer to "What are you setting up?": `business` joins or starts
+    the organization for the account's Workspace domain; `club` starts a
+    club or group (ADR-0034). "Just me" is `create_domainless_org`."""
+    payload = decode_pending_personal_signup_token(pending_token)
+    email, name, domain = payload["email"], payload.get("name"), payload.get("hd")
+    existing = next(iter(members_for_email(email, db)), None)
+    if existing is not None:
+        return _login_result(existing)
+    if kind == "business":
+        if not domain:
+            raise ValueError("sign in with your work account to set up a business or organization")
+        return _login_result(join_or_create_domain_org(email, name, domain, db))
+    if kind == "club":
+        return _login_result(create_club_org(email, name, domain, db))
+    raise ValueError("choose a business or organization, a club or group, or just you")

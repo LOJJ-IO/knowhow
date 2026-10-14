@@ -14,7 +14,7 @@ from app.auth.linked_drive import (
     complete_linked_drive_consent,
     start_linked_drive_consent,
 )
-from app.auth.login import complete_login, start_login
+from app.auth.login import complete_login, members_for_email, start_login
 from app.auth.personal_oauth import (
     PERSONAL_OAUTH_STATE_PURPOSE,
     complete_personal_oauth_consent,
@@ -111,6 +111,14 @@ def remember_on_this_device(
         # Every account belongs to a person from its first sign-in; linking
         # is what later brings two accounts under one.
         person_for(member, db)
+        # Google just proved this account, so every org it belongs to goes in
+        # the picker (a student's clubs, ADR-0034), the signed-in one last so
+        # it sorts first.
+        email = getattr(member, "email", None)
+        for other in members_for_email(email, db) if email else []:
+            if other.id != member.id:
+                person_for(other, db)
+                remember_account(device_id, other, db)
         remember_account(device_id, member, db)
     except Exception as exc:  # noqa: BLE001 - never break sign-in over the picker
         logger.warning("auth.remember_account_failed", error=str(exc))
@@ -137,7 +145,7 @@ def signup_redirect(
     sign-in")."""
     settings = get_settings()
     if result.pending_personal_token is not None:
-        query = "signup=personal&invite=wrong_account" if result.invite_wrong_account else "signup=personal"
+        query = "signup=choose&invite=wrong_account" if result.invite_wrong_account else "signup=choose"
         response = RedirectResponse(f"{settings.frontend_origin}?{query}", status_code=status.HTTP_302_FOUND)
         response.set_cookie(
             PENDING_PERSONAL_SIGNUP_COOKIE,
@@ -470,6 +478,11 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         # the domain, so it needs both.
         "organization_name": member.organization.name,
         "organization_domain": member.organization.observed_domain,
+        # "company" or "club" (ADR-0034); clubs skip the Workspace steps.
+        "organization_kind": member.organization.kind,
+        "club_account_member_id": (
+            str(member.organization.club_account_member_id) if member.organization.club_account_member_id else None
+        ),
         "email": member.email,
         "display_name": member.display_name,
         "auth_type": member.auth_type.value,

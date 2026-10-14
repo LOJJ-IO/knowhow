@@ -180,8 +180,8 @@ def attach_pending_personal_email(person_id: uuid.UUID, email: str, db: Session)
             raise AccountAlreadyLinked(f"{normalized} already belongs to another person")
         return
     member = db.execute(
-        select(OrgMember).where(func.lower(OrgMember.email) == normalized)
-    ).scalar_one_or_none()
+        select(OrgMember).where(func.lower(OrgMember.email) == normalized).order_by(OrgMember.created_at.desc())
+    ).scalars().first()
     if member is not None:
         # It does have a membership after all — link it properly instead.
         link_account_to_person(person_id, member, db)

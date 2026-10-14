@@ -16,6 +16,8 @@ import { ErrorTip } from "@/components/brand/tooltip";
  *  that moment nobody has been asked. `acme.org` is a placeholder; this turns
  *  it into the guess a founder is most likely to accept. */
 export function suggestOrgName(me: Me): string {
+  // A new club is "New club" until its founder names it (ADR-0034).
+  if (me.organization_kind === "club" && me.organization_name === "New club") return "";
   const domain = me.organization_domain;
   // Already named by a human (or a personal org, named at creation).
   if (!domain || me.organization_name.toLowerCase() !== domain.toLowerCase())
@@ -87,8 +89,16 @@ export function OrgNameStep({
 
   return (
     <div>
-      <SetupHeading>What&rsquo;s your organization called?</SetupHeading>
-      <SetupBody>This is the name your team sees when they join.</SetupBody>
+      <SetupHeading>
+        {me.organization_kind === "club"
+          ? "What’s your club called?"
+          : "What’s your organization called?"}
+      </SetupHeading>
+      <SetupBody>
+        {me.organization_kind === "club"
+          ? "This is the name your members see when they join."
+          : "This is the name your team sees when they join."}
+      </SetupBody>
       <ErrorTip
         message={error}
         onDismiss={() => {

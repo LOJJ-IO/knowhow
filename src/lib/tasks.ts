@@ -19,6 +19,8 @@ export type Task =
   | { kind: "no_owner"; id: string }
   | { kind: "no_super_admin"; id: string }
   | { kind: "company_drive"; id: string }
+  /** A club hasn't chosen its club account (ADR-0034). */
+  | { kind: "club_account"; id: string }
   | { kind: "own_drive"; id: string }
   /** A linked personal account whose Drive isn't connected (ADR-0025). */
   | { kind: "linked_drive"; id: string; email: string }

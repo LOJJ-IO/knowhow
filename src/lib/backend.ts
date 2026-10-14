@@ -9,6 +9,10 @@ export type Me = {
   organization_id: string;
   organization_name: string;
   organization_domain: string | null;
+  /** "company", or "club" (ADR-0034): no domain, no Workspace steps. */
+  organization_kind: "company" | "club";
+  /** A club's club account, which file ownership moves to. */
+  club_account_member_id: string | null;
   email: string;
   /** The person's name as Google gave it. Null when Google didn't. */
   display_name: string | null;

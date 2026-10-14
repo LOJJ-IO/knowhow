@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit_entry
 from app.exceptions import CrossOrgAccessDenied
 from app.google.drive_client import get_drive_client_for_user
-from app.google.ownership import revoke_permission_if_not_owner, transfer_ownership
+from app.google.ownership import hand_over_personal_ownership, revoke_permission_if_not_owner, transfer_ownership
 from app.models.file_index import FileIndex
 from app.models.org_member import AuthType, OrgMember
 from app.models.transfer_batch import (
@@ -19,6 +19,7 @@ from app.models.transfer_batch import (
     TransferEligibility,
     TransferItemStatus,
 )
+from app.models.organization import Organization
 from app.models.unresolved_ownership import UnresolvedOwnership, UnresolvedOwnershipReason
 
 
@@ -38,11 +39,30 @@ def _require_batch_in_org(batch_id: uuid.UUID, org_id: uuid.UUID, db: Session) -
     return batch
 
 
-def _eligibility(current_owner: OrgMember | None, proposed_owner: OrgMember) -> TransferEligibility:
-    if (
-        current_owner is not None
-        and current_owner.auth_type == AuthType.DOMAIN_DELEGATED
+def _domain(email: str) -> str:
+    return email.rsplit("@", 1)[-1].lower()
+
+
+def _eligibility(
+    current_owner: OrgMember | None, proposed_owner: OrgMember, club: bool = False
+) -> TransferEligibility:
+    """Where Google lets ownership move. Between two accounts on the same
+    Workspace domain, always. In a club (ADR-0034) members can be on
+    different domains, so the domains must match; and two personal Gmail
+    accounts can hand over too (Google's pending-owner flow, see
+    `_execute_item`). Across the Workspace / personal boundary, never."""
+    if current_owner is None:
+        return TransferEligibility.INELIGIBLE_PERSONAL_ACCOUNT
+    both_workspace = (
+        current_owner.auth_type == AuthType.DOMAIN_DELEGATED
         and proposed_owner.auth_type == AuthType.DOMAIN_DELEGATED
+    )
+    if both_workspace and (not club or _domain(current_owner.email) == _domain(proposed_owner.email)):
+        return TransferEligibility.ELIGIBLE
+    if (
+        club
+        and current_owner.auth_type == AuthType.PERSONAL_OAUTH
+        and proposed_owner.auth_type == AuthType.PERSONAL_OAUTH
     ):
         return TransferEligibility.ELIGIBLE
     return TransferEligibility.INELIGIBLE_PERSONAL_ACCOUNT
@@ -52,13 +72,15 @@ def _plan_items(
     org_id: uuid.UUID, planned: list[PlannedTransfer], db: Session
 ) -> list[TransferBatchItem]:
     items: list[TransferBatchItem] = []
+    org = db.get(Organization, org_id)
+    club = org is not None and org.is_club
     for p in planned:
         current_owner = db.get(OrgMember, p.current_owner_member_id) if p.current_owner_member_id else None
         proposed_owner = db.get(OrgMember, p.proposed_owner_member_id)
         if proposed_owner is None:
             raise ValueError(f"no OrgMember with id={p.proposed_owner_member_id}")
 
-        eligibility = _eligibility(current_owner, proposed_owner)
+        eligibility = _eligibility(current_owner, proposed_owner, club)
         detail = None
         if eligibility == TransferEligibility.INELIGIBLE_PERSONAL_ACCOUNT:
             detail = (
@@ -132,7 +154,15 @@ def record_new_owner(org_id: uuid.UUID, file_id: str, owner_id: uuid.UUID, db: S
 
 def _execute_item(item: TransferBatchItem, current_owner: OrgMember, proposed_owner: OrgMember) -> None:
     drive = get_drive_client_for_user(current_owner.id)
-    transfer_ownership(drive, item.file_id, proposed_owner.email)
+    if current_owner.auth_type == AuthType.PERSONAL_OAUTH and proposed_owner.auth_type == AuthType.PERSONAL_OAUTH:
+        # Personal Gmail to personal Gmail (a club, ADR-0034): Google needs
+        # the new owner to accept, which Knohow does as them through their
+        # own Drive connection.
+        hand_over_personal_ownership(
+            drive, get_drive_client_for_user(proposed_owner.id), item.file_id, proposed_owner.email
+        )
+    else:
+        transfer_ownership(drive, item.file_id, proposed_owner.email)
     revoke_permission_if_not_owner(drive, item.file_id, current_owner.email)
     item.status = TransferItemStatus.TRANSFERRED
 
