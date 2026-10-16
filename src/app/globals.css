@@ -979,10 +979,48 @@ body.t-deck-dragging * {
  * panel (`.t-deck-cover-notes`). Fixed width; height follows content via
  * `LoginModal` (measured → explicit px, so `.t-resize` can tween it).
  * Nested radius: outer = button radius + side padding + 1px border. */
+/* The card plus its back arrow, which sits outside the card on its left
+ * (Ronald, 2026-10-15). The frame carries the card's width. */
+.t-login-modal-frame {
+  position: relative;
+  width: min(399px, 100% - 32px);
+}
+.t-login-modal-frame:has(.t-demo-booking) {
+  width: min(920px, 100% - 32px);
+}
+.t-login-back-slot {
+  position: absolute;
+  /* Level with the heading: the body's 2.5rem top padding, centred on the
+   * 1.62rem heading's first line. */
+  top: calc(2.5rem + 0.93rem - 22px);
+  right: calc(100% + 12px);
+  opacity: 0;
+  transition: opacity 220ms var(--resize-ease);
+}
+.t-login-back-slot[data-open] {
+  opacity: 1;
+}
+/* Same surface, border and shadow as the card. */
+.t-login-back {
+  border-radius: 9999px;
+  background: #fbfaf8;
+  border: 1px solid rgb(0 0 0 / 0.08);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.12);
+}
+/* No room beside the card on a phone: above it, at its left edge. */
+@media (max-width: 520px) {
+  .t-login-back-slot {
+    top: auto;
+    bottom: calc(100% + 12px);
+    right: auto;
+    left: 0;
+  }
+}
+
 .t-login-modal {
   --login-button-radius: 10px;
   --login-modal-pad-x: 1.1rem;
-  width: min(399px, 100% - 32px);
+  width: 100%;
   overflow: hidden;
   background: #fbfaf8;
   border: 1px solid rgb(0 0 0 / 0.08);
@@ -1014,7 +1052,6 @@ body.t-deck-dragging * {
  * (content + border) is unaffected; width and height both tween via
  * `.t-resize`. */
 .t-login-modal:has(.t-demo-booking) {
-  width: min(920px, 100% - 32px);
   background: transparent;
   border-color: transparent;
   box-shadow: none;

@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+
+/** A spot just outside the card's left edge where a screen's back arrow
+ *  renders (Ronald, 2026-10-15), since the card clips its own overflow. */
+export const LoginBackSlotContext = createContext<HTMLElement | null>(null);
 
 /** Book a Demo's reservation window, from first open. */
 export const DEMO_RESERVED_MS = 5 * 60 * 1000;
@@ -89,6 +93,7 @@ export function LoginModal({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [heights, setHeights] = useState<{ border: number; full: number }>();
   const lastFull = useRef(0);
+  const [backSlot, setBackSlot] = useState<HTMLElement | null>(null);
   const openRef = useRef(open);
   useEffect(() => {
     openRef.current = open;
@@ -141,13 +146,16 @@ export function LoginModal({
   }, []);
 
   return (
-    <div
-      ref={shellRef}
-      className="t-login-modal t-resize pointer-events-auto"
-      style={{ height: heights && (open ? heights.full : heights.border) }}
-    >
-      <div ref={bodyRef} className="t-login-modal-body">
-        {children}
+    <div className="t-login-modal-frame">
+      <div ref={setBackSlot} className="t-login-back-slot" data-open={open || undefined} />
+      <div
+        ref={shellRef}
+        className="t-login-modal t-resize pointer-events-auto"
+        style={{ height: heights && (open ? heights.full : heights.border) }}
+      >
+        <div ref={bodyRef} className="t-login-modal-body">
+          <LoginBackSlotContext.Provider value={backSlot}>{children}</LoginBackSlotContext.Provider>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useContext, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { LoginBackSlotContext } from "@/components/login/login-modal";
 import { sohne } from "@/components/brand/logo-mark";
 import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
@@ -29,14 +31,22 @@ import {
  *  (cofounder, 2026-10-13: "there should be a back button at every step"). */
 export const SetupBackContext = createContext<(() => void) | null>(null);
 
-/** The account picker's back chevron, shared. */
+/** Every setup / account-picker back chevron. Inside the Log In card it sits
+ *  outside the card on its left, in a circle with the card's own surface,
+ *  border and shadow so it reads as clearly as the card (Ronald, 2026-10-15).
+ *  Anywhere else it stays inline before the heading. */
 export function SetupBackButton({ onClick }: { onClick: () => void }) {
-  return (
+  const slot = useContext(LoginBackSlotContext);
+  const button = (
     <button
       type="button"
       onClick={onClick}
       aria-label="Back"
-      className="-ml-1 mt-[0.1rem] flex size-7 shrink-0 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
+      className={
+        slot
+          ? "t-login-back pointer-events-auto flex size-11 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
+          : "-ml-1 mt-[0.1rem] flex size-7 shrink-0 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
+      }
     >
       <svg viewBox="0 0 24 24" fill="none" className="size-5">
         <path
@@ -49,6 +59,7 @@ export function SetupBackButton({ onClick }: { onClick: () => void }) {
       </svg>
     </button>
   );
+  return slot ? createPortal(button, slot) : button;
 }
 
 /** `onBack` overrides the context for a sub-screen inside one step (e.g. the

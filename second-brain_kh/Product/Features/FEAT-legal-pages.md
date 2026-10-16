@@ -26,7 +26,7 @@ The footer and the Log In modal linked to "Terms of Use" / "Privacy Policy" stub
 
 **Wiring:** `FooterStubLink` takes an optional `href` → `next/link`; Terms/Privacy in both landing footers and the Log In modal's terms line now navigate. Shared `src/components/brand/fonts.ts` (Satoshi, LOJJ face) and `logo-lockup.tsx` (`as="div"` so legal pages keep a single h1) were extracted from `landing-hero.tsx`.
 
-**About page (2026-10-15, Ronald — Google brand verification):** `/about` explains what Knohow does and why it requests Google user data, links Privacy + Terms, requires no login. Landing **About Us** → `/about`. Same visual shell as legal pages (logo, grey title banner, sidebar). Google OAuth Application home page should be `https://knohow.app/about`, not `app.knohow.app`.
+**About page (2026-10-15, Ronald — Google brand verification):** `/about` explains what Knohow does and why it requests Google user data, links Privacy + Terms, requires no login. Landing **About Us** → `/about`. Same visual shell as legal pages (logo, grey title banner, sidebar). Application home page `https://knohow.app/about`. **Brand verified and shown to users (Ronald, 2026-10-15).**
 
 Verified 2026-09-17: both routes 200 at 1440 and 390 wide, no horizontal overflow, one h1 each, 18 / 15 sections; footer → /terms, sidebar → /privacy, logo → /; no console errors; `next build` passes with both prerendered static.
 

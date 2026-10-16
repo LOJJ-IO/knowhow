@@ -7,6 +7,7 @@ import { satoshi } from "@/components/brand/fonts";
 import { cn } from "@/lib/utils";
 import { GoogleG } from "@/components/ui/icons";
 import { PersonAvatar } from "@/components/identity/person-avatar";
+import { SetupBackButton } from "@/components/setup/shell";
 import { FooterStubLink } from "@/components/landing/footer-stub-link";
 import {
   Tooltip,
@@ -213,22 +214,7 @@ function RemoveAccountsScreen({
   return (
     <>
       <div className="flex items-center gap-3 pl-[7%] pr-[3%]">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Back"
-          className="flex size-7 shrink-0 cursor-pointer items-center justify-center text-[#1c1917] transition-transform duration-150 active:scale-95"
-        >
-          <svg viewBox="0 0 24 24" fill="none" className="size-5">
-            <path
-              d="M15 5l-7 7 7 7"
-              stroke="currentColor"
-              strokeWidth={3}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
+        <SetupBackButton onClick={onBack} />
         <h2
           className={`${sohne.className} m-0 text-[1.62rem] leading-[1.15] tracking-tight text-[#1c1917]`}
         >
