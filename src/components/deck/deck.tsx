@@ -496,10 +496,55 @@ function NotesFolder({
   );
 }
 
+/** The card's screen from the live demo, recorded as a short keynote-style
+ *  loop (Ronald, 2026-10-15). Loads and plays only while on screen; a still
+ *  poster for reduced motion. Files in `public/deck/clips/`, named by card id. */
+function DeckClip({ id, title, active }: { id: string; title: string; active?: boolean }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Mobile's cover flow stacks every card on screen: only the front one plays.
+    if (active === false) {
+      video.pause();
+      return;
+    }
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          video.preload = "auto";
+          void video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(video);
+    return () => io.disconnect();
+  }, [active]);
+  return (
+    <video
+      ref={videoRef}
+      className="t-deck-clip"
+      poster={`/deck/clips/${id}.jpg`}
+      muted
+      loop
+      playsInline
+      preload="none"
+      aria-label={`${title} in Knohow`}
+    >
+      <source src={`/deck/clips/${id}.webm`} type="video/webm" />
+      <source src={`/deck/clips/${id}.mp4`} type="video/mp4" />
+    </video>
+  );
+}
+
 function DeckWindow({
   card,
   parkSlot,
-  focused = false,
+  focused,
   ref,
   style,
   onPointerDownCapture,
@@ -508,6 +553,7 @@ function DeckWindow({
   card: DeckCard;
   /** Off-stage slot while CSS entrance plays (cards without an entrance seat). */
   parkSlot?: number;
+  /** Mobile cover flow's front card; unset on the desktop ring. */
   focused?: boolean;
   ref?: React.Ref<HTMLDivElement>;
   style?: React.CSSProperties;
@@ -541,7 +587,9 @@ function DeckWindow({
       data-focus={focused ? "true" : "false"}
     >
       <div className={`t-deck-mat t-deck-mat--${card.mat}`} aria-hidden />
-      <InteractiveMacWindow title={card.title} />
+      <InteractiveMacWindow title={card.title}>
+        <DeckClip id={card.id} title={card.title} active={focused} />
+      </InteractiveMacWindow>
       <NotesFolder
         note={card.note}
         open={notesOpen}

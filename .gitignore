@@ -64,3 +64,8 @@ backend/*.egg-info/
 backend/.pytest_cache/
 backend/.ruff_cache/
 backend/.mypy_cache/
+
+# deck clip recordings (scripts/deck-clips)
+scripts/deck-clips/.out/
+scripts/deck-clips/node_modules/
+scripts/deck-clips/package*.json

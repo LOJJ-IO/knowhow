@@ -566,6 +566,20 @@ html {
     max(0px, calc(var(--deck-mac-radius) - 1px));
 }
 
+/* A demo clip fills the window body edge to edge. */
+.t-deck-window-body:has(> .t-deck-clip) {
+  padding: 0;
+  overflow: hidden;
+}
+.t-deck-clip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top left;
+  pointer-events: none;
+}
+
 .t-deck-notes-copy {
   margin: 0;
   font-size: 0.82rem;
