@@ -373,9 +373,11 @@ export async function importLinkedFiles(
   email: string,
   fileIds: string[],
   to: "company" | "me",
+  /** Dropped on a folder: the copy goes in it too. */
+  folderId?: string,
 ) {
   return call<{ imported: string[]; failed: string[] }>(`${base(org)}/librarian/import-linked`, {
     method: "POST",
-    body: JSON.stringify({ email, file_ids: fileIds, to }),
+    body: JSON.stringify({ email, file_ids: fileIds, to, folder_id: folderId ?? null }),
   });
 }

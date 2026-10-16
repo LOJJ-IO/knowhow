@@ -107,6 +107,30 @@ export function WorkspaceScreen() {
   const [deleteShown, setDeleteShown] = useState<FolderSummary | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
+  const toasts = Toast.useToastManager();
+
+  /** A personal file dragged onto a folder: a company copy goes in it
+   *  straight away (Ronald, 2026-10-13). */
+  async function dropPersonalFile(f: FolderSummary, data: string) {
+    let file: { email: string; id: string; name: string };
+    try {
+      file = JSON.parse(data);
+    } catch {
+      return;
+    }
+    try {
+      const result = await importLinkedFiles(org, file.email, [file.id], "company", f.id);
+      if (result.failed.length) {
+        toasts.add({ title: `${file.name} couldn’t be added`, description: "Google may not allow copying it." });
+      } else {
+        toasts.add({ type: "success", title: `Added to ${f.name}`, description: file.name });
+      }
+      await refreshFolders();
+    } catch (e) {
+      toasts.add({ title: `${file.name} couldn’t be added`, description: message(e) });
+    }
+  }
+
   function openFolder(f: FolderSummary) {
     setFolderMenu(null);
     setOpenFolderId(f.id);
@@ -163,10 +187,10 @@ export function WorkspaceScreen() {
 
   useEffect(() => {
     // Initial load; both helpers set state only after their fetch resolves.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshFolders();
     // What's waiting pops up as the librarian's pills (LibrarianPopup) and
     // stays in Notifications under Librarian (Ronald 2026-10-04).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshLibrarian();
   }, [refreshFolders, refreshLibrarian]);
 
@@ -283,6 +307,8 @@ export function WorkspaceScreen() {
                       e.preventDefault();
                       setFolderMenu({ folder: f, anchor: menuAnchor(e) });
                     }}
+                    dropType={PERSONAL_FILE_DRAG}
+                    onDropData={(data) => void dropPersonalFile(f, data)}
                   />
                   <div className={`${satoshi.className} text-center`}>
                     <div className="text-[0.9375rem] text-[#1c1917]">{f.name}</div>
@@ -400,6 +426,9 @@ export function WorkspaceScreen() {
   );
 }
 
+/** Drag data for a personal file; folders accept it as a drop. */
+const PERSONAL_FILE_DRAG = "application/x-knohow-personal-file";
+
 /** A connected personal account linked to you (ADR-0025): its recent files.
  *  Shown only to you; nothing here is saved to Knohow. Connecting one is a
  *  Pending task in Notifications. */
@@ -439,7 +468,18 @@ function LinkedAccount({
       {account.files.length ? (
         <ul className="mt-6 grid grid-cols-[repeat(auto-fill,8rem)] justify-center gap-x-8 gap-y-3">
           {account.files.map((file) => (
-            <li key={file.id} className="min-w-0">
+            <li
+              key={file.id}
+              className="min-w-0 cursor-grab active:cursor-grabbing"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData(
+                  PERSONAL_FILE_DRAG,
+                  JSON.stringify({ email: account.email, id: file.id, name: file.name }),
+                );
+              }}
+            >
               <FileCard
                 name={file.name}
                 mimeType={file.mimeType}

@@ -23,6 +23,7 @@ comments; the person keeps the original. This is the trade-off the user
 accepted (2026-09-27)."""
 
 import io
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -35,6 +36,7 @@ from sqlalchemy.orm import Session
 from app.audit.service import record_audit_entry
 from app.librarian.service import _member_team_ids, _team_folder, _add_to_folder, LibrarianError
 from app.models.file_index import FileIndex
+from app.models.librarian import KnohowFolder
 from app.models.org_member import OrgMember
 from app.google.drive_client import get_drive_client_for_user
 from app.logging_config import get_logger
@@ -89,11 +91,13 @@ def import_linked_files(
     file_ids: list[str],
     to: str,
     db: Session,
+    folder_id: uuid.UUID | None = None,
 ) -> ImportResult:
     """From a personal account linked to this member.
 
     `to="company"`: copied into the org as Company files, filed in the
-    member's team folder.
+    member's team folder, or in `folder_id` (a drop onto a folder, Ronald
+    2026-10-13) and that folder's team.
     `to="me"`: the originals are shared with the member's own work account
     as editor. They stay owned by the personal account and are not indexed;
     they show up in the work account's "Shared with me", for that person only."""
@@ -109,7 +113,7 @@ def import_linked_files(
         return _share_with_work_account(member, personal, file_ids, db)
     if to != "company":
         raise LibrarianError("choose the company or just you")
-    return import_with_personal_client(member, personal, file_ids, db)
+    return import_with_personal_client(member, personal, file_ids, db, folder_id=folder_id)
 
 
 def _grant_member(personal, file_id: str, member: OrgMember) -> str | None:
@@ -166,12 +170,24 @@ def _copy_by_upload(personal, org, file_id: str) -> dict:
     return org.files().create(body=body, media_body=media, fields=COPY_FIELDS).execute()
 
 
-def import_with_personal_client(member: OrgMember, personal, file_ids: list[str], db: Session) -> ImportResult:
+def import_with_personal_client(
+    member: OrgMember,
+    personal,
+    file_ids: list[str],
+    db: Session,
+    folder_id: uuid.UUID | None = None,
+) -> ImportResult:
     _check_batch(file_ids)
+    target = None
+    if folder_id is not None:
+        target = db.get(KnohowFolder, folder_id)
+        if target is None or target.org_id != member.organization_id:
+            raise LibrarianError("that folder isn't in this organization")
     org = get_drive_client_for_user(member.id, db)
 
     teams = _member_team_ids(member.organization_id, member.id, db)
-    team_id = teams[0] if teams else None
+    # A team folder makes the copy that team's; otherwise your own team.
+    team_id = target.team_id if target is not None and target.team_id else (teams[0] if teams else None)
     now = datetime.now(timezone.utc)
 
     def _ts(value: str | None) -> datetime:
@@ -224,9 +240,11 @@ def import_with_personal_client(member: OrgMember, personal, file_ids: list[str]
                 )
             )
             db.flush()
+            if target is not None:
+                _add_to_folder(target, copy_id, member.id, db)
             if team_id is not None:
                 folder = _team_folder(member.organization_id, team_id, db)
-                if folder is not None:
+                if folder is not None and folder is not target:
                     _add_to_folder(folder, copy_id, member.id, db)
         result.imported.append(copy_id)
 

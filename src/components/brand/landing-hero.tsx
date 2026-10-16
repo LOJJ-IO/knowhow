@@ -546,7 +546,7 @@ function LandingHero() {
         <div
           className={`${satoshi.className} relative z-10 flex justify-between px-6 pb-[max(1rem,env(safe-area-inset-bottom))] text-[0.908552rem] font-bold text-[#1c1917]`}
         >
-          <FooterStubLink>About Us</FooterStubLink>
+          <FooterStubLink href="/about">About Us</FooterStubLink>
           <div className="flex gap-4">
             <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
             <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>
@@ -611,7 +611,7 @@ function LandingHero() {
           <div
             className={`${satoshi.className} mt-[2px] flex justify-between px-[clamp(0.75rem,2vw,1.5rem)] text-[0.908552rem] font-bold lg:px-6`}
           >
-            <FooterStubLink>About Us</FooterStubLink>
+            <FooterStubLink href="/about">About Us</FooterStubLink>
             <div className="flex gap-4 lg:gap-6">
               <FooterStubLink href="/terms">Terms of Use</FooterStubLink>
               <FooterStubLink href="/privacy">Privacy Policy</FooterStubLink>

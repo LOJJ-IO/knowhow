@@ -3,11 +3,14 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-10-13
+updated: 2026-10-15
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
 # Lessons Learned
+
+## 2026-10-15 — Google brand verification homepage ≠ app login origin
+Google's OAuth branding check rejects a homepage that is only a sign-in screen, and rejects a marketing hero that is only a tagline. With [[0022-landing-and-app-on-separate-origins]], `app.knohow.app` rewrites `/` to login (`AppEntry`); put **Application home page** on the marketing origin (`https://knohow.app/about`) with purpose + why Google data + Privacy Policy link, visible without login. Scope/CASA verification is separate from brand verification.
 
 ## 2026-09-27 — No `openid` scope, no `id_token`
 Google only returns an `id_token` from the code exchange when the auth request included `openid`. A consent

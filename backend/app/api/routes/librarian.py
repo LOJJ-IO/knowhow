@@ -79,6 +79,8 @@ class LinkedImportBody(BaseModel):
     # "company": a copy the org owns, in your team folder. "me": shared with
     # your own work account only.
     to: str = "company"
+    # Dropped on a folder: the copy goes in it (Ronald, 2026-10-13).
+    folder_id: uuid.UUID | None = None
 
 
 @router.post("/librarian/import-linked")
@@ -90,7 +92,7 @@ def import_linked(
 ) -> dict:
     from app.librarian.import_personal import import_linked_files
 
-    result = _run(import_linked_files, member, body.email, body.file_ids, body.to, db)
+    result = _run(import_linked_files, member, body.email, body.file_ids, body.to, db, folder_id=body.folder_id)
     return {"imported": result.imported, "failed": result.failed}
 
 

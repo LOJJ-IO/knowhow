@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useSyncExternalStore } from "react";
+import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 
 import { cn } from "@/lib/utils";
@@ -132,6 +132,8 @@ export function Folder({
   onOpen,
   onDoubleClick,
   onContextMenu,
+  dropType,
+  onDropData,
   decorative = false,
   className,
 }: {
@@ -147,6 +149,10 @@ export function Folder({
   onDoubleClick?: () => void;
   /** A right click (or the keyboard's menu key): the folder's menu. */
   onContextMenu?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  /** Drag data of this type can be dropped on the folder; it lifts while
+   *  something droppable is over it (Ronald, 2026-10-13). */
+  dropType?: string;
+  onDropData?: (data: string) => void;
   /** A picture, not a control (the New folder dialog's preview). */
   decorative?: boolean;
   className?: string;
@@ -165,6 +171,10 @@ export function Folder({
   const drop = () => {
     if (liftedFolder === uid) setLiftedFolder(null);
   };
+  // dragenter on a child fires before dragleave on the parent; count so
+  // moving across the drawing doesn't drop the flap.
+  const dragDepth = useRef(0);
+  const accepts = (e: React.DragEvent) => !!dropType && e.dataTransfer.types.includes(dropType);
   // Opening a folder unmounts it mid-hover; don't leave the page pointing at it.
   useEffect(
     () => () => {
@@ -349,6 +359,29 @@ export function Folder({
       onPointerLeave={drop}
       onFocus={lift}
       onBlur={drop}
+      onDragEnter={(e) => {
+        if (!accepts(e)) return;
+        e.preventDefault();
+        dragDepth.current += 1;
+        lift();
+      }}
+      onDragOver={(e) => {
+        if (!accepts(e)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "copy";
+      }}
+      onDragLeave={(e) => {
+        if (!accepts(e)) return;
+        dragDepth.current = Math.max(0, dragDepth.current - 1);
+        if (dragDepth.current === 0) drop();
+      }}
+      onDrop={(e) => {
+        if (!accepts(e) || !dropType) return;
+        e.preventDefault();
+        dragDepth.current = 0;
+        drop();
+        onDropData?.(e.dataTransfer.getData(dropType));
+      }}
       className={cn(
         "relative block cursor-pointer rounded-[20px] outline-none select-none focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1c1917]",
         className,

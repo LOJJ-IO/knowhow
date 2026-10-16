@@ -4,7 +4,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Knohow",
-  description: "Knohow",
+  description:
+    "Knohow helps organizations take control of Google Workspace files — team folders, sharing rules, ownership, and offboarding.",
 };
 
 export default function RootLayout({

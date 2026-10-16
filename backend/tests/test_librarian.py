@@ -666,6 +666,28 @@ def test_import_linked_falls_back_to_upload_when_sharing_is_closed(db, monkeypat
     assert db.get(FileIndex, "up-1").team_id == team.id
 
 
+def test_import_linked_dropped_on_a_folder_lands_in_it(db, monkeypatch):
+    """Dragging a personal file onto a folder copies it into that folder and
+    the importer's team folder (Ronald, 2026-10-13)."""
+    from app.auth import linked_drive
+    from app.librarian import import_personal as imp
+
+    _o, _lead, worker, team = _org(db)
+    drives = _UploadDrives()
+    monkeypatch.setattr(linked_drive, "linked_drive_client", lambda *a, **k: drives)
+    monkeypatch.setattr(imp, "get_drive_client_for_user", lambda *a, **k: drives)
+    monkeypatch.setattr(imp, "record_audit_entry", lambda **k: None)
+    target = uuid.UUID(service.create_folder(worker, "Drops", db)["id"])
+
+    result = imp.import_linked_files(worker, "me@gmail.com", ["shared-1"], "company", db, folder_id=target)
+
+    copy_id = result.imported[0]
+    folders = set(db.execute(select(FolderFile.folder_id).where(FolderFile.file_id == copy_id)).scalars())
+    team_folder = db.execute(select(KnohowFolder.id).where(KnohowFolder.team_id == team.id)).scalar_one()
+    assert folders == {target, team_folder}
+    assert db.get(FileIndex, copy_id).team_id == team.id
+
+
 def test_import_linked_to_me_only_shares_with_the_work_account(db, monkeypatch):
     from app.auth import linked_drive
     from app.librarian import import_personal as imp
