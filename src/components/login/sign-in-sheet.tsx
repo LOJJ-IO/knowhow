@@ -17,6 +17,7 @@ export function SignInSheet({
   onClose,
   onReachedTop,
   topLeft,
+  topRight,
   sheetRef,
   children,
 }: {
@@ -26,9 +27,12 @@ export function SignInSheet({
   atTop: boolean;
   /** The card has grown from its closed line to its content. */
   cardOpen: boolean;
-  onClose: () => void;
+  onClose?: () => void;
   onReachedTop?: () => void;
   topLeft?: React.ReactNode;
+  /** In place of Close, for a sheet with nowhere to close to (the survey's
+   *  sound toggle). */
+  topRight?: React.ReactNode;
   sheetRef?: React.Ref<HTMLDivElement>;
   children?: React.ReactNode;
 }) {
@@ -56,13 +60,15 @@ export function SignInSheet({
         className={`${satoshi.className} relative z-10 flex items-center justify-between gap-2 p-6`}
       >
         {topLeft}
-        <button
-          type="button"
-          onClick={onClose}
-          className={cn(CTA_CLASS, "ml-auto")}
-        >
-          Close
-        </button>
+        {topRight ?? (
+          <button
+            type="button"
+            onClick={onClose}
+            className={cn(CTA_CLASS, "ml-auto")}
+          >
+            Close
+          </button>
+        )}
       </div>
       <div className="pointer-events-none absolute bottom-6 left-6 z-10">
         {/* eslint-disable-next-line @next/next/no-img-element */}

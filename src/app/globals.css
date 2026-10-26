@@ -1074,6 +1074,82 @@ body.t-deck-dragging * {
   translate: 0 40px;
 }
 
+/* The survey (/survey) on the same card: a little wider for its questions,
+ * wider again for the tour's stage. Width tweens via `.t-resize`. */
+.t-login-modal:has(.t-survey) {
+  width: min(460px, 100% - 32px);
+}
+.t-login-modal:has(.t-survey-wide) {
+  width: min(660px, 100% - 32px);
+}
+/* A phone's sheet has the Back / sound row right above a centred card; a
+ * tall question met it. Down a little, clear of the row. */
+@media (max-width: 639px) {
+  .t-login-modal:has(.t-survey, .t-survey-wide) {
+    translate: 0 32px;
+  }
+  /* …which leaves the Edmonton mark half under it: drop the mark there. */
+  .t-signin-bg:has(.t-survey, .t-survey-wide) img[src="/hero/edmonton.png"] {
+    display: none;
+  }
+}
+
+/* The survey's price slider: a warm-ink fill up to the thumb (`--fill`, set
+ * inline), a white thumb with the hairline the choice buttons use. */
+.t-survey-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+.t-survey-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #1c1917 var(--fill, 0%),
+    rgb(28 25 23 / 0.12) var(--fill, 0%)
+  );
+}
+.t-survey-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(28 25 23 / 0.12);
+}
+.t-survey-range::-moz-range-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: #1c1917;
+}
+.t-survey-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  margin-top: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #d9d9de;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+  transition: transform 150ms;
+}
+.t-survey-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid #d9d9de;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+}
+.t-survey-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+.t-survey-range:focus-visible {
+  outline: 2px solid #1c1917;
+  outline-offset: 4px;
+  border-radius: 999px;
+}
+
 /* Fixed slot so the modal grows **once**: with an auto-height child it
  * tweened twice (placeholder height, then Cal's own height on load). The
  * height is what Cal reports for `month_view` at this width (measured in
