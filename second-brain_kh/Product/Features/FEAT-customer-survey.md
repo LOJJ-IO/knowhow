@@ -10,7 +10,7 @@ related: ["[[FEAT-landing-login-panel]]", "[[FEAT-landing-book-a-demo]]", "[[000
 # FEAT: Customer survey (`/survey`)
 
 ## Status
-`in-progress`: built by Tolu with Claude, 2026-10-25. Local, uncommitted, not deployed. Not yet hooked to a sheet (env vars unset).
+`in-progress`: built by Tolu with Claude, 2026-10-25. Local, uncommitted, not deployed. Live on knohow.app/survey since 2026-10-26, hooked to a sheet through Railway env vars.
 
 ## Problem
 The team is emailing ~120 administrators at African and Caribbean non-profits (associations, advocacy groups and more) to ask whether they'd use Knohow and pay $1,800 a year. Target is 30 responses; if there are fewer by Sun Nov 1, follow-ups go out and the deadline moves to Sun Nov 8. The brief asked for the questions to go into Fillout. Tolu asked for a page on knohow.app instead, fully in Knohow's own look, with a short interactive look at the product before the questions.
@@ -29,6 +29,7 @@ Look: the sign-in sky sheet and `LoginModal` card (height tweens between screens
 - **`?ref=`** on each person's link (e.g. `knohow.app/survey?ref=row-17`, matching the outreach list) is stored in the `ref` column. That shows who answered without needing their email, so follow-ups go only to people who haven't.
 - **`response_id`**: one per browser, made on first send. The Apps Script updates that row on a resend instead of adding a duplicate.
 - **Progress is saved in the browser** (`knohow_survey_v1` in localStorage). A refresh resumes where they stopped, and a finished browser shows the thank-you screen rather than allowing a second submission.
+- **Partial answers are kept (Tolu, 2026-10-26; Isaac asked):** every answer is sent as it's given (`sendProgress` in `survey-flow.tsx`), so someone who stops at the price question still leaves their earlier answers. The row upserts on `response_id`; `completed` is `yes` only after Send. Sends are queued one at a time so a slow earlier one can't blank newer answers. The tour and intro send nothing. Google accounts aren't tracked (no sign-in).
 - The optional email is a fallback. Nothing stops one person answering from two browsers.
 
 ## Out of scope

@@ -269,6 +269,32 @@ function useSaved() {
   );
 }
 
+/* ——— Sending ———
+ * One row per browser, rewritten whole on every send (the sheet's script
+ * upserts on `response_id`), so sends go one at a time, in order: a slow
+ * earlier one landing after a later one would blank the newer answers. */
+
+let sending: Promise<unknown> = Promise.resolve();
+
+function sendProgress(completed: boolean): Promise<boolean> {
+  const { history, answers } = loadSaved();
+  const response: SurveyResponse = {};
+  for (const s of history)
+    for (const field of STEP_FIELDS[s] ?? [])
+      if (answers[field]) response[field] = answers[field];
+  // Nothing answered yet (the intro and the tour): nothing to record.
+  if (!completed && !Object.keys(response).length) return Promise.resolve(true);
+  const ref = new URLSearchParams(window.location.search).get("ref");
+  if (ref) response.ref = ref;
+  const responseId = loadSaved().responseId ?? crypto.randomUUID();
+  if (responseId !== loadSaved().responseId) save({ ...loadSaved(), responseId });
+  response.response_id = responseId;
+  if (completed) response.completed = "yes";
+  const run = sending.then(() => submitSurvey(response).then((r) => r.ok));
+  sending = run.catch(() => false);
+  return run.catch(() => false);
+}
+
 /* ——— The page ——— */
 
 export function SurveyFlow() {
@@ -289,8 +315,12 @@ export function SurveyFlow() {
   };
   const go = (next: StepId) =>
     update({ history: [...loadSaved().history, next] });
-  const advance = (answers: SurveyResponse = loadSaved().answers) =>
+  const advance = (answers: SurveyResponse = loadSaved().answers) => {
     go(nextStep(step, answers));
+    // Each answer goes to the sheet as it's given, so someone who stops at
+    // the price question still leaves what they said before it.
+    void sendProgress(false);
+  };
   const back = () => {
     const { history } = loadSaved();
     if (history.length > 1) update({ history: history.slice(0, -1) });
@@ -362,18 +392,8 @@ export function SurveyFlow() {
       <AboutScreen
         initial={state.answers}
         onSend={async (about) => {
-          const answers = answer(about);
-          const { history } = loadSaved();
-          const response: SurveyResponse = {};
-          for (const s of history)
-            for (const field of STEP_FIELDS[s] ?? [])
-              if (answers[field]) response[field] = answers[field];
-          const ref = new URLSearchParams(window.location.search).get("ref");
-          if (ref) response.ref = ref;
-          const responseId = loadSaved().responseId ?? crypto.randomUUID();
-          update({ responseId });
-          response.response_id = responseId;
-          const { ok } = await submitSurvey(response);
+          answer(about);
+          const ok = await sendProgress(true);
           if (ok) {
             playChime();
             go("done");

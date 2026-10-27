@@ -23,6 +23,9 @@ export const SURVEY_FIELDS = [
   /** One per browser: a resend after a failed or lost reply updates the same
    *  row instead of adding a second. */
   "response_id",
+  /** "yes" once they reach Send; blank means they stopped partway, and the
+   *  row holds what they answered up to then. */
+  "completed",
 ] as const;
 
 export type SurveyField = (typeof SURVEY_FIELDS)[number];
