@@ -3,6 +3,9 @@
 
 Kinds, in the order they're returned:
   join_request    a joiner waiting on a team you lead (owner / Super Admin back up)
+  outside_joined  someone from outside the org came in through a team's
+                  outside link; owner and Super Admins keep or remove them
+                  (ADR-0035)
   owner_claim     someone claimed to be owner; founder or Super Admin confirms,
                   never the claimant themself (ADR-0021: a claim, not a grant)
   no_owner        nobody sits at the top and nobody has claimed it
@@ -82,6 +85,10 @@ def pending_tasks(org_id: uuid.UUID, member: OrgMember, db: Session) -> list[dic
                 "created_at": req.created_at.isoformat(),
             }
         )
+
+    from app.members.outside import outside_join_tasks
+
+    tasks.extend(outside_join_tasks(org_id, member, db))
 
     if chart is not None:
         claimant_id = chart.pending_owner_member_id

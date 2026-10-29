@@ -50,6 +50,7 @@ const SIGN_IN_ERRORS = [
   "link_locked",
   "link_not_found",
   "other_organization",
+  "removed",
   "no_account",
   "state_expired",
   "google_denied",
@@ -466,6 +467,7 @@ export function SignInResultPanel({
     case "link_locked":
     case "link_not_found":
     case "other_organization":
+    case "removed":
     case "no_account":
     case "state_expired":
     case "google_denied":
@@ -492,6 +494,10 @@ export function SignInResultPanel({
         other_organization: [
           "That account is already in use",
           "It belongs to another organization on Knohow. Sign in with a different account.",
+        ],
+        removed: [
+          "You were removed from this organization",
+          "Ask whoever sent the link if you should be let back in.",
         ],
         no_account: [
           "There’s no Knohow account for that email",

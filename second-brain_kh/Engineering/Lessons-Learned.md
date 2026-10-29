@@ -3,7 +3,7 @@ type: pattern
 status: active
 tags: []
 created: 2026-08-31
-updated: 2026-10-15
+updated: 2026-10-25
 related: ["[[Known-Issues]]", "[[Architecture-Overview]]", "[[Current-Context]]"]
 ---
 
@@ -628,3 +628,9 @@ On the Windows dev box, a reload after an edit logs "Reloading..." and never res
 Google returns `error=access_denied` (cancel, or an unverified app in Testing mode refusing a non-test user) with **no `code`**. A FastAPI callback declaring `code: str` turns that into a raw 422 JSON page with no way back. Every callback takes `code`/`state`/`error` as optional and sends errors somewhere retryable; after a failed sign-in, ask Google for the account chooser (`prompt=select_account`) or it silently reuses the same blocked account.
 
 - **Recording UI clips: use Chrome's screencast, not Playwright's `recordVideo` (Ronald, 2026-10-15).** `recordVideo` is ~0.8 Mbps VP8 at 1x and pads (doesn't scale) when `size` differs from the viewport, so text came out soft with grey bars. `Page.startScreencast` over a CDP session at `deviceScaleFactor: 2` gives ~37 fps JPEG frames with timestamps; hold each until the next (ffmpeg concat `duration`) and encode at 30 fps. Do zooms in the page (CSS transform on `body`), not in ffmpeg, so text re-rasterises sharp. Measure a dialog for framing after it has finished opening. See `scripts/deck-clips/`.
+
+## 2026-10-16 — `overview.teams` order isn't stable (Tolu)
+Home's team order changes as teams get activity: making an outside link for Engineering moved it from first to last after the next overview refresh. Any picker that defaults to `overview.teams[0]` jumps to another team under the pointer. The Outside link team picker sorts by name for that reason (`outside-link-section.tsx`). Sort, or keep the chosen id, whenever a control defaults to "the first team".
+
+## 2026-10-25 — Never hand a `useEffectEvent` function to `addEventListener` (Tolu)
+The survey's number-key shortcut passed the effect event straight to `window.addEventListener` and removed it in cleanup. Its identity isn't stable, so `removeEventListener` never matched: every past question's listener stayed attached, and one keypress answered several questions. Wrap it: `const listener = (e) => onKey(e)`, then add and remove `listener`. (`src/components/survey/survey-flow.tsx`)

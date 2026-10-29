@@ -105,7 +105,15 @@ export type Sharing = {
   /** The company owner, for the Owner badge. */
   owner_id: string | null;
   teams: SharingTeam[];
+};
+
+/** The caller's files waiting on a share decision, read live from Drive:
+ *  `total` is every pending one, `unreadable` those Google wouldn't show. */
+export type SharingSuggestions = {
   suggestions: Suggestion[];
+  total: number;
+  unreadable: number;
+  drive_connected: boolean;
 };
 
 export type ActivePerson = Person & {
@@ -185,7 +193,12 @@ export const resolveUnresolved = (orgId: string, id: string) =>
 
 export const fetchSharing = (orgId: string) => call<Sharing>(`${org(orgId)}/sharing`);
 
-export const setAutoOwn = (orgId: string, teamId: string, on: boolean) =>
+export const fetchSharingSuggestions = (orgId: string, q = "") =>
+  call<SharingSuggestions>(
+    `${org(orgId)}/sharing/suggestions${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`,
+  );
+
+export const setAutoOwn =(orgId: string, teamId: string, on: boolean) =>
   call(`${org(orgId)}/teams/${teamId}`, {
     method: "PATCH",
     body: JSON.stringify({ auto_own_enabled: on }),

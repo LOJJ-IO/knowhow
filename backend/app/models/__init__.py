@@ -27,6 +27,7 @@ from app.models.remembered_account import RememberedAccount
 from app.models.suggested_share import SuggestedShare, SuggestedShareStatus
 from app.models.team import Team
 from app.models.team_join_request import TeamJoinRequest, TeamJoinRequestStatus
+from app.models.team_outside_link import TeamOutsideLink
 from app.models.transfer_batch import (
     TransferBatch,
     TransferBatchItem,
@@ -72,6 +73,7 @@ __all__ = [
     "Team",
     "TeamJoinRequest",
     "TeamJoinRequestStatus",
+    "TeamOutsideLink",
     "TransferBatch",
     "TransferBatchItem",
     "TransferBatchType",

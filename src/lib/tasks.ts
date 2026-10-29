@@ -16,6 +16,15 @@ export type Task =
       person: TaskPerson | null;
     }
   | { kind: "owner_claim"; id: string; person: TaskPerson | null }
+  /** Someone from outside the org came in through a team's outside link
+   *  (ADR-0035); owner and Super Admins keep or remove them. `id` is the
+   *  member's id. */
+  | {
+      kind: "outside_joined";
+      id: string;
+      person: TaskPerson | null;
+      teams: { id: string; name: string }[];
+    }
   | { kind: "no_owner"; id: string }
   | { kind: "no_super_admin"; id: string }
   | { kind: "company_drive"; id: string }
@@ -87,6 +96,13 @@ export async function fetchTasks(organizationId: string): Promise<Task[]> {
       };
     if (t.kind === "owner_claim")
       return { kind: t.kind, id: t.id, person: person(t.person as RawPerson) };
+    if (t.kind === "outside_joined")
+      return {
+        kind: t.kind,
+        id: t.id,
+        person: person(t.person as RawPerson),
+        teams: t.teams as { id: string; name: string }[],
+      };
     if (t.kind === "linked_drive")
       return { kind: t.kind, id: t.id, email: t.email as string };
     if (

@@ -22,12 +22,12 @@ const LIFETIMES = [
 
 /** Shared by Lock / Unlock and the lifetime dropdown so they match. The
  *  width fits the longest lifetime label ("No end date"). */
-const PILL =
+export const PILL =
   "flex h-9 w-28 shrink-0 whitespace-nowrap cursor-pointer items-center justify-center gap-2 rounded-full border border-[var(--app-border)] bg-white px-4 transition-colors duration-150 hover:border-[#d9d9de]";
 
 /** The shortest the spinner cursor shows for, so it reads as a step, not a
  *  flicker (600ms was still too fast, user 2026-09-29). */
-const MIN_CREATING_MS = 1200;
+export const MIN_CREATING_MS = 1200;
 
 /** Who gets in without the owner deciding each time: auto-approve for
  *  Workspace accounts, and the join link (ADR-0021). Lives in Manage teams
@@ -43,11 +43,6 @@ export function JoiningSection() {
   const [reissuing, setReissuing] = useState(false);
   /** A new link was just made: the plus shows a tick for 1.5s, like Copy. */
   const [created, setCreated] = useState(false);
-  /** Where the pointer was on New link's click: the spinner cursor starts
-   *  there. */
-  const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(
-    null,
-  );
   /** Its own flag: sharing Create's made that button flash "Creating…". */
   const [locking, setLocking] = useState(false);
   const [error, setError] = useState("");
@@ -187,46 +182,11 @@ export function JoiningSection() {
                 </p>
               )}
             </div>
-            <Button
-              variant="outline"
-              className="group relative"
-              aria-busy={reissuing}
-              onClick={(e) => {
-                setPointerAt({ x: e.clientX, y: e.clientY });
-                void reissueLink();
-              }}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                {/* Drawn on a 16px grid with 2px bars so both strokes land on
-                  whole pixels; Lucide's 24-unit Plus blurs unevenly at 16px. */}
-                <svg
-                  aria-hidden
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  className="size-4 shrink-0 transform-gpu transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110 group-disabled:scale-100 motion-reduce:transition-none"
-                >
-                  {created ? (
-                    // Drawn in rather than swapped (user 2026-09-29).
-                    <path
-                      d="M3 8.5l3.5 3.5L13 4.5"
-                      strokeLinejoin="round"
-                      pathLength={1}
-                      className="app-draw-in"
-                    />
-                  ) : (
-                    <path d="M8 3v10M3 8h10" />
-                  )}
-                </svg>
-                New link
-              </span>
-              {reissuing ? <span className="sr-only">Creating</span> : null}
-            </Button>
-            {/* While a link is made the mouse pointer is the landing's Get
-                Started spinner (user 2026-09-29). */}
-            <SpinnerCursor active={reissuing} from={pointerAt} />
+            <NewLinkButton
+              busy={reissuing}
+              created={created}
+              onClick={() => void reissueLink()}
+            />
           </div>
         </div>
       ) : null}
@@ -278,7 +238,69 @@ export function JoiningSection() {
   );
 }
 
-function Row({
+/** New link, with the plus that draws into a tick once a link is made. While
+ *  it's busy the mouse pointer is the landing's Get Started spinner (user
+ *  2026-09-29). Shared by the join link and teams' outside links. */
+export function NewLinkButton({
+  busy,
+  created,
+  onClick,
+}: {
+  busy: boolean;
+  created: boolean;
+  onClick: () => void;
+}) {
+  /** Where the pointer was on the click: the spinner cursor starts there. */
+  const [pointerAt, setPointerAt] = useState<{ x: number; y: number } | null>(
+    null,
+  );
+  return (
+    <>
+    <Button
+      variant="outline"
+      className="group relative"
+      aria-busy={busy}
+      onClick={(e) => {
+        setPointerAt({ x: e.clientX, y: e.clientY });
+        onClick();
+      }}
+    >
+      <span className="inline-flex items-center gap-1.5">
+        {/* Drawn on a 16px grid with 2px bars so both strokes land on
+          whole pixels; Lucide's 24-unit Plus blurs unevenly at 16px. */}
+        <svg
+          aria-hidden
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          className="size-4 shrink-0 transform-gpu transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-110 group-disabled:scale-100 motion-reduce:transition-none"
+        >
+          {created ? (
+            // Drawn in rather than swapped (user 2026-09-29).
+            <path
+              d="M3 8.5l3.5 3.5L13 4.5"
+              strokeLinejoin="round"
+              pathLength={1}
+              className="app-draw-in"
+            />
+          ) : (
+            <path d="M8 3v10M3 8h10" />
+          )}
+        </svg>
+        New link
+      </span>
+      {busy ? <span className="sr-only">Creating</span> : null}
+    </Button>
+    {/* While a link is made the mouse pointer is the landing's Get
+        Started spinner (user 2026-09-29). */}
+    <SpinnerCursor active={busy} from={pointerAt} />
+    </>
+  );
+}
+
+export function Row({
   label,
   display,
   children,
@@ -303,7 +325,7 @@ function Row({
 
 /** The link lifetime as a compact dropdown, drawn like the profile menu. It
  *  opens inside a dialog, so it sits above dialogs (500), under tooltips. */
-function LifetimeMenu({
+export function LifetimeMenu({
   value,
   onChange,
 }: {

@@ -28,6 +28,7 @@ import { sohne } from "@/components/brand/logo-mark";
 import {
   fetchDrivePreview,
   fetchLinkedDrivePreviews,
+  type DrivePreview,
   type DrivePreviewFile,
   type LinkedDrivePreview,
 } from "@/lib/drive-preview";
@@ -76,7 +77,7 @@ const plural = (n: number, one: string, many: string) =>
  *  Drive, you say what's company work, and those files
  *  land in Knohow folders. Drive itself is never reorganised. */
 export function WorkspaceScreen() {
-  const { chrome } = useSession();
+  const { chrome, me } = useSession();
   const { reloadTasks } = useUpdates();
   const org = chrome.organizationId;
 
@@ -112,14 +113,21 @@ export function WorkspaceScreen() {
   /** A personal file dragged onto a folder: a company copy goes in it
    *  straight away (Ronald, 2026-10-13). */
   async function dropPersonalFile(f: FolderSummary, data: string) {
-    let file: { email: string; id: string; name: string };
+    let file: { email: string; id: string; name: string; own?: boolean };
     try {
       file = JSON.parse(data);
     } catch {
       return;
     }
     try {
-      const result = await importLinkedFiles(org, file.email, [file.id], "company", f.id);
+      // A club member's own Drive is read as them, so it files like Add
+      // files' "From your Drive"; a linked account is imported as a copy.
+      const result = file.own
+        ? await addDriveFileToFolder(org, f.id, file.id).then(
+            () => ({ failed: [] as string[] }),
+            () => ({ failed: [file.id] }),
+          )
+        : await importLinkedFiles(org, file.email, [file.id], "company", f.id);
       if (result.failed.length) {
         toasts.add({ title: `${file.name} couldn’t be added`, description: "Google may not allow copying it." });
       } else {
@@ -162,6 +170,23 @@ export function WorkspaceScreen() {
       cancelled = true;
     };
   }, [org]);
+
+  /** A club member's own Drive (ADR-0034): there is no work account to link,
+   *  so their Drive is the personal section, to drag files from. */
+  const isClub = me.organization_kind === "club";
+  const [ownDrive, setOwnDrive] = useState<DrivePreview | null>(null);
+  useEffect(() => {
+    if (!isClub) return;
+    let cancelled = false;
+    fetchDrivePreview(org)
+      .then((preview) => {
+        if (!cancelled) setOwnDrive(preview);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [org, isClub]);
 
   const refreshFolders = useCallback(async () => {
     try {
@@ -324,6 +349,16 @@ export function WorkspaceScreen() {
         </div>
         {/* An unconnected linked account is a Pending task in Notifications,
             not a prompt here (user 2026-09-27). */}
+        {ownDrive?.connected ? (
+          <LinkedAccount
+            org={org}
+            title="Your Drive"
+            blurb={`Reading as ${ownDrive.connectedAs ?? "you"}. Drag a file onto a folder to add it. Only you can see this list.`}
+            own
+            account={{ email: ownDrive.connectedAs ?? "", connected: true, files: ownDrive.files, error: null }}
+            onImported={() => void refreshFolders()}
+          />
+        ) : null}
         {linked
           .filter((account) => account.connected)
           .map((account) => (
@@ -436,10 +471,17 @@ function LinkedAccount({
   org,
   account,
   onImported,
+  title = "Personal account",
+  blurb,
+  own = false,
 }: {
   org: string;
   account: LinkedDrivePreview;
   onImported: () => void;
+  title?: string;
+  blurb?: string;
+  /** The member's own Drive rather than a linked account: dragging only. */
+  own?: boolean;
 }) {
   const [adding, setAdding] = useState(false);
   return (
@@ -448,17 +490,19 @@ function LinkedAccount({
         <h2
           className={`${sohne.className} text-[1.125rem] leading-[1.3] tracking-tight text-[#1c1917]`}
         >
-          Personal account
+          {title}
         </h2>
-        <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-          <Plus size={16} strokeWidth={NAV_STROKE} />
-          Add to Knohow
-        </Button>
+        {own ? null : (
+          <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+            <Plus size={16} strokeWidth={NAV_STROKE} />
+            Add to Knohow
+          </Button>
+        )}
       </div>
       <p
         className={`${satoshi.className} mt-2 max-w-[34rem] text-[0.9375rem] leading-[1.55] text-[var(--app-dim)]`}
       >
-        {`Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`}
+        {blurb ?? `Reading as ${account.email}. Only you can see these, and nothing here is saved to Knohow.`}
       </p>
       {account.error ? (
         <p className={`${satoshi.className} mt-3 text-[0.875rem] text-[#EA4335]`}>
@@ -476,7 +520,7 @@ function LinkedAccount({
                 e.dataTransfer.effectAllowed = "copy";
                 e.dataTransfer.setData(
                   PERSONAL_FILE_DRAG,
-                  JSON.stringify({ email: account.email, id: file.id, name: file.name }),
+                  JSON.stringify({ email: account.email, id: file.id, name: file.name, own }),
                 );
               }}
             >

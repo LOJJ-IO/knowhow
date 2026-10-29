@@ -31,6 +31,7 @@ import { TeamIcon } from "@/components/identity/team-icon";
 import {
   decideSuggestion,
   fetchSharing,
+  fetchSharingSuggestions,
   peopleById,
   saveSharingRule,
   setAutoOwn,
@@ -38,6 +39,7 @@ import {
   type ShareRole,
   type Sharing,
   type SharingRule,
+  type SharingSuggestions,
   type SharingTeam,
 } from "@/lib/governance";
 
@@ -104,6 +106,28 @@ export function SharingScreen() {
     void refresh();
   }, [refresh]);
 
+  // The files waiting on a share decision cost a Drive call each, so they
+  // load when the dialog opens, not with the team rules.
+  const [waiting, setWaiting] = useState<SharingSuggestions | null>(null);
+  const [waitingError, setWaitingError] = useState("");
+  /** Searches by name, so a long backlog doesn't mean scrolling it all. */
+  const [waitingQuery, setWaitingQuery] = useState("");
+  const refreshWaiting = useCallback(async () => {
+    try {
+      setWaiting(await fetchSharingSuggestions(org, waitingQuery));
+      setWaitingError("");
+    } catch (e) {
+      setWaitingError(message(e));
+    }
+  }, [org, waitingQuery]);
+  useEffect(() => {
+    if (!sharesOpen) return;
+    // Loads when the dialog opens, and a moment after typing stops; state is
+    // set only after the fetch resolves.
+    const timer = window.setTimeout(() => void refreshWaiting(), waitingQuery ? 300 : 0);
+    return () => window.clearTimeout(timer);
+  }, [sharesOpen, refreshWaiting, waitingQuery]);
+
   const people = useMemo(() => peopleById(data?.people ?? []), [data]);
   const topLeaders = (data?.top_leader_ids ?? []).map((id) => people.get(id));
 
@@ -111,7 +135,7 @@ export function SharingScreen() {
     setBusy(fileId);
     try {
       await decideSuggestion(fileId, share);
-      await refresh();
+      await refreshWaiting();
       reloadTasks();
     } catch (e) {
       setError(message(e));
@@ -288,9 +312,22 @@ export function SharingScreen() {
         <p className={`${satoshi.className} mb-4 text-[0.9375rem] text-[var(--app-dim)]`}>
           Files you made outside Knohow. Share them the way Knohow would have?
         </p>
-        {data?.suggestions.length ? (
+        {waiting && waiting.total > 5 ? (
+          <input
+            type="search"
+            value={waitingQuery}
+            onChange={(e) => setWaitingQuery(e.target.value)}
+            placeholder="Search by name"
+            aria-label="Search files waiting for you"
+            className="mb-4 h-10 w-full rounded-[10px] border border-[var(--app-border)] bg-white px-3 text-[0.9375rem] text-[#1c1917] outline-none focus:border-[#1c1917]"
+          />
+        ) : null}
+        {waitingError ? (
+          <p className={`${satoshi.className} mb-3 text-[0.875rem] text-[#EA4335]`}>{waitingError}</p>
+        ) : null}
+        {waiting?.suggestions.length ? (
           <ul className="flex flex-col gap-2">
-                {data.suggestions.map((s) => {
+                {waiting.suggestions.map((s) => {
                   const recipients = s.recipient_ids.map((id) => people.get(id));
                   return (
                     <li
@@ -345,9 +382,24 @@ export function SharingScreen() {
               </ul>
         ) : (
           <p className={`${satoshi.className} py-8 text-center text-[0.9375rem] text-[var(--app-dim)]`}>
-            Nothing waiting for you.
+            {!waiting
+              ? waitingError
+                ? ""
+                : "Loading…"
+              : waiting.total === 0
+                ? "Nothing waiting for you."
+                : waitingQuery.trim()
+                  ? "Nothing by that name."
+                : waiting.drive_connected
+                  ? `${plural(waiting.total, "file", "files")} waiting, but Google didn’t show them. They may have been deleted or moved.`
+                  : `${plural(waiting.total, "file", "files")} waiting. Connect your Drive to see them.`}
           </p>
         )}
+        {waiting && !waitingQuery.trim() && waiting.total > waiting.suggestions.length && waiting.suggestions.length ? (
+          <p className={`${satoshi.className} mt-4 text-center text-[0.8125rem] text-[var(--app-dim)]`}>
+            {plural(waiting.total - waiting.suggestions.length, "more file", "more files")} after these.
+          </p>
+        ) : null}
       </AppDialog>
     </AppPage>
   );

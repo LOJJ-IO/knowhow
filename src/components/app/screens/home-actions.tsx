@@ -8,6 +8,10 @@ import { AppDialog, MODAL_SWAP_MS } from "@/components/app/dialog";
 import { RenameDialog } from "@/components/app/item-menu";
 import { JoiningSection } from "@/components/app/joining-section";
 import { NewTeamDialog } from "@/components/app/new-team-dialog";
+import {
+  OutsideLinkPanel,
+  OutsideLinkSection,
+} from "@/components/app/outside-link-section";
 import { RemoveTeamDialog } from "@/components/app/remove-team-dialog";
 import { useSession } from "@/components/app/session";
 import { TeamMembersSection } from "@/components/app/team-members-section";
@@ -56,6 +60,10 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
   const [removeOpen, setRemoveOpen] = useState(false);
   /** Bumped on each open: a fresh warning, no choice carried over. */
   const [removeOpens, setRemoveOpens] = useState(0);
+  /** The team behind the menu's Add people from outside; kept after close
+   *  for the fade. */
+  const [outsideTeam, setOutsideTeam] = useState<OverviewTeam | null>(null);
+  const [outsideOpen, setOutsideOpen] = useState(false);
   /** A handoff between Manage teams and New team is under way: both keep
    *  the backdrop steady (no flash). */
   const [swapping, setSwapping] = useState(false);
@@ -157,7 +165,11 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
         </div>
         <div role="tabpanel">
           {tab === "joining" ? (
-            <JoiningSection />
+            <div className="flex flex-col gap-10">
+              <JoiningSection />
+              {/* Also in each team's menu (user 2026-10-16: both). */}
+              <OutsideLinkSection />
+            </div>
           ) : (
             <TeamMembersSection
               onRenameTeam={(team) => {
@@ -174,6 +186,12 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
                 setRemoveOpens((n) => n + 1);
                 setOpen(false);
                 swap(() => setRemoveOpen(true));
+              }}
+              onAddOutside={(team) => {
+                // Same swap as New team.
+                setOutsideTeam(team);
+                setOpen(false);
+                swap(() => setOutsideOpen(true));
               }}
             />
           )}
@@ -197,6 +215,21 @@ export function ManageTeamsButton({ teams }: { teams: { name: string }[] }) {
             refresh();
           }}
         />
+      ) : null}
+      {outsideTeam ? (
+        <AppDialog
+          open={outsideOpen}
+          swap={swapping}
+          onOpenChange={(next) => {
+            setOutsideOpen(next);
+            if (!next) swap(() => setOpen(true));
+          }}
+          title={`Add people from outside · ${outsideTeam.name}`}
+          size="sm"
+          footer={<Button onClick={() => setOutsideOpen(false)}>Done</Button>}
+        >
+          <OutsideLinkPanel key={outsideTeam.id} teamId={outsideTeam.id} hint />
+        </AppDialog>
       ) : null}
       <RemoveTeamDialog
         key={removeOpens}

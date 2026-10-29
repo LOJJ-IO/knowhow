@@ -92,7 +92,7 @@ def list_remembered_orgs(device_id: uuid.UUID, db: Session) -> list[RememberedOr
         .join(RememberedAccount, RememberedAccount.member_id == OrgMember.id)
         .join(Organization, Organization.id == OrgMember.organization_id)
         .outerjoin(Person, Person.id == OrgMember.person_id)
-        .where(RememberedAccount.device_id == device_id)
+        .where(RememberedAccount.device_id == device_id, OrgMember.removed_at.is_(None))
         .order_by(RememberedAccount.last_seen_at.desc())
     ).all()
     hidden = {

@@ -17,6 +17,7 @@ from app.api.routes import (
     offboard,
     onboarding,
     org_chart,
+    outside,
     reassignments,
     sandbox,
     search,
@@ -122,3 +123,4 @@ app.include_router(transfer_batches.router)
 app.include_router(webhooks.router)
 app.include_router(sandbox.router)
 app.include_router(governance.router)
+app.include_router(outside.router)

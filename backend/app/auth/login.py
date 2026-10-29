@@ -42,11 +42,12 @@ class LoginResult:
 def members_for_email(email: str, db: Session) -> list[OrgMember]:
     """Every membership this Google account has, newest first. Before club
     orgs (ADR-0034) an email had at most one; now a student can be in a
-    company and several clubs."""
+    company and several clubs. An account removed from an org (ADR-0035)
+    no longer counts as a membership there."""
     return list(
         db.execute(
             select(OrgMember)
-            .where(func.lower(OrgMember.email) == email.lower())
+            .where(func.lower(OrgMember.email) == email.lower(), OrgMember.removed_at.is_(None))
             .order_by(OrgMember.created_at.desc())
         ).scalars()
     )

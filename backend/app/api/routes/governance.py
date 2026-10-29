@@ -8,8 +8,10 @@ and POST /offboard."""
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
+import httplib2
+from google.auth.exceptions import GoogleAuthError
 from googleapiclient.errors import HttpError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -39,7 +41,9 @@ router = APIRouter(prefix="/organizations/{org_id}", tags=["governance"])
 
 
 def _people(org_id: uuid.UUID, db: Session) -> list[dict]:
-    members = db.execute(select(OrgMember).where(OrgMember.organization_id == org_id)).scalars().all()
+    members = db.execute(
+        select(OrgMember).where(OrgMember.organization_id == org_id, OrgMember.removed_at.is_(None))
+    ).scalars().all()
     memberships = db.execute(select(OrgMembership).where(OrgMembership.org_id == org_id)).scalars().all()
     teams_of: dict[uuid.UUID, list[str]] = {}
     for m in memberships:
@@ -375,29 +379,6 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
     is_club = org is not None and org.is_club
     club_account = org.club_account_member_id if is_club else None
 
-    pending = db.execute(
-        select(SuggestedShare)
-        .where(
-            SuggestedShare.org_id == org_id,
-            SuggestedShare.creator_user_id == member.id,
-            SuggestedShare.status == SuggestedShareStatus.PENDING,
-        )
-        .order_by(SuggestedShare.created_at.desc())
-    ).scalars().all()
-    live: dict[str, dict] = {}
-    if pending:
-        try:
-            drive = get_drive_client_for_user(member.id, db)
-            for s in pending:
-                try:
-                    live[s.file_id] = drive.files().get(
-                        fileId=s.file_id, fields="id,name,mimeType,modifiedTime,webViewLink"
-                    ).execute()
-                except HttpError:
-                    continue
-        except (DelegationNotApproved, PersonalAccountNotConsented):
-            pass
-
     return {
         "people": _people(org_id, db),
         "top_leader_ids": [str(m) for m in top_leaders],
@@ -420,6 +401,82 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
             }
             for t in _teams(org_id, db)
         ],
+    }
+
+
+# Titles are read live from Drive, one call per file, so only the newest few
+# are shown at a time; "Share" or "Not now" brings the next ones up.
+SUGGESTIONS_SHOWN = 25
+# One file Google or the network failed on is just "couldn't read it": it
+# mustn't turn the whole list into a 500.
+_DRIVE_READ_ERRORS = (HttpError, httplib2.HttpLib2Error, OSError)
+
+
+@router.get("/sharing/suggestions")
+def sharing_suggestions(
+    org_id: uuid.UUID,
+    q: str = Query("", max_length=200),
+    db: Session = Depends(get_db),
+    member: OrgMember = Depends(require_same_org),
+) -> dict:
+    """The caller's own files waiting on a share decision (titles read live,
+    shown only to their creator). Its own route so the team rules don't wait
+    on a Drive call per file: `total` is every pending row (the bell's count),
+    `unreadable` how many of the ones tried Google wouldn't show.
+
+    `q` searches by name. Titles are never stored (the file isn't Company
+    work yet), so Drive does the matching and only the pending files among
+    its answers are kept."""
+    pending = db.execute(
+        select(SuggestedShare)
+        .where(
+            SuggestedShare.org_id == org_id,
+            SuggestedShare.creator_user_id == member.id,
+            SuggestedShare.status == SuggestedShareStatus.PENDING,
+        )
+        .order_by(SuggestedShare.created_at.desc())
+    ).scalars().all()
+    query = q.strip()
+    tried = pending[:SUGGESTIONS_SHOWN]
+    live: dict[str, dict] = {}
+    connected = True
+    if tried:
+        try:
+            drive = get_drive_client_for_user(member.id, db)
+            if query:
+                wanted = {s.file_id for s in pending}
+                needle = query.replace("\\", "\\\\").replace("'", "\\'")
+                try:
+                    found = (
+                        drive.files()
+                        .list(
+                            q=f"name contains '{needle}' and trashed = false",
+                            orderBy="modifiedTime desc",
+                            pageSize=200,
+                            fields="files(id,name,mimeType,modifiedTime,webViewLink)",
+                        )
+                        .execute()
+                        .get("files", [])
+                    )
+                except _DRIVE_READ_ERRORS:
+                    found = []
+                hits = {f["id"]: f for f in found if f["id"] in wanted}
+                tried = [s for s in pending if s.file_id in hits][:SUGGESTIONS_SHOWN]
+                live = {s.file_id: hits[s.file_id] for s in tried}
+            for s in [] if query else tried:
+                try:
+                    live[s.file_id] = drive.files().get(
+                        fileId=s.file_id, fields="id,name,mimeType,modifiedTime,webViewLink"
+                    ).execute()
+                except _DRIVE_READ_ERRORS:
+                    continue
+        except (DelegationNotApproved, PersonalAccountNotConsented, GoogleAuthError):
+            connected = False
+
+    return {
+        "total": len(pending),
+        "unreadable": len(tried) - len(live),
+        "drive_connected": connected,
         "suggestions": [
             {
                 "id": str(s.id),
@@ -431,7 +488,7 @@ def sharing(org_id: uuid.UUID, db: Session = Depends(get_db), member: OrgMember 
                 "recipient_ids": list(s.proposed_recipients),
                 "created_at": _iso(s.created_at),
             }
-            for s in pending
+            for s in tried
             if s.file_id in live
         ],
     }

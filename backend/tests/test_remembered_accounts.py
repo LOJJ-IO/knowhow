@@ -303,7 +303,7 @@ def test_switch_refuses_an_account_this_browser_never_used(monkeypatch):
 
 def test_switch_issues_session_cookies_for_a_remembered_account(monkeypatch):
     member_id, org_id = uuid.uuid4(), uuid.uuid4()
-    member = SimpleNamespace(id=member_id, organization_id=org_id)
+    member = SimpleNamespace(id=member_id, organization_id=org_id, removed_at=None)
 
     class _Db:
         def get(self, model, key):

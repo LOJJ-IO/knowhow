@@ -279,6 +279,8 @@ def _sign_in_error_code(message: str) -> tuple[str, str | None]:
         return "link_not_found", None
     if message == "this Google account already belongs to another organization":
         return "other_organization", None
+    if message == "this account was removed from this organization":
+        return "removed", None
     return "error", None
 
 
@@ -378,7 +380,8 @@ def refresh(
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"invalid refresh token: {exc}") from exc
 
     member_id = uuid.UUID(payload["sub"])
-    if db.get(OrgMember, member_id) is None:
+    member = db.get(OrgMember, member_id)
+    if member is None or member.removed_at is not None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "member no longer exists")
 
     access_token = issue_access_token(member_id, uuid.UUID(payload["org_id"]))
@@ -426,7 +429,7 @@ def switch_account(
         )
 
     member = db.get(OrgMember, payload.member_id)
-    if member is None:
+    if member is None or member.removed_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "member no longer exists")
 
     set_session_cookies(

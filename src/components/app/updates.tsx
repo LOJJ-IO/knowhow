@@ -384,6 +384,8 @@ function taskLine(task: Task): string {
       return `${name(task.person)} wants to join ${task.team.name ?? "a team"}.`;
     case "owner_claim":
       return `${name(task.person)} says they’re the owner.`;
+    case "outside_joined":
+      return `${name(task.person)} joined ${task.teams.map((t) => t.name).join(", ") || "a team"} from outside.`;
     default:
       return "Something new needs you in Pending.";
   }

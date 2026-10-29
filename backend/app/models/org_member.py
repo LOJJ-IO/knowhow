@@ -65,6 +65,17 @@ class OrgMember(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Came in through a team's outside link (ADR-0035): someone without the
+    # org's email. The owner and Super Admins are told once they're in, and
+    # `outside_reviewed_at` is set when one of them keeps them.
+    joined_from_outside_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    outside_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Removed from the organization (ADR-0035, "kick them out"). The row
+    # stays for the audit trail and Knohow's file records, but it can't sign
+    # in, isn't listed, and the account can't come back by link.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = created_at_col()
 
     organization: Mapped["Organization"] = relationship(back_populates="members", foreign_keys=[organization_id])

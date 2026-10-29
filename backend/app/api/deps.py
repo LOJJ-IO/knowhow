@@ -33,6 +33,9 @@ def get_current_member(
     member = db.get(OrgMember, uuid.UUID(payload["sub"]))
     if member is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "member no longer exists")
+    if member.removed_at is not None:
+        # Removed from the organization (ADR-0035): the session ends here.
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "removed from this organization")
 
     return member
 

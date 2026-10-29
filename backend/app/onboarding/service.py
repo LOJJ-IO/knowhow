@@ -202,6 +202,13 @@ def resolve_join_link_preview(token: str, db: Session) -> dict:
     tags and the sign-in screen when someone arrives on the link. Deliberately
     exposes only the org name and domain, never member data."""
     link = db.execute(select(JoinLink).where(JoinLink.token == token)).scalar_one_or_none()
+    if link is None:
+        # Or a team's outside link (ADR-0035), served on the same page.
+        from app.members.outside import find_outside_link, outside_link_preview
+
+        outside = find_outside_link(token, db)
+        if outside is not None:
+            return outside_link_preview(outside, db)
     # The sales sandbox can make links, but nobody real can arrive through one.
     if link is None or is_sandbox_org(link.organization_id):
         raise ValueError("join link not found")
@@ -660,6 +667,19 @@ def complete_signup(code: str, state: str, db: Session) -> SignupResult:
     invited = invite_email is not None or "open_admin_invite" in state_payload
     join_org: Organization | None = None
     if join_token:
+        from app.members.outside import find_outside_link, join_through_outside_link
+
+        outside = find_outside_link(join_token, db)
+        if outside is not None:
+            # A team's link for people outside the org (ADR-0035): any
+            # Google account, straight into (or asking to join) that team.
+            member = join_through_outside_link(
+                outside, email, id_token_claims.get("name"), id_token_claims.get("hd"), db
+            )
+            needs_admin_proof = accept_invitations_on_sign_in(member, db)
+            return SignupResult(
+                login=_login_result(member), needs_admin_proof=needs_admin_proof, invite_wrong_account=wrong_account
+            )
         join_org = _org_for_valid_join_token(join_token, db)
 
     members = members_for_email(email, db)
@@ -785,6 +805,9 @@ def _join_club(
     """Into a club by its link: any Google account, approved on arrival (the
     link is the club's invitation); teams with a lead still approve a
     newcomer in the join wizard (ADR-0021)."""
+    from app.members.outside import assert_not_removed
+
+    assert_not_removed(org.id, email, db)
     member = OrgMember(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -811,6 +834,9 @@ def _join_existing_org(
     email: str, display_name: str | None, org: Organization, hosted_domain: str | None, db: Session
 ) -> OrgMember:
     """Place a new Workspace account into an org that already exists (join link)."""
+    from app.members.outside import assert_not_removed
+
+    assert_not_removed(org.id, email, db)
     member = OrgMember(
         id=uuid.uuid4(),
         organization_id=org.id,
@@ -1103,7 +1129,9 @@ def list_members(org_id: uuid.UUID, db: Session) -> list[OrgMember]:
     the caller's route dependency."""
     return list(
         db.execute(
-            select(OrgMember).where(OrgMember.organization_id == org_id).order_by(OrgMember.created_at)
+            select(OrgMember)
+            .where(OrgMember.organization_id == org_id, OrgMember.removed_at.is_(None))
+            .order_by(OrgMember.created_at)
         ).scalars()
     )
 

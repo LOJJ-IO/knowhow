@@ -399,3 +399,70 @@ export async function removeFromTeam(
   );
   if (!res.ok) throw new Error(await backendError(res));
 }
+
+/** A team's link for people outside the organization (ADR-0035). `url` is
+ *  null until one is made. `askFirst`: newcomers wait for the team lead. */
+export type OutsideLink = {
+  url: string | null;
+  askFirst: boolean;
+};
+
+export async function fetchOutsideLink(
+  organizationId: string,
+  teamId: string,
+): Promise<OutsideLink> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}/outside-link`,
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+  const body = (await res.json()) as { url: string | null; ask_first: boolean };
+  return { url: body.url, askFirst: body.ask_first };
+}
+
+/** A new link for the team; the one before stops working. */
+export async function createOutsideLink(
+  organizationId: string,
+  teamId: string,
+  lifetime: string,
+): Promise<string> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}/outside-link`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lifetime }),
+    },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+  return ((await res.json()) as { url: string }).url;
+}
+
+export async function setOutsideAskFirst(
+  organizationId: string,
+  teamId: string,
+  askFirst: boolean,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/teams/${teamId}/outside-link`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ask_first: askFirst }),
+    },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+}
+
+/** Owner / Super Admin, on "joined from outside": keep them, or take them
+ *  out of the organization. */
+export async function decideOutsideMember(
+  organizationId: string,
+  memberId: string,
+  keep: boolean,
+): Promise<void> {
+  const res = await backendFetch(
+    `/organizations/${organizationId}/outside-members/${memberId}/${keep ? "keep" : "remove"}`,
+    { method: "POST" },
+  );
+  if (!res.ok) throw new Error(await backendError(res));
+}

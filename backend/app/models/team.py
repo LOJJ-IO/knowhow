@@ -50,6 +50,11 @@ class Team(Base):
         UUID(as_uuid=True), ForeignKey("org_members.id"), nullable=True
     )
 
+    # Whether someone from outside the organization who uses this team's
+    # outside link waits for the team lead (ADR-0035). On unless the lead
+    # turns it off ("anyone with the link can join").
+    outside_ask_first: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
     created_at: Mapped[datetime] = created_at_col()
 
     memberships: Mapped[list["OrgMembership"]] = relationship(back_populates="team")

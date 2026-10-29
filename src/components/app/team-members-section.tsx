@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Menu } from "@base-ui/react/menu";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, UserPlus } from "lucide-react";
 
 import { Badge } from "@/components/app/badge";
 import {
@@ -10,6 +10,7 @@ import {
   TEAM_CLEAR_WIDTH,
 } from "@/components/app/notifications-dialog";
 import { NAV_STROKE } from "@/components/app/icon";
+import { useCanManageOutsideLink } from "@/components/app/outside-link-section";
 import { MENU_ITEM } from "@/components/app/profile-menu";
 import { useSession } from "@/components/app/session";
 import { useUpdates } from "@/components/app/updates";
@@ -31,17 +32,23 @@ import {
  *
  *  The owner and a Super Admin also get the same kebab on each team's row
  *  (Ronald, 2026-10-10; a red minus before): Rename, and in red, Remove
- *  team. Each asks the caller to open its dialog. */
+ *  team. Each asks the caller to open its dialog.
+ *
+ *  A team's lead gets the kebab on their own team too, for Add people from
+ *  outside (ADR-0035), which the owner and Super Admin also see. */
 export function TeamMembersSection({
   onRenameTeam,
   onRemoveTeam,
+  onAddOutside,
 }: {
   onRenameTeam?: (team: OverviewTeam) => void;
   onRemoveTeam?: (team: OverviewTeam) => void;
+  onAddOutside?: (team: OverviewTeam) => void;
 }) {
   const { chrome, me } = useSession();
   const { overview, refresh } = useUpdates();
   const [error, setError] = useState("");
+  const canManageOutside = useCanManageOutsideLink();
 
   if (!overview) return null;
 
@@ -79,15 +86,29 @@ export function TeamMembersSection({
                 >
                   {team.name}
                 </span>
-                {canRemoveTeams && onRenameTeam && onRemoveTeam ? (
+                {(canRemoveTeams && onRenameTeam && onRemoveTeam) ||
+                (onAddOutside && canManageOutside(team)) ? (
                   // In the column the member kebabs use.
                   <span
                     className={`${TEAM_CLEAR_WIDTH} relative flex h-5 shrink-0 items-center pl-3.5`}
                   >
                     <TeamMenu
                       name={team.name}
-                      onRename={() => onRenameTeam(team)}
-                      onRemove={() => onRemoveTeam(team)}
+                      onRename={
+                        canRemoveTeams && onRenameTeam
+                          ? () => onRenameTeam(team)
+                          : undefined
+                      }
+                      onAddOutside={
+                        onAddOutside && canManageOutside(team)
+                          ? () => onAddOutside(team)
+                          : undefined
+                      }
+                      onRemove={
+                        canRemoveTeams && onRemoveTeam
+                          ? () => onRemoveTeam(team)
+                          : undefined
+                      }
                     />
                   </span>
                 ) : null}
@@ -189,15 +210,18 @@ const KEBAB_DOTS = (
 
 /** A team's kebab (Ronald, 2026-10-10): Rename with the pencil, and Remove
  *  team with the bin in Notifications' destructive red, like the Workspace
- *  right-click menu. */
+ *  right-click menu. Add people from outside sits between them (ADR-0035).
+ *  Each item shows only when its handler is given. */
 function TeamMenu({
   name,
   onRename,
+  onAddOutside,
   onRemove,
 }: {
   name: string;
-  onRename: () => void;
-  onRemove: () => void;
+  onRename?: () => void;
+  onAddOutside?: () => void;
+  onRemove?: () => void;
 }) {
   return (
     <Menu.Root>
@@ -209,17 +233,27 @@ function TeamMenu({
           <Menu.Popup
             className={`${satoshi.className} app-modal min-w-[11rem] rounded-[16px] bg-white py-1 shadow-[0_18px_50px_rgba(0,0,0,0.16),0_0_0_1px_var(--app-border)] outline-none`}
           >
-            <Menu.Item onClick={onRename} className={MENU_ITEM}>
-              <Pencil size={18} strokeWidth={NAV_STROKE} />
-              Rename
-            </Menu.Item>
-            <Menu.Item
-              onClick={onRemove}
-              className={cn(MENU_ITEM, "text-[#EA4335] data-[highlighted]:text-[#EA4335]")}
-            >
-              <Trash2 size={18} strokeWidth={NAV_STROKE} />
-              Remove team
-            </Menu.Item>
+            {onRename ? (
+              <Menu.Item onClick={onRename} className={MENU_ITEM}>
+                <Pencil size={18} strokeWidth={NAV_STROKE} />
+                Rename
+              </Menu.Item>
+            ) : null}
+            {onAddOutside ? (
+              <Menu.Item onClick={onAddOutside} className={MENU_ITEM}>
+                <UserPlus size={18} strokeWidth={NAV_STROKE} />
+                Add people from outside
+              </Menu.Item>
+            ) : null}
+            {onRemove ? (
+              <Menu.Item
+                onClick={onRemove}
+                className={cn(MENU_ITEM, "text-[#EA4335] data-[highlighted]:text-[#EA4335]")}
+              >
+                <Trash2 size={18} strokeWidth={NAV_STROKE} />
+                Remove team
+              </Menu.Item>
+            ) : null}
           </Menu.Popup>
         </Menu.Positioner>
       </Menu.Portal>

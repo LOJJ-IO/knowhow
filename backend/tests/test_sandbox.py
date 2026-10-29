@@ -97,7 +97,8 @@ def test_screens_read_through_the_sandbox(client):
     ownership = client.get(f"/organizations/{ORG}/ownership").json()
     assert ownership["files"] and ownership["unresolved"] and any(b["status"] == "planned" for b in ownership["batches"])
     sharing = client.get(f"/organizations/{ORG}/sharing").json()
-    assert len(sharing["teams"]) == 6 and sharing["suggestions"]
+    assert len(sharing["teams"]) == 6
+    assert client.get(f"/organizations/{ORG}/sharing/suggestions").json()["suggestions"]
     off = client.get(f"/organizations/{ORG}/offboarding").json()
     assert off["active"] and off["history"]
     kinds = [t["kind"] for t in client.get(f"/organizations/{ORG}/tasks").json()]

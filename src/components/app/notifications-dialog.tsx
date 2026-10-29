@@ -27,7 +27,11 @@ import { satoshi } from "@/components/brand/fonts";
 import { TeamIcon } from "@/components/identity/team-icon";
 import { startDriveConsent, startLinkedDriveConsent } from "@/lib/backend";
 import { DotLine } from "@/components/app/dot-line";
-import type { ChangeEvent, OverviewMember } from "@/lib/organization";
+import {
+  decideOutsideMember,
+  type ChangeEvent,
+  type OverviewMember,
+} from "@/lib/organization";
 import { changeParts, relativeTime } from "@/lib/change-text";
 import { appEntryUrl } from "@/lib/origins";
 import { OPEN_SETTINGS_EVENT } from "@/lib/app-events";
@@ -191,7 +195,13 @@ export function NotificationsDialog({
                             task.id,
                             approve,
                           )
-                        : decideOwnerClaim(chrome.organizationId, approve),
+                        : task.kind === "outside_joined"
+                          ? decideOutsideMember(
+                              chrome.organizationId,
+                              task.id,
+                              approve,
+                            )
+                          : decideOwnerClaim(chrome.organizationId, approve),
                     )
                   }
                   onInvite={() => {
@@ -392,7 +402,7 @@ function TaskRow({
    *  cells in Pending's grid. */
   listItem?: boolean;
 }) {
-  const decide = (yes: string) => (
+  const decide = (yes: string, no = "Decline") => (
     <>
       <Button
         size="sm"
@@ -400,7 +410,7 @@ function TaskRow({
         disabled={busy}
         onClick={() => onApprove(false)}
       >
-        Decline
+        {no}
       </Button>
       <Button size="sm" disabled={busy} onClick={() => onApprove(true)}>
         {yes}
@@ -419,6 +429,12 @@ function TaskRow({
         return [
           `${nameOf(task.person)} says they’re the owner.`,
           decide("Confirm"),
+        ];
+      case "outside_joined":
+        // Remove takes them out of the organization (user 2026-10-16).
+        return [
+          `${nameOf(task.person)} joined ${task.teams.map((t) => t.name).join(", ") || "a team"} from outside.`,
+          decide("Keep", "Remove"),
         ];
       case "no_owner":
         return [
