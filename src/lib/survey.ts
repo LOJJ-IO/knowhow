@@ -3,20 +3,21 @@
  *  Action that forwards them, so a sheet's header row never drifts from what
  *  the page sends. Order here is column order. */
 export const SURVEY_FIELDS = [
-  "manages_team",
+  "name",
+  "organization",
+  "email",
+  "position",
+  "role",
   "suite",
-  "sharing_struggle",
-  "sorting_struggle",
-  "offboarding_struggle",
+  "links_hours",
+  "sorting_hours",
+  "offboarding_contact",
   "would_use",
   "pay_1800",
   "price_per_year",
   "why_not",
   "current_tools",
   "magic_wand",
-  "name",
-  "organization",
-  "email",
   /** `?ref=` on the survey link: who the email went to, so follow-ups only
    *  go to people who haven't answered. */
   "ref",
