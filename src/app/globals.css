@@ -1082,14 +1082,31 @@ body.t-deck-dragging * {
 .t-login-modal:has(.t-survey-wide) {
   width: min(660px, 100% - 32px);
 }
-/* A tall question (the feature list plus four wrapped answers) outgrew a
- * short window and was cut off top and bottom. Held clear of the Back /
- * sound row and the Edmonton mark (5.5rem each side), it scrolls inside. */
+/* Question 7 (the feature list plus four answers) is wider, so it needs no
+ * scrolling on a desktop window (the team: no scrolling unless a phone). */
+.t-login-modal-frame:has(.t-survey-roomy) {
+  width: min(620px, 100% - 32px);
+  transition: width 300ms var(--resize-ease);
+}
+.t-login-modal:has(.t-survey-roomy) {
+  width: 100%;
+}
+/* The fallback for a phone or a very short window: held clear of the Back /
+ * sound row and the Edmonton mark (5.5rem each side), the card scrolls inside
+ * rather than being cut off. */
 .t-login-modal:has(.t-survey, .t-survey-wide) {
   max-height: calc(100dvh - 11rem);
   overflow: hidden auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
+}
+/* On a wide window the Back and sound buttons and the Edmonton mark sit in
+ * the corners, clear of the centred card, so it may use nearly the full
+ * height. */
+@media (min-width: 1000px) {
+  .t-login-modal:has(.t-survey, .t-survey-wide) {
+    max-height: calc(100dvh - 2rem);
+  }
 }
 /* A phone's sheet has the Back / sound row right above a centred card; a
  * tall question met it. Down a little, clear of the row. */

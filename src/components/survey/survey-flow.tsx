@@ -132,6 +132,9 @@ type ChoiceStep = {
   heading: string;
   body?: React.ReactNode;
   options: string[];
+  /** A wider card (the feature list sits two by two), so it fits a window
+   *  without scrolling. */
+  roomy?: boolean;
 };
 
 const HOURS = ["0-1 hrs per week", "2-4 hrs per week", "4+ hrs per week"];
@@ -177,6 +180,7 @@ const CHOICES: Partial<Record<StepId, ChoiceStep>> = {
     options: ["Often", "Sometimes", "Rarely", "Never"],
   },
   use: {
+    roomy: true,
     field: "would_use",
     heading:
       "Here is our solution Knohow and how it solves the issues above, would you use this product?",
@@ -550,6 +554,7 @@ function ChoiceScreen({
   heading,
   body,
   options,
+  roomy,
   value,
   onPick,
   children,
@@ -611,7 +616,7 @@ function ChoiceScreen({
   }, []);
 
   return (
-    <div className="t-survey">
+    <div className={cn("t-survey", roomy && "t-survey-roomy")}>
       <SetupHeading onBack={null}>{heading}</SetupHeading>
       {body ? <SetupBody>{body}</SetupBody> : null}
       {children}
@@ -675,7 +680,7 @@ const FEATURE_LINES = [
 
 function FeatureRecap() {
   return (
-    <ul className={`${satoshi.className} mx-[2.5%] mt-5 mb-0 flex list-none flex-col gap-2 p-0`}>
+    <ul className={`${satoshi.className} mx-[2.5%] mt-5 mb-0 grid list-none gap-2 p-0 sm:grid-cols-2`}>
       {TOUR_SCENES.map(({ id, title, icon: Icon }, i) => (
         <li
           key={id}
