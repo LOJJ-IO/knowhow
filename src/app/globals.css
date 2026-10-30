@@ -1082,6 +1082,15 @@ body.t-deck-dragging * {
 .t-login-modal:has(.t-survey-wide) {
   width: min(660px, 100% - 32px);
 }
+/* A tall question (the feature list plus four wrapped answers) outgrew a
+ * short window and was cut off top and bottom. Held clear of the Back /
+ * sound row and the Edmonton mark (5.5rem each side), it scrolls inside. */
+.t-login-modal:has(.t-survey, .t-survey-wide) {
+  max-height: calc(100dvh - 11rem);
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
 /* A phone's sheet has the Back / sound row right above a centred card; a
  * tall question met it. Down a little, clear of the row. */
 @media (max-width: 639px) {

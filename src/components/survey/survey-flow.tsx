@@ -338,7 +338,12 @@ export function SurveyFlow() {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  const update = (patch: Partial<Saved>) => save({ ...loadSaved(), ...patch });
+  // A tall card scrolls inside itself; the next question starts at its top.
+  useEffect(() => {
+    document.querySelector(".t-login-modal")?.scrollTo(0, 0);
+  }, [step]);
+
+  const update =(patch: Partial<Saved>) => save({ ...loadSaved(), ...patch });
   const answer = (patch: SurveyResponse) => {
     const answers = { ...loadSaved().answers, ...patch };
     update({ answers });
