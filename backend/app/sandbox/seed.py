@@ -483,7 +483,8 @@ def add_demo_joiner(db: Session) -> uuid.UUID:
         email=email,
         display_name=name,
         auth_type=AuthType.DOMAIN_DELEGATED,
-        standing=MemberStanding.AUTO_AFFILIATED,
+        # Acme auto-approves its Workspace accounts, so a joiner is in at once.
+        standing=MemberStanding.APPROVED,
         created_at=now,
     )
     db.add(member)
