@@ -28,6 +28,8 @@ export type Me = {
   admin_proof_attempted: boolean;
   /** Joiner still needs the team-pick wizard (ADR-0021). */
   needs_join_placement: boolean;
+  /** In the sales sandbox (`/demo`). */
+  is_demo?: boolean;
   /** Owner unset on the chart — join wizard may offer an owner claim. */
   owner_claim_available: boolean;
 };

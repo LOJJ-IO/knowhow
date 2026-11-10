@@ -102,7 +102,7 @@ def test_the_demo_join_link_opens_the_team_pick_as_a_new_person(db):
     me = c.get("/auth/me").json()
     assert me["organization_id"] == ORG and me["needs_join_placement"] and not me["is_owner"]
     assert me["email"] == "new.member@acme.com"
-    assert me["standing"] == "approved"
+    assert me["standing"] == "approved" and me["is_demo"] is True
     # Another open is another person.
     other = TestClient(app)
     other.get("/sandbox/join/demo-join", follow_redirects=False)

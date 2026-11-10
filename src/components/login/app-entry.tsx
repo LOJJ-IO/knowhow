@@ -250,7 +250,9 @@ export function AppEntry({
 
   /** The back arrow on each card that has one. Log In itself has Close. */
   const back: (() => void) | null =
-    kind === "setup" || kind === "join"
+    kind === "join" && me?.is_demo
+      ? backToDemoOwner
+      : kind === "setup" || kind === "join"
       ? () => void backToLogIn()
       : kind === "connect"
         ? intoTheApp
@@ -281,6 +283,14 @@ export function AppEntry({
 
   /** Close the card first (its own resize), so the finish is visible at
    *  once, then hand over to the app. */
+  /** A demo joiner is done (or backs out): sign this browser back in as
+   *  the demo's owner, who now sees them in the org. */
+  function backToDemoOwner() {
+    window.location.replace(
+      `${process.env.NEXT_PUBLIC_BACKEND_API_URL}/sandbox/enter`,
+    );
+  }
+
   function intoTheApp() {
     setKind(null);
     window.setTimeout(() => router.push(APP_HOME), CARD_CLOSE_MS);
@@ -393,7 +403,10 @@ export function AppEntry({
           }}
         />
       ) : kind === "join" && me ? (
-        <JoinPlacementForm me={me} onDone={intoTheApp} />
+        <JoinPlacementForm
+          me={me}
+          onDone={me.is_demo ? backToDemoOwner : intoTheApp}
+        />
       ) : kind === "result" && signInResult ? (
         <SignInResultPanel
           result={signInResult}

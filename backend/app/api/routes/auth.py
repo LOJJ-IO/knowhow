@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.sandbox import is_sandbox_org
 from app.api.deps import get_current_member, get_db
 from app.auth.linked_drive import (
     LINKED_DRIVE_STATE_PURPOSE,
@@ -501,6 +502,8 @@ def me(member: OrgMember = Depends(get_current_member), db: Session = Depends(ge
         "is_super_admin": member.super_admin_verified_at is not None,
         "admin_proof_attempted": admin_proof_attempted,
         "needs_join_placement": needs_join_placement(member, db),
+        # Someone who came in through the sales sandbox's join link.
+        "is_demo": is_sandbox_org(member.organization_id),
         "owner_claim_available": owner_claim_available(member.organization_id, db),
     }
 

@@ -96,21 +96,21 @@ class FileSpec:
 # Company files: indexed, foldered, searchable.
 FILES: list[FileSpec] = [
     # Owner
-    FileSpec("Company OKRs Q4", SLIDES, "david", 3, None, content="objectives key results revenue retention", folders=("Board meetings",)),
+    FileSpec("Company OKRs Q4", SLIDES, "david", 3, None, content="objectives key results revenue retention", folders=("Impact",)),
     FileSpec("All-hands deck October", SLIDES, "david", 6, None, content="all hands roadmap hiring wins"),
-    FileSpec("Investor update September", DOC, "david", 21, None, content="investors arr burn runway", folders=("Board meetings",)),
+    FileSpec("Investor update September", DOC, "david", 21, None, content="investors arr burn runway", folders=("Impact",)),
     FileSpec("Org design 2026", DOC, "david", 12, None, private=True, content="org chart reporting lines hiring plan"),
     # Engineering
     FileSpec("Platform architecture 2026", DOC, "bongani", 4, "leadership", content="services kubernetes postgres queue api gateway"),
     FileSpec("API v3 migration plan", DOC, "wunmi", 1.5, "leadership", content="api versioning deprecation customers timeline"),
     FileSpec("Incident postmortem: Sept 14 outage", DOC, "dennis", 15, "leadership", content="outage database failover root cause action items"),
-    FileSpec("On-call rotation Q4", SHEET, "morakinyo", 8, "leadership", content="on call pager schedule"),
-    FileSpec("Sprint 42 planning", DOC, "annette", 0.3, "leadership", content="sprint backlog estimates"),
+    FileSpec("On-call rotation Q4", SHEET, "morakinyo", 8, "leadership", content="on call pager schedule", folders=("Fellowship",)),
+    FileSpec("Sprint 42 planning", DOC, "annette", 0.3, "leadership", content="sprint backlog estimates", folders=("Mentorship",)),
     FileSpec("Security review checklist", DOC, "dennis", 30, "leadership", content="security soc2 access review encryption"),
-    FileSpec("Hiring rubric: Senior backend engineer", DOC, "bongani", 25, "leadership", private=True, content="interview rubric hiring"),
-    FileSpec("Engineering roadmap H2", SLIDES, "bongani", 9, "leadership", content="roadmap platform mobile reliability"),
+    FileSpec("Hiring rubric: Senior backend engineer", DOC, "bongani", 25, "leadership", private=True, content="interview rubric hiring", folders=("Fellowship",)),
+    FileSpec("Engineering roadmap H2", SLIDES, "bongani", 9, "leadership", content="roadmap platform mobile reliability", folders=("Fellowship",)),
     FileSpec("Load test results (Oct)", SHEET, "morakinyo", 5, "leadership", content="latency throughput p99"),
-    FileSpec("Mobile app release notes 4.2", DOC, "wunmi", 2, "leadership", content="release notes mobile ios android", folders=("Q4 launch",)),
+    FileSpec("Mobile app release notes 4.2", DOC, "wunmi", 2, "leadership", content="release notes mobile ios android"),
     FileSpec("Tech debt register", SHEET, "dennis", 40, "leadership", content="tech debt refactor"),
     # Design
     FileSpec("Brand guidelines 2026", SLIDES, "jon", 10, "guidance", content="brand logo colour typography voice"),
@@ -119,16 +119,16 @@ FILES: list[FileSpec] = [
     FileSpec("Onboarding flow audit", SLIDES, "chi", 14, "guidance", content="onboarding friction drop off"),
     FileSpec("User research synthesis: SMB owners", DOC, "chi", 18, "guidance", content="interviews research smb pain points"),
     FileSpec("Icon set v2 spec", DOC, "charles", 6, "guidance", content="icons spec"),
-    FileSpec("Pricing page wireframes", PDF, "charles", 4, "guidance", content="pricing wireframes plans", folders=("Q4 launch",)),
+    FileSpec("Pricing page wireframes", PDF, "charles", 4, "guidance", content="pricing wireframes plans"),
     FileSpec("Accessibility audit Q3", DOC, "kiran", 22, "guidance", content="accessibility wcag contrast"),
-    FileSpec("Q4 campaign moodboard", SLIDES, "jon", 2, "guidance", content="campaign moodboard photography", folders=("Q4 launch",)),
+    FileSpec("Q4 campaign moodboard", SLIDES, "jon", 2, "guidance", content="campaign moodboard photography", folders=("BHM dinner",)),
     # Marketing
-    FileSpec("Q4 launch plan", DOC, "michael", 1, "board", content="launch plan channels timeline budget", folders=("Q4 launch",)),
+    FileSpec("Q4 launch plan", DOC, "michael", 1, "board", content="launch plan channels timeline budget", folders=("BHM dinner",)),
     FileSpec("Content calendar October", SHEET, "taiwo", 2, "board", content="blog posts newsletter schedule"),
     FileSpec("Brand campaign budget", SHEET, "michael", 11, "board", content="budget paid media spend"),
     FileSpec("Website traffic report Sept", SHEET, "clarence", 16, "board", content="traffic sessions conversion seo"),
-    FileSpec("Webinar run of show", DOC, "taiwo", 5, "board", content="webinar speakers agenda", folders=("Q4 launch",)),
-    FileSpec("Press release: Series B", DOC, "michael", 20, "board", content="press release funding series b investors", folders=("Q4 launch",)),
+    FileSpec("Webinar run of show", DOC, "taiwo", 5, "board", content="webinar speakers agenda", folders=("BHM dinner",)),
+    FileSpec("Press release: Series B", DOC, "michael", 20, "board", content="press release funding series b investors", folders=("BHM dinner",)),
     FileSpec("Competitor messaging map", SLIDES, "clarence", 27, "board", content="competitors positioning messaging"),
     FileSpec("Customer story: Northwind", DOC, "moussa", 3, "board", content="case study northwind results"),
     FileSpec("Social media guidelines", DOC, "clarence", 45, "board", content="social linkedin tone"),
@@ -144,25 +144,25 @@ FILES: list[FileSpec] = [
     FileSpec("Demo script v5", DOC, "pat", 4, "board", content="demo script talk track"),
     FileSpec("Commission plan FY26", SHEET, "sandra", 24, "board", private=True, content="commission quota accelerators"),
     # Customer Success
-    FileSpec("Onboarding checklist for new accounts", DOC, "akwasi", 8, "guidance", content="onboarding kickoff checklist"),
+    FileSpec("Onboarding checklist for new accounts", DOC, "akwasi", 8, "guidance", content="onboarding kickoff checklist", folders=("Mentorship",)),
     FileSpec("Churn risk tracker", SHEET, "chucks", 1, "guidance", content="churn risk accounts health"),
     FileSpec("QBR template", SLIDES, "akwasi", 29, "guidance", content="quarterly business review template"),
     FileSpec("Support macros", DOC, "chucks", 36, "guidance", content="support replies macros"),
     FileSpec("Customer health scores", SHEET, "akwasi", 3, "guidance", content="health score usage nps"),
-    FileSpec("Escalation runbook", DOC, "chucks", 12, "guidance", content="escalation severity runbook"),
-    FileSpec("NPS survey results Q3", SLIDES, "akwasi", 18, "guidance", content="nps survey promoters detractors"),
+    FileSpec("Escalation runbook", DOC, "chucks", 12, "guidance", content="escalation severity runbook", folders=("Mentorship",)),
+    FileSpec("NPS survey results Q3", SLIDES, "akwasi", 18, "guidance", content="nps survey promoters detractors", folders=("Impact",)),
     # Finance
-    FileSpec("FY26 budget", SHEET, "omar", 2, "board", content="budget headcount opex"),
-    FileSpec("Board deck October", SLIDES, "omar", 4, "board", content="board metrics arr burn", folders=("Board meetings",)),
+    FileSpec("FY26 budget", SHEET, "omar", 2, "board", content="budget headcount opex", folders=("Scholarship",)),
+    FileSpec("Board deck October", SLIDES, "omar", 4, "board", content="board metrics arr burn", folders=("Impact",)),
     FileSpec("Cash flow forecast", SHEET, "akins", 6, "board", content="cash flow forecast runway"),
     FileSpec("Vendor contracts tracker", SHEET, "seyi", 15, "board", content="vendors contracts renewals"),
-    FileSpec("Expense policy", DOC, "seyi", 60, "board", content="expenses travel reimbursement policy"),
-    FileSpec("Q3 financial statements", PDF, "akins", 26, "board", content="income statement balance sheet", folders=("Board meetings",)),
+    FileSpec("Expense policy", DOC, "seyi", 60, "board", content="expenses travel reimbursement policy", folders=("Scholarship",)),
+    FileSpec("Q3 financial statements", PDF, "akins", 26, "board", content="income statement balance sheet", folders=("Impact",)),
     FileSpec("Headcount plan 2026", SHEET, "omar", 10, "board", private=True, content="headcount hiring plan"),
-    FileSpec("Audit prep checklist", DOC, "akins", 31, "board", content="audit prep controls"),
+    FileSpec("Audit prep checklist", DOC, "akins", 31, "board", content="audit prep controls", folders=("Scholarship",)),
 ]
 
-CUSTOM_FOLDERS = ["Q4 launch", "Board meetings"]
+CUSTOM_FOLDERS = ["BHM dinner", "Mentorship", "Scholarship", "Fellowship", "Impact"]
 
 # Files the previous member owned; moved to Sandra when they were offboarded.
 FORMER_FILES = [
