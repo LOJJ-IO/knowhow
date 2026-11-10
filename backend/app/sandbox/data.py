@@ -109,7 +109,7 @@ FILES: list[FileSpec] = [
     FileSpec("Security review checklist", DOC, "dennis", 30, "leadership", content="security soc2 access review encryption"),
     FileSpec("Hiring rubric: Senior backend engineer", DOC, "bongani", 25, "leadership", private=True, content="interview rubric hiring", folders=("Fellowship",)),
     FileSpec("Engineering roadmap H2", SLIDES, "bongani", 9, "leadership", content="roadmap platform mobile reliability", folders=("Fellowship",)),
-    FileSpec("Load test results (Oct)", SHEET, "morakinyo", 5, "leadership", content="latency throughput p99"),
+    FileSpec("Load test results (Oct)", SHEET, "morakinyo", 5, "leadership", content="latency throughput p99", folders=("Reports",)),
     FileSpec("Mobile app release notes 4.2", DOC, "wunmi", 2, "leadership", content="release notes mobile ios android"),
     FileSpec("Tech debt register", SHEET, "dennis", 40, "leadership", content="tech debt refactor"),
     # Design
@@ -126,7 +126,7 @@ FILES: list[FileSpec] = [
     FileSpec("Q4 launch plan", DOC, "michael", 1, "board", content="launch plan channels timeline budget", folders=("BHM dinner",)),
     FileSpec("Content calendar October", SHEET, "taiwo", 2, "board", content="blog posts newsletter schedule"),
     FileSpec("Brand campaign budget", SHEET, "michael", 11, "board", content="budget paid media spend"),
-    FileSpec("Website traffic report Sept", SHEET, "clarence", 16, "board", content="traffic sessions conversion seo"),
+    FileSpec("Website traffic report Sept", SHEET, "clarence", 16, "board", content="traffic sessions conversion seo", folders=("Reports",)),
     FileSpec("Webinar run of show", DOC, "taiwo", 5, "board", content="webinar speakers agenda", folders=("BHM dinner",)),
     FileSpec("Press release: Series B", DOC, "michael", 20, "board", content="press release funding series b investors", folders=("BHM dinner",)),
     FileSpec("Competitor messaging map", SLIDES, "clarence", 27, "board", content="competitors positioning messaging"),
@@ -140,7 +140,7 @@ FILES: list[FileSpec] = [
     FileSpec("Contoso renewal deck", SLIDES, "pat", 6, "board", content="contoso renewal expansion"),
     FileSpec("Territory plan West", SHEET, "kene", 17, "board", content="territory accounts west"),
     FileSpec("Discount approval matrix", SHEET, "sandra", 33, "board", content="discount approval"),
-    FileSpec("Win-loss analysis Q3", SLIDES, "seyi", 9, "board", content="win loss competitors reasons"),
+    FileSpec("Win-loss analysis Q3", SLIDES, "seyi", 9, "board", content="win loss competitors reasons", folders=("Reports",)),
     FileSpec("Demo script v5", DOC, "pat", 4, "board", content="demo script talk track"),
     FileSpec("Commission plan FY26", SHEET, "sandra", 24, "board", private=True, content="commission quota accelerators"),
     # Customer Success
@@ -148,7 +148,7 @@ FILES: list[FileSpec] = [
     FileSpec("Churn risk tracker", SHEET, "chucks", 1, "guidance", content="churn risk accounts health"),
     FileSpec("QBR template", SLIDES, "akwasi", 29, "guidance", content="quarterly business review template"),
     FileSpec("Support macros", DOC, "chucks", 36, "guidance", content="support replies macros"),
-    FileSpec("Customer health scores", SHEET, "akwasi", 3, "guidance", content="health score usage nps"),
+    FileSpec("Customer health scores", SHEET, "akwasi", 3, "guidance", content="health score usage nps", folders=("Reports",)),
     FileSpec("Escalation runbook", DOC, "chucks", 12, "guidance", content="escalation severity runbook", folders=("Mentorship",)),
     FileSpec("NPS survey results Q3", SLIDES, "akwasi", 18, "guidance", content="nps survey promoters detractors", folders=("Impact",)),
     # Finance
@@ -162,7 +162,7 @@ FILES: list[FileSpec] = [
     FileSpec("Audit prep checklist", DOC, "akins", 31, "board", content="audit prep controls", folders=("Scholarship",)),
 ]
 
-CUSTOM_FOLDERS = ["BHM dinner", "Mentorship", "Scholarship", "Fellowship", "Impact"]
+CUSTOM_FOLDERS = ["BHM dinner", "Mentorship", "Scholarship", "Fellowship", "Impact", "Reports"]
 
 # Files the previous member owned; moved to Sandra when they were offboarded.
 FORMER_FILES = [
