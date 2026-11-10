@@ -209,8 +209,7 @@ def resolve_join_link_preview(token: str, db: Session) -> dict:
         outside = find_outside_link(token, db)
         if outside is not None:
             return outside_link_preview(outside, db)
-    # The sales sandbox can make links, but nobody real can arrive through one.
-    if link is None or is_sandbox_org(link.organization_id):
+    if link is None:
         raise ValueError("join link not found")
 
     org = db.get(Organization, link.organization_id)
@@ -243,6 +242,10 @@ def resolve_join_link_preview(token: str, db: Session) -> dict:
         "valid": valid,
         "title": title,
         "description": description,
+        # The sales sandbox's links skip Google: opening one walks through
+        # joining as a made-up person (`GET /sandbox/join/{token}`). Nobody
+        # real can sign in through one (`_org_for_valid_join_token`).
+        "demo": is_sandbox_org(link.organization_id),
     }
 
 

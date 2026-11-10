@@ -9,6 +9,9 @@ export type JoinLinkPreview = {
   valid: boolean;
   title: string;
   description: string;
+  /** The sales sandbox's link: opening it skips Google and walks through
+   *  joining as a made-up person. */
+  demo?: boolean;
 };
 
 export async function fetchJoinPreview(

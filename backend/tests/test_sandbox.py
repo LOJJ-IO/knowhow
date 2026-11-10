@@ -55,7 +55,7 @@ def _member(db, email) -> OrgMember:
 
 def test_seed_builds_a_whole_company_with_a_valid_audit_chain(db):
     members = db.execute(select(OrgMember).where(OrgMember.organization_id == SANDBOX_ORG_ID)).scalars().all()
-    assert len(members) >= 25
+    assert len(members) >= 24
     assert db.execute(select(FileIndex).where(FileIndex.org_id == SANDBOX_ORG_ID)).scalars().first() is not None
     assert verify_audit_chain(SANDBOX_ORG_ID, db).valid
 
@@ -70,25 +70,43 @@ def test_reseed_replaces_rather_than_duplicates(db):
 
 
 def test_sandbox_members_get_the_in_memory_drive_never_google(db):
-    alex = _member(db, "alex@acme.com")
+    alex = _member(db, "david@acme.com")
     drive = get_drive_client_for_user(alex.id, db)
     assert isinstance(drive, SandboxDrive)
     mine = drive.files().list(q="'me' in owners and trashed = false").execute()["files"]
-    assert mine and all(f["owners"][0]["emailAddress"] == "alex@acme.com" for f in mine)
+    assert mine and all(f["owners"][0]["emailAddress"] == "david@acme.com" for f in mine)
     hits = drive.files().list(q="fullText contains 'pricing' and trashed = false").execute()["files"]
     assert any("Pricing" in f["name"] for f in hits)
 
 
 def test_nobody_real_can_join_the_sandbox(db, client):
-    # A join link made inside the sandbox is refused at sign-in and in previews.
-    alex = _member(db, "alex@acme.com")
-    db.add(JoinLink(organization_id=SANDBOX_ORG_ID, token="sandbox-link", created_by_member_id=alex.id))
+    # A join link made inside the sandbox is refused at sign-in; its preview
+    # only says it's the demo's (opening it skips Google, see below).
+    david = _member(db, "david@acme.com")
+    db.add(JoinLink(organization_id=SANDBOX_ORG_ID, token="sandbox-link", created_by_member_id=david.id))
     db.commit()
-    assert TestClient(app).get("/join-links/sandbox-link").status_code == 404
+    assert TestClient(app).get("/join-links/sandbox-link").json()["demo"] is True
     from app.onboarding.service import _org_for_valid_join_token
 
     with pytest.raises(ValueError, match="join link not found"):
         _org_for_valid_join_token("sandbox-link", db)
+
+
+def test_the_demo_join_link_opens_the_team_pick_as_a_new_person(db):
+    david = _member(db, "david@acme.com")
+    db.add(JoinLink(organization_id=SANDBOX_ORG_ID, token="demo-join", created_by_member_id=david.id))
+    db.commit()
+    c = TestClient(app)
+    res = c.get("/sandbox/join/demo-join", follow_redirects=False)
+    assert res.status_code == 302 and res.headers["location"].endswith("/entry")
+    me = c.get("/auth/me").json()
+    assert me["organization_id"] == ORG and me["needs_join_placement"] and not me["is_owner"]
+    assert me["email"] == "new.member@acme.com"
+    # Another open is another person.
+    other = TestClient(app)
+    other.get("/sandbox/join/demo-join", follow_redirects=False)
+    assert other.get("/auth/me").json()["email"] == "new.member2@acme.com"
+    assert TestClient(app).get("/sandbox/join/not-a-link", follow_redirects=False).status_code == 404
 
 
 def test_screens_read_through_the_sandbox(client):
@@ -97,7 +115,7 @@ def test_screens_read_through_the_sandbox(client):
     ownership = client.get(f"/organizations/{ORG}/ownership").json()
     assert ownership["files"] and ownership["unresolved"] and any(b["status"] == "planned" for b in ownership["batches"])
     sharing = client.get(f"/organizations/{ORG}/sharing").json()
-    assert len(sharing["teams"]) == 6
+    assert len(sharing["teams"]) == 3
     assert client.get(f"/organizations/{ORG}/sharing/suggestions").json()["suggestions"]
     off = client.get(f"/organizations/{ORG}/offboarding").json()
     assert off["active"] and off["history"]
@@ -110,7 +128,7 @@ def test_screens_read_through_the_sandbox(client):
 
 
 def test_offboarding_moves_files_and_updates_the_record(db, client):
-    ethan, marcus = _member(db, "ethan@acme.com"), _member(db, "marcus@acme.com")
+    ethan, marcus = _member(db, "dennis@acme.com"), _member(db, "bongani@acme.com")
     preview = client.get(
         f"/organizations/{ORG}/offboarding/preview", params={"user_id": str(ethan.id), "transfer_to": str(marcus.id)}
     ).json()
@@ -127,11 +145,11 @@ def test_offboarding_moves_files_and_updates_the_record(db, client):
 def test_only_owner_admin_or_their_lead_can_offboard(db):
     from app.api.routes.governance import _may_offboard
 
-    sofia, ethan, maya = (_member(db, e) for e in ("sofia@acme.com", "ethan@acme.com", "maya@acme.com"))
-    marcus = _member(db, "marcus@acme.com")
+    sofia, ethan, maya = (_member(db, e) for e in ("wunmi@acme.com", "dennis@acme.com", "jon@acme.com"))
+    marcus = _member(db, "bongani@acme.com")
     assert not _may_offboard(sofia, ethan.id, db)  # teammate, not their lead
     assert not _may_offboard(maya, ethan.id, db)  # a lead, but of another team
-    assert _may_offboard(marcus, ethan.id, db)  # Engineering's lead
+    assert _may_offboard(marcus, ethan.id, db)  # Leadership's lead
     assert not _may_offboard(marcus, marcus.id, db)  # never yourself
 
 

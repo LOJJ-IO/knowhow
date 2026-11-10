@@ -199,8 +199,8 @@ def seed(db: Session) -> uuid.UUID:
             org_id=SANDBOX_ORG_ID,
             name=name,
             team_leader_id=members[lead.key].id,
-            # Marketing reviews ownership moves by hand; everyone else is automatic.
-            auto_own_enabled=key != "marketing",
+            # The Board reviews ownership moves by hand; everyone else is automatic.
+            auto_own_enabled=key != "board",
             created_at=ago(390),
         )
         db.add(teams[key])
@@ -326,8 +326,8 @@ def seed(db: Session) -> uuid.UUID:
         org_id=SANDBOX_ORG_ID,
         batch_type=TransferBatchType.BULK,
         status=TransferBatchStatus.EXECUTED,
-        created_by_member_id=members["ben"].id,
-        reason="Pricing files to the Sales lead",
+        created_by_member_id=members["sandra"].id,
+        reason="Pricing files to the Board chair",
         created_at=ago(3.2),
         confirmed_at=ago(3),
         executed_at=ago(3),
@@ -337,8 +337,8 @@ def seed(db: Session) -> uuid.UUID:
         org_id=SANDBOX_ORG_ID,
         batch_type=TransferBatchType.BULK,
         status=TransferBatchStatus.PLANNED,
-        created_by_member_id=members["marcus"].id,
-        reason="Engineering records to the team lead",
+        created_by_member_id=members["bongani"].id,
+        reason="Leadership records to the team lead",
         created_at=ago(0.8),
     )
     db.add_all([moved, planned])
@@ -349,8 +349,8 @@ def seed(db: Session) -> uuid.UUID:
                 id=uuid.uuid4(),
                 batch_id=moved.id,
                 file_id=file_ids[title],
-                current_owner_member_id=members["isabella"].id,
-                proposed_owner_member_id=members["ben"].id,
+                current_owner_member_id=members["seyi"].id,
+                proposed_owner_member_id=members["sandra"].id,
                 eligibility=TransferEligibility.ELIGIBLE,
                 status=TransferItemStatus.TRANSFERRED,
                 created_at=ago(3.2),
@@ -362,8 +362,8 @@ def seed(db: Session) -> uuid.UUID:
                 id=uuid.uuid4(),
                 batch_id=planned.id,
                 file_id=file_ids[title],
-                current_owner_member_id=members["ethan"].id,
-                proposed_owner_member_id=members["marcus"].id,
+                current_owner_member_id=members["dennis"].id,
+                proposed_owner_member_id=members["bongani"].id,
                 eligibility=TransferEligibility.ELIGIBLE,
                 status=TransferItemStatus.PENDING,
                 created_at=ago(0.8),
@@ -375,8 +375,8 @@ def seed(db: Session) -> uuid.UUID:
                 id=uuid.uuid4(),
                 org_id=SANDBOX_ORG_ID,
                 file_id=file_ids[title],
-                current_owner_member_id=members["riley"].id,
-                intended_recipient_member_id=members["maya"].id,
+                current_owner_member_id=members["charles"].id,
+                intended_recipient_member_id=members["jon"].id,
                 reason=UnresolvedOwnershipReason.PERSONAL_ACCOUNT_OWNER,
                 detail=(
                     f"'{title}' is owned by a personal Google account. Google doesn't let ownership "
@@ -404,35 +404,35 @@ def _history(db, members, teams, file_ids, moved, planned, now) -> None:
 
     events: list[tuple[float, str | None, str, str | None, dict]] = [
         # days ago, actor, action, target, details
-        (9.0, m("ben"), "offboard.completed", m("sam"),
-         {"transfer_to_user_id": m("ben"), "files_affected": 2, "unresolved_count": 0}),
-        (9.0, m("ben"), "offboard.file.ownership_transferred", f("Fabrikam account plan"),
+        (9.0, m("sandra"), "offboard.completed", m("sam"),
+         {"transfer_to_user_id": m("sandra"), "files_affected": 2, "unresolved_count": 0}),
+        (9.0, m("sandra"), "offboard.file.ownership_transferred", f("Fabrikam account plan"),
          {"file_name": "Fabrikam account plan", "detail": None}),
-        (9.0, m("ben"), "offboard.file.ownership_transferred", f("Q3 forecast (Sam)"),
+        (9.0, m("sandra"), "offboard.file.ownership_transferred", f("Q3 forecast (Sam)"),
          {"file_name": "Q3 forecast (Sam)", "detail": None}),
-        (9.0, m("alex"), "org_chart.member_offboarded", m("sam"),
-         {"transfer_to_user_id": m("ben"), "teams_led_reassigned": [], "teams_left_leaderless": []}),
-        (6.0, m("alex"), "org_chart.team.leader_assigned", t("finance"),
-         {"new_leader_id": m("daniel"), "team_id": t("finance")}),
-        (5.0, m("olivia"), "org_chart.membership.upserted", m("chloe"),
-         {"user_id": m("chloe"), "team_id": t("marketing"), "role": "member"}),
-        (4.0, m("maya"), "sharing.suggested_share_confirmed", f("Brand guidelines 2026"), {"recipient_count": 3}),
-        (3.2, m("ben"), "transfer_batch.created", str(moved.id),
+        (9.0, m("david"), "org_chart.member_offboarded", m("sam"),
+         {"transfer_to_user_id": m("sandra"), "teams_led_reassigned": [], "teams_left_leaderless": []}),
+        (6.0, m("david"), "org_chart.team.leader_assigned", t("board"),
+         {"new_leader_id": m("sandra"), "team_id": t("board")}),
+        (5.0, m("sandra"), "org_chart.membership.upserted", m("moussa"),
+         {"user_id": m("moussa"), "team_id": t("board"), "role": "member"}),
+        (4.0, m("jon"), "sharing.suggested_share_confirmed", f("Brand guidelines 2026"), {"recipient_count": 3}),
+        (3.2, m("sandra"), "transfer_batch.created", str(moved.id),
          {"reason": moved.reason, "item_count": 2, "file_id": f("Enterprise pricing sheet")}),
-        (3.0, m("ben"), "transfer_batch.executed", str(moved.id),
+        (3.0, m("sandra"), "transfer_batch.executed", str(moved.id),
          {"transferred": 2, "failed": 0, "skipped_ineligible": 0, "file_id": f("Enterprise pricing sheet")}),
-        (2.0, m("marcus"), "org_chart.membership.upserted", m("nora"),
-         {"user_id": m("nora"), "team_id": t("eng"), "role": "member"}),
-        (1.2, m("alex"), "librarian.confirmed_company", f("Customer story: Northwind"),
-         {"proposer_id": m("chloe"), "team_id": t("marketing")}),
-        (1.0, m("olivia"), "document.created", f("Q4 launch plan"), {"kind": "doc"}),
-        (0.8, m("marcus"), "transfer_batch.created", str(planned.id),
+        (2.0, m("bongani"), "org_chart.membership.upserted", m("charmaine"),
+         {"user_id": m("charmaine"), "team_id": t("leadership"), "role": "member"}),
+        (1.2, m("david"), "librarian.confirmed_company", f("Customer story: Northwind"),
+         {"proposer_id": m("moussa"), "team_id": t("board")}),
+        (1.0, m("michael"), "document.created", f("Q4 launch plan"), {"kind": "doc"}),
+        (0.8, m("bongani"), "transfer_batch.created", str(planned.id),
          {"reason": planned.reason, "item_count": 3, "file_id": f("Tech debt register")}),
-        (0.5, m("ben"), "document.created", f("Q4 pipeline review"), {"kind": "sheet"}),
-        (0.3, m("lucas"), "document.created", f("Sprint 42 planning"), {"kind": "doc"}),
-        (0.12, m("priya"), "org_chart.membership.upserted", m("mia"),
-         {"user_id": m("mia"), "team_id": t("cs"), "role": "member"}),
-        (0.05, m("owen"), "sharing.file_created_handled", f("Churn risk tracker"), {"action": "indexed"}),
+        (0.5, m("sandra"), "document.created", f("Q4 pipeline review"), {"kind": "sheet"}),
+        (0.3, m("annette"), "document.created", f("Sprint 42 planning"), {"kind": "doc"}),
+        (0.12, m("akwasi"), "org_chart.membership.upserted", m("brian"),
+         {"user_id": m("brian"), "team_id": t("guidance"), "role": "member"}),
+        (0.05, m("chucks"), "sharing.file_created_handled", f("Churn risk tracker"), {"action": "indexed"}),
     ]
     prev_hash, sequence = GENESIS_HASH, 0
     for days_ago, actor, action, target, details in events:
@@ -457,3 +457,35 @@ def _history(db, members, teams, file_ids, moved, planned, now) -> None:
         prev_hash = entry_hash
     db.flush()
     assert db.execute(select(func.count()).select_from(AuditLogEntry).where(AuditLogEntry.org_id == SANDBOX_ORG_ID)).scalar_one() == sequence
+
+
+# ------------------------------------------------------------------ joiners
+
+
+def add_demo_joiner(db: Session) -> uuid.UUID:
+    """A made-up person who just opened the sandbox's join link: in the org,
+    on no team yet, so sign-in lands them on the team pick."""
+    taken = db.execute(
+        select(func.count()).select_from(OrgMember).where(
+            OrgMember.organization_id == SANDBOX_ORG_ID, OrgMember.email.like("new.member%")
+        )
+    ).scalar_one()
+    n = taken + 1
+    name = "New Member" if n == 1 else f"New Member {n}"
+    email = "new.member@" + SANDBOX_DOMAIN if n == 1 else f"new.member{n}@{SANDBOX_DOMAIN}"
+    now = datetime.now(timezone.utc)
+    person = Person(id=uuid.uuid4(), display_name=name, created_at=now)
+    db.add(person)
+    member = OrgMember(
+        id=uuid.uuid4(),
+        organization_id=SANDBOX_ORG_ID,
+        person_id=person.id,
+        email=email,
+        display_name=name,
+        auth_type=AuthType.DOMAIN_DELEGATED,
+        standing=MemberStanding.AUTO_AFFILIATED,
+        created_at=now,
+    )
+    db.add(member)
+    db.commit()
+    return member.id
